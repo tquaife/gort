@@ -1175,12 +1175,13 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "\n============ Prospect leaf options:\n" );
 	
 	fprintf( stderr, "-N arg  \tset the leaf structure variable to arg\n"  );
-	fprintf( stderr, "-cab arg\tset the leaf chlorophyl concentration to arg\n"  );
-	fprintf( stderr, "-cw arg \tset the equivelant leaf water thickness to arg\n"  );
-	fprintf( stderr, "-cc arg \tset the celulose concentration to arg\n"  );
-	fprintf( stderr, "        \t[n.b. this flag does nothing in the dry matter version of prospect]\n"  );
-	/*fprintf( stderr, "-cp arg \tset the protein to arg\n"  );*/
-	fprintf( stderr, "-cdm arg \tset the dry matter to arg\n"  );
+	fprintf( stderr, "-Cab arg\tset the leaf chlorophyl content (µg.cm-2) to arg\n"  );
+	fprintf( stderr, "-Cw arg \tset the equivelant leaf water thickness (cm) to arg\n"  );
+	fprintf( stderr, "-Car arg \tset the carotenoid content (µg.cm-2) to arg\n"  );
+	fprintf( stderr, "-Anth arg \tset the anthocyanin content (µg.cm-2) to arg\n"  );
+	fprintf( stderr, "-Cbrown arg \tset the /brown pigment content (arbitrary units) to arg\n"  );
+	fprintf( stderr, "-Cm arg \tset the leaf mass per unit area (g.cm-2) to arg\n"  );
+	
 	
 	
 	fprintf( stderr, "\n============ Price soil spectra options:\n" );

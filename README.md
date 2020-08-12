@@ -14,7 +14,7 @@ With the exception of the contents of the PROSPECT-D directory all code was writ
 
 ## Usage
  
-usage: `gortt \[options\] < angles.dat > output.dat`
+usage: `gortt [options] < angles.dat > output.dat`
 
 A list of \[options\] and brief description of the formet of the angles.dat file can be found by typing:
 

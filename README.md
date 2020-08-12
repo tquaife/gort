@@ -1,9 +1,21 @@
 # GORT
 
 A C implementation of the Geometric Optic Radiative Transfer model as described in Ni et al. (1999). 
-It was originally used as the forward operator fr data assimilation experiments described by 
+Models the BRDF of forests at optical wavelengths by
+calculating the viewed proportions of illuminated and shaded crown and ground,
+and their reflectance factors, for randomly located ellipsoids.
+
+This version of the model was originally used as the forward operator for data assimilation experiments described by 
 Quaife et al. (2008).
-This version coupled to PROSPECT-D to (optionally) provide leaf optical properties.
+
+
+<!-- ## Main features
+
+* Coupled to PROSPECT-D to (optionally) provide leaf optical properties.
+* Soil reflectance using EOFs from Price (1990).
+* Read/write LUTs of key intermediate variables to speed up some applications
+-->
+
 
 ## Authors
 
@@ -31,11 +43,13 @@ The following example calculates the reflectance for a forest with an LAI of 4.0
 
 ## Install
 
-I have only ever tried installing on Linux platforms. As long as you have the standard development tools installed (specifically `gcc`, `gfortran` and `make`) it should just be a case of typing `make`.
+I have only ever tried installing on Linux platforms. As long as you have the standard development tools installed (specifically `gcc`, `gfortran` and `make`) it should just be a case of typing `make`. Note that currently the C bindings for the PROSPECT are throwing a number of warnings. As far as I can tell these are harmless.
 
 
 ## References
 
 Ni, W., Li, X., Woodcock, C. E., Caetano, M. R., & Strahler, A. H. (1999). An analytical hybrid GORT model for bidirectional reflectance over discontinuous plant canopies. IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987-999.
+
+Price, J. C. (1990). On the information content of soil reflectance spectra. Remote Sensing of Environment, 33(2), 113-121.
 
 Quaife, T., Lewis, P., De Kauwe, M., Williams, M., Law, B. E., Disney, M., & Bowyer, P. (2008). Assimilating canopy reflectance data into an ecosystem model with an Ensemble Kalman Filter. Remote Sensing of Environment, 112(4), 1347-1364.

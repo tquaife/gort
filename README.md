@@ -9,12 +9,14 @@ This version of the model was originally used as the forward operator for data a
 Quaife et al. (2008).
 
 
-<!-- ## Main features
+## Main features
 
+* Calculates BRDFs for arbitrary view-illumination geometry
+* Calculates spectral albedo and absorption by the forest (e.g. fAPAR)
 * Coupled to PROSPECT-D to (optionally) provide leaf optical properties.
 * Soil reflectance using EOFs from Price (1990).
-* Read/write LUTs of key intermediate variables to speed up some applications
--->
+* Reads/writes LUTs of key intermediate variables to speed up some applications
+
 
 
 ## Authors

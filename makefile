@@ -1,4 +1,3 @@
-PTYPE=wn
 CC = gcc
 FF = gfortran
 CFLAGS = -Wall -g #-O3 
@@ -7,7 +6,7 @@ INCLS = -I./ -I/usr/include -I./include
 
 vpath %.f90 ./PROSPECT-D
 
-OBJECTS = gortt_pn_kopen.${PTYPE}.o gortt_brdf.o gortt_albedo.o
+OBJECTS = gortt_pn_kopen.o gortt_brdf.o gortt_albedo.o
 FOBJECTS =  dataSpec_PDB.o tav_abs.o prospect_DB.o
 
 		

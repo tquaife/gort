@@ -43,6 +43,7 @@ typedef struct  {
     unsigned short print_comp_spectra ;
     unsigned short print_comp_proport ;
     unsigned short calc_integrals ;
+    unsigned short use_q08_pn_kopen ;
 
 } gortt_control ;
 

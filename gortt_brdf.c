@@ -345,7 +345,6 @@ double Kg ;
 
 
 
-
 double gortt_t_prime_df( p, g, s )
 /*
 directional hemispherical path transmittance

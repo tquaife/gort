@@ -33,6 +33,7 @@ int main( int argc, char **argv )
     cont.print_comp_proport=FALSE ;
     cont.calc_integrals=FALSE ;
     cont.use_q08_pn_kopen=FALSE ;
+    cont.lidar_mode=FALSE ;
 
 	spect.rsl1=0.2 ;
 	spect.rsl2=0.1 ;
@@ -293,6 +294,14 @@ int main( int argc, char **argv )
 		gortt_set_zenith_dependant_probabilities( &params, &geom );
 		gortt_rsurf( &params, &geom, &spect );
 
+	
+	/**
+	LIDAR calculations
+	**/
+	
+	
+	gortt_lidar( &params, &geom, &spect );
+	
 	
     /*BRF outputs 
     n.b. the integral routines write over the BRFs so
@@ -1056,6 +1065,7 @@ gortt_control *c ;
 			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;			
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
 			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;			
+			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;			
 			
 			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, argv[ ++i ] );}
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;

@@ -44,6 +44,7 @@ typedef struct  {
     unsigned short print_comp_proport ;
     unsigned short calc_integrals ;
     unsigned short use_q08_pn_kopen ;
+    unsigned short lidar_mode ;
 
 } gortt_control ;
 
@@ -241,6 +242,9 @@ double gortt_p_prime_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  
 double gortt_phase_function_assymetry( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
 double gortt_kuusk( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
 double gortt_leaf_angle_distribution( gortt_parameters *, double );
+
+void  gortt_lidar( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+
 
 /*TQ's integral routines*/
 

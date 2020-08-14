@@ -32,6 +32,7 @@ int main( int argc, char **argv )
     cont.print_comp_spectra=FALSE ;
     cont.print_comp_proport=FALSE ;
     cont.calc_integrals=FALSE ;
+    cont.use_q08_pn_kopen=FALSE ;
 
 	spect.rsl1=0.2 ;
 	spect.rsl2=0.1 ;
@@ -112,8 +113,10 @@ int main( int argc, char **argv )
 	
 	/*1) calculate own probabilities if not reading from */
 	if( params.read_prob_file == FALSE )
-		gortt_gap_probabilities( &params, &geom ) ;
-
+	    if( cont.use_q08_pn_kopen == TRUE )
+		    gortt_gap_probabilities_Q08( &params, &geom ) ;
+        else
+		    gortt_gap_probabilities( &params, &geom ) ;
 
   /*2) write probability file for later use*/
 	if( params.write_prob_file == TRUE ){
@@ -1052,6 +1055,7 @@ gortt_control *c ;
 			else if( !strncmp( argv[ i ], "-prnspec", 7 ) ) c->print_comp_spectra=TRUE;
 			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;			
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
+			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;
 
 			
 			

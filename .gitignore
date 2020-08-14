@@ -3,3 +3,4 @@ gort
 *.o
 *.mod
 *~
+.gitignore

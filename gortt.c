@@ -1072,7 +1072,8 @@ gortt_control *c ;
 			
 			/*prospect*/
 			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Car     = atof( argv[ ++i ] ); 
+			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( argv[ ++i ] ); 
+			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( argv[ ++i ] ); 
 			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( argv[ ++i ] ); 
 			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( argv[ ++i ] ); 
 			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( argv[ ++i ] ); 

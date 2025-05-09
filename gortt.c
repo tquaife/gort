@@ -314,14 +314,14 @@ int main( int argc, char **argv )
 			  printf( "{ %f %f %f %f } ",*(spect.scomp+i*4+0),*(spect.scomp+i*4+1),*(spect.scomp+i*4+2),*(spect.scomp+i*4+3));
 		}
     if( cont.print_comp_proport==TRUE )
-		  printf( "[ %f %f %f %f ]", geom.Kc, geom.Kg, geom.Kt, geom.Kz );
+		  printf( "[ %f %f %f %f ] ", geom.Kc, geom.Kg, geom.Kt, geom.Kz );
 
 
 		/*integral terms*/
 		if( cont.calc_integrals ){
 		  gortt_energy( &params, &geom, &spect );
 	    for( i=0; i<spect.nw; i++ )
-			  printf( "%f %f %f", *( spect.albedo + i ), *( spect.favegt + i ), *( spect.fasoil + i ) );
+			  printf( "%f %f %f ", *( spect.albedo + i ), *( spect.favegt + i ), *( spect.fasoil + i ) );
 	  }
 	
 	  printf( "\n" );

@@ -51,8 +51,10 @@ gortt_spectra *s ;
     *(s->favegt+k)=Fd1-Fu1-Fd2+Fu2;
     *(s->fasoil+k)=Fd2-Fu2 ;
 
+    /*
     fprintf( stderr, "++ %f %f %f %f %f %f %f \n", Fd1, Fd2, Fu1, Fu2, G, Z, Pn0 );
-
+    */
+  
   }
 
 }

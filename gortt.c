@@ -1461,6 +1461,14 @@ void gortt_price_soil( gortt_spectra *s, double *sv1, double *sv2, double *sv3, 
 			upper = 1. + (*( s->wavelength +i )-400) / 5.0 ;
 			lower = (*( s->wavelength +i )-400) / 5.0 ;
 
+			/*
+			At exactly 2500nm upper lands one past the end of the
+			Price vectors. fraction is zero there, so the out of
+			range element was always multiplied by zero and never
+			affected the answer - but it was still read.
+			*/
+			if( upper > PRICE_NBANDS - 1 ) upper = PRICE_NBANDS - 1 ;
+
 			fraction = (double) ( *( s->wavelength +i ) - 400. ) / 5.0 - lower ;
 
 
@@ -1509,6 +1517,15 @@ void gortt_prospect_interface( gortt_spectra *s )
 			/*get the leaf optics for the desired wavelength*/
 			upper = 1 + (*( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN ;
 			lower = (*( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN ;
+
+			/*
+			As in gortt_price_soil: at exactly 2500nm upper lands one
+			past the end of the reflectance half of prospect_out, and
+			upper+PROSPECT_NWBANDS one past the end of the array
+			itself. fraction is zero there so the answer was right,
+			but the read was not.
+			*/
+			if( upper > PROSPECT_NWBANDS - 1 ) upper = PROSPECT_NWBANDS - 1 ;
 
 			fraction = (float) ( *( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN - lower ;
 

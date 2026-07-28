@@ -70,8 +70,14 @@ void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
   double *sum_y, *sum_x ;
   int i, j, k ;
 
-	sum_y = (double *)malloc( p->npoints * sizeof( double ) );
-	sum_x = (double *)malloc( p->npoints * sizeof( double ) );
+	/*
+	n.b. these are accumulators over wavebands, not over quadrature
+	points: every index into them below runs over s->nw. They used to be
+	allocated with p->npoints elements, which silently overflowed the
+	heap for any run with more than 32 wavebands.
+	*/
+	sum_y = (double *)malloc( s->nw * sizeof( double ) );
+	sum_x = (double *)malloc( s->nw * sizeof( double ) );
 
   xm=0.5*(1.-1.);
   xr=0.5*(1.+1.);
@@ -128,6 +134,9 @@ void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
   }
 
   for( k=0;k<s->nw;k++ ) *(s->albedo+k) = *(sum_y+k) / M_PI ;
+
+	gortt_dealloc_1d( sum_y );
+	gortt_dealloc_1d( sum_x );
 
 }
 

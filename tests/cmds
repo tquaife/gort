@@ -43,6 +43,11 @@ prnspec         spec.in     -P @PROBS_DEFAULT@ -prnspec
 prnprop         spec.in     -P @PROBS_DEFAULT@ -prnprop
 prnboth         spec.in     -P @PROBS_DEFAULT@ -prnspec -prnprop
 energy          spec.in     -P @PROBS_DEFAULT@ -energy
+# 42 wavebands, i.e. more than npoints (32). gortt_albedo used to size its
+# accumulators by npoints while indexing them by waveband, so this
+# overflowed the heap. Ends on 2500nm, the interpolation endpoint that
+# used to read one past the end of the Price and PROSPECT tables.
+widespec        widespec.in -P @PROBS_DEFAULT@ -energy
 useprobs        basic.in    -P @PROBS_DEFAULT@
 
 # -P vs the direct path disagree above 89 deg zenith: the -W file is written

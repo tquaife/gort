@@ -1,0 +1,64 @@
+# Regression case registry for tests/run.sh
+#
+#   <name>  <input-file-in-cases/-or-">-"-for-no-stdin>  [args...]
+#
+# @PROBS_DEFAULT@ expands to a gap-probability file (gortt -W) generated from
+# the default canopy geometry.  Cases using it MUST NOT pass any canopy
+# geometry or -favd/-LAI option, or the probabilities will not correspond.
+# Blank lines and #-comments are ignored.
+
+# ---- direct path: full gap-probability computation each time ---------------
+default         basic.in
+lai             basic.in    -LAI 4.0
+favd            spec.in     -favd 0.5
+hbrpcc          spec.in     -HB 2.5 -BR 1.5 -PCC 0.6
+oldgeom         spec.in     -r 1.0 -b 3.0 -h1 2.0 -h2 9.0 -lambda 0.3
+beta            spec.in     -beta 0.4
+diffuse         spec.in     -diffuse 0.3
+readme          readme.in   -LAI 4.0
+extreme         extreme.in
+angnorm         angnorm.in
+endpoints       endpoints.in
+energy-lai      basic.in    -LAI 4.0 -energy
+q08             spec.in     -q08_pn_kopen
+q08-energy      spec.in     -q08_pn_kopen -energy
+lidar           spec.in     -lidar
+
+# ---- gap probabilities themselves (printed at %0.40f -- the precise gate) --
+probs           -           -W
+probs-lai       -           -LAI 4.0 -W
+probs-hbrpcc    -           -HB 2.5 -BR 1.5 -PCC 0.6 -W
+
+# ---- spectral-only sweeps, driven off a shared probability file -----------
+albleaf         spec.in     -P @PROBS_DEFAULT@ -alb_leaf 0.4
+albsoil         spec.in     -P @PROBS_DEFAULT@ -alb_soil 0.25
+prospect        spec.in     -P @PROBS_DEFAULT@ -N 2.1 -Cab 55 -Car 18 -Cbrown 0.4 -Cw 0.02 -Cm 0.012
+# gortt_usage advertises "-Anth", but gortt_cl_parser only matches "-canth"
+# (at 3 chars, i.e. "-ca").  So the documented spelling is rejected and the
+# anthocyanin content can only be set as -ca<something>.  Both pinned here.
+prospect-anth   spec.in     -P @PROBS_DEFAULT@ -canth 12.0
+badanth         -           -Anth 3.0
+price           spec.in     -P @PROBS_DEFAULT@ -rsl1 0.3 -rsl2 0.05 -rsl3 0.01 -rsl4 -0.005
+prnspec         spec.in     -P @PROBS_DEFAULT@ -prnspec
+prnprop         spec.in     -P @PROBS_DEFAULT@ -prnprop
+prnboth         spec.in     -P @PROBS_DEFAULT@ -prnspec -prnprop
+energy          spec.in     -P @PROBS_DEFAULT@ -energy
+useprobs        basic.in    -P @PROBS_DEFAULT@
+
+# -P vs the direct path disagree above 89 deg zenith: the -W file is written
+# with only 90 of the nth=91 theta rows, so index 90 is read back as zero.
+# This case pins that behaviour so the fix shows up as a deliberate delta.
+useprobs-extreme extreme.in -P @PROBS_DEFAULT@
+
+# ---- user-facing error and help paths -------------------------------------
+usage           -           -u
+badopt          -           -zzz
+badarg          -           notanargument
+# NOT covered yet: an option that takes a value, given as the last word on the
+# command line (e.g. "gortt -Cab"), reads argv[argc] == NULL and segfaults.
+# The shell's crash message and "(core dumped)" depend on ulimit, so pinning
+# it would make the suite environment-dependent.  Add a case here once the
+# missing-argument check goes in.
+badcount        badcount.in
+badwl           badwl.in
+badangle        badangle.in

@@ -4,3 +4,6 @@ gort
 *.mod
 *~
 
+#regression test output (tests/golden is tracked, tests/actual is not)
+tests/actual/
+

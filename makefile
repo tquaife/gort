@@ -23,6 +23,20 @@ gortt:	${OBJECTS} gortt.o makefile ${FOBJECTS}
 		$(FF) $(CFLAGS) -c $<
 	    
 
+#Regression suite: compares model output against tests/golden.
+#See tests/run.sh. "make bless" re-captures the goldens and should
+#only be run on a commit that is MEANT to change the numbers.
+
+test:	gortt
+		@cd tests && ./run.sh
+
+bless:	gortt
+		@cd tests && ./bless.sh
+
+
 clean:
 		\rm -f *.o *~ *% *.mod
+
+#n.b. does not remove the gortt binary
+.PHONY:	test bless clean
 

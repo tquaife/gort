@@ -4,10 +4,9 @@
 #include <gortt.h>
 
 
-void gortt_energy( p, g, s )
 /*
 Calculate the SW energy balance in the canopy
-The variables Fd1, Fd2, Fu1, Fd2 are the flux 
+The variables Fd1, Fd2, Fu1, Fd2 are the flux
 terms normalised to the incoming (i.e. Fd1=1.),
 where:
 
@@ -18,26 +17,24 @@ u=up-welling
 
 Fu1 is the albedo.
 
-Note that this routine assumes a Lambertian 
-background reflectance at the moment. This 
+Note that this routine assumes a Lambertian
+background reflectance at the moment. This
 would have to change if either Z or G are
 modified to have a BRDF.
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_energy( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 {
 
 
-  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, rsoil ; 
+  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, rsoil ;
 	int k;
 
   gortt_albedo( p, g, s );
 
   Pn0=p->p_neq0_heq0_sza ;
-  
+
   for( k=0;k<s->nw;k++ ){
-  
+
     Fu1 = *(s->albedo+k) ;
 
     rsoil= *(s->rsoil+k) ;
@@ -54,12 +51,11 @@ gortt_spectra *s ;
     /*
     fprintf( stderr, "++ %f %f %f %f %f %f %f \n", Fd1, Fd2, Fu1, Fu2, G, Z, Pn0 );
     */
-  
+
   }
 
 }
 
-void gortt_albedo( p, g, s )
 /*
 Hemispherical integral of GORT reflectances.
 Calculated for each spectral channel in s and
@@ -67,9 +63,7 @@ the solar geometry in g (n.b. we are integrating
 over the viewing hemisphere so only the solar
 zenith angle matters).
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 {
 
   double xm, xr, ym, yr, x ,y ;
@@ -87,30 +81,30 @@ gortt_spectra *s ;
 
   for( k=0;k<s->nw;k++ ) *(sum_y+k) = 0.;
   for( i=0;i<p->npoints;i++ ){
-    
+
     y = ym + yr* *(p->abscissa+i);
-    
+
     g->vaa = y;
-    
+
     /*corrections...*/
     while ( g->vaa > 2 * M_PI ) g->vaa -= 2 * M_PI;
     g->raa = g->saa - g->vaa ;
 		g->raa = fabs((g->raa - 2 * M_PI * (int) (0.5 + g->raa * M_1_PI * 0.5)));
-    
+
     for( k=0;k<s->nw;k++ ) *(sum_x+k)=0.;
-    for( j=p->npoints/2.;j<p->npoints;j++ ){ 
-    
+    for( j=p->npoints/2.;j<p->npoints;j++ ){
+
       x=xm + xr* *(p->abscissa+j) ;
 
       g->vza = acos( x );
-      
+
       /*corrections... un-needed!
       - but exercising caution...*/
       if ( g->vza < 0.0 ) {
 			  g->vaa += M_PI ;
 			  g->vza *= -1.0 ;
 		  }
-		
+
       g->vza_prime = gortt_prime_theta( p, g->vza );
 		  g->sza_prime = gortt_prime_theta( p, g->sza );
 
@@ -118,28 +112,27 @@ gortt_spectra *s ;
   		p->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
 
 		  gortt_set_zenith_dependant_probabilities( p, g );
-		 
+
 		  /* Checking probability terms...
 		  fprintf( stderr, "+++ %f\n", p->p_neq0_heq0_sza );
 		  */
-		 
+
 		  gortt_rsurf( p, g, s );
 
       for( k=0;k<s->nw;k++ )
         *(sum_x+k)=*(sum_x+k)+*(s->rsurf+k)* *(p->weights+j)*fabs(x)*xr ;
-    
+
     }
     for( k=0;k<s->nw;k++ )
       *(sum_y+k) = *(sum_y+k) + *(sum_x+k)* *(p->weights+i)*yr ;
-  }     
-  
+  }
+
   for( k=0;k<s->nw;k++ ) *(s->albedo+k) = *(sum_y+k) / M_PI ;
 
 }
 
 
 #define EPS 3.0e-11
-void gauleg(x1,x2,x,w,n)
 /**
 Gauss-Legendre ascissa and weights using the numerical
 recepies algorithm. This code taken from:
@@ -154,8 +147,7 @@ n  = number of points
 NB - this version is modifed to use zero indexed arrays
 
 **/
-double x1,x2,*x,*w;
-int n;
+void gauleg( double x1, double x2, double *x, double *w, int n )
 {
 	int m,j,i;
 	double z1,z,xm,xl,pp,p3,p2,p1;

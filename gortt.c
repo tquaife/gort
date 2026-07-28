@@ -13,15 +13,15 @@ int main( int argc, char **argv )
 	gortt_parameters params ;
 	gortt_spectra spect ;
 	gortt_control cont ;
-	
+
 	int i, j, nw_check, na_check, na=0 ;
-	
+
 	double x1, x2 ;
-	
+
 	char line[ MAX_LINE_LEN ], out_head[ MAX_LINE_LEN ], tmp_str1[ MAX_LINE_LEN ];
-	
+
 	FILE *prob_fp ;
-	
+
 	double *soil_vector_1, *soil_vector_2, *soil_vector_3, *soil_vector_4 ;
 	double out_vza, out_vaa, out_sza, out_saa ;
 
@@ -31,7 +31,7 @@ int main( int argc, char **argv )
 	/*
 	Initialise control structure
 	*/
-	
+
 	/*
 	Output precision for the reflectance/albedo columns. The default "%f"
 	gives 4 significant figures, which is too coarse to see a small change
@@ -66,27 +66,27 @@ int main( int argc, char **argv )
 	spect.is_user_leaf=FALSE ;
 	spect.is_user_soil=FALSE ;
 	spect.is_file_soil=FALSE ;
-	
-	
+
+
 	/*
 	default prospect values taken from the main.f90
 	file in the PROSPECT-D main repositpry
 	*/
-	
+
 	spect.p_N= 1.2;    // structure coefficient
-	spect.p_Cab= 30.;  // chlorophyll content (µg.cm-2) 
-	spect.p_Car= 10.;  // carotenoid content (µg.cm-2) 
-	spect.p_Anth= 1.0; // anthocyanin content (µg.cm-2) 
+	spect.p_Cab= 30.;  // chlorophyll content (µg.cm-2)
+	spect.p_Car= 10.;  // carotenoid content (µg.cm-2)
+	spect.p_Anth= 1.0; // anthocyanin content (µg.cm-2)
 	spect.p_Cbrown = 0.0; //brown pigment content (arbitrary units)
 	spect.p_Cw = 0.015;	// EWT (cm)
 	spect.p_Cm = 0.009;	// leaf mass per unit area (g.cm-2)
-			
-		
+
+
 	geom.vza = 0. ;
 	geom.vaa = 0. ;
 	geom.sza = 0. ;
 	geom.saa = 0. ;
-	
+
 	params.lambda = 0.405 ;
 	params.r = 0.76 ;
 	params.b = 3.55263 * params.r ;
@@ -94,7 +94,7 @@ int main( int argc, char **argv )
 	params.h2 = 8.5 ;
 	params.favd = 0.858 ;
 
-	params.dz  = 0.20 ;	
+	params.dz  = 0.20 ;
 	params.ds  = 0.20 ;
 	params.dth = DTOR( 1 ) ;
 
@@ -107,7 +107,7 @@ int main( int argc, char **argv )
 	/*params.lad = LAD_EXTREMOPHILE ;*/
 	params.lad = LAD_05 ;
 
-	/*the following prob. 
+	/*the following prob.
 	don't need changing*/
 	params.maxcrowns = 30 ;
 	params.nh_es = 20 ;
@@ -117,24 +117,24 @@ int main( int argc, char **argv )
 
   /*diffuse radiation*/
 	params.use_user_fd=FALSE ;
-	
+
 	gortt_cl_parser( argc, argv, &params, &geom, &spect, &cont ) ;
-	
-	
+
+
 	/*read soil spectra if requested*/
-	
+
 	if( spect.is_file_soil == TRUE ) gortt_read_soil_lut( &spect );
-	
-	
+
+
 	/*initialise some GORT stuff*/
-	
+
 	gortt_init_params( &params, &geom ) ;
-	
+
 	/**
 	Three options for dealing with photon scattering
 	probabilities:
 	**/
-	
+
 	/*1) calculate own probabilities if not reading from */
 	if( params.read_prob_file == FALSE )
 	    if( cont.use_q08_pn_kopen == TRUE )
@@ -149,8 +149,8 @@ int main( int argc, char **argv )
 		printf( "-1 %0.40f %0.40f\n",  params.k_open[0], params.k_openep[0]  );
 		return( EXIT_SUCCESS );
 	}
-	
-  /*3) read existing probability file*/	
+
+  /*3) read existing probability file*/
 	if( params.read_prob_file == TRUE ){
 		if( ( prob_fp = fopen( params.prob_fn, "r") ) == NULL ){
 			fprintf( stderr, "%s: error opening probability file: %s\n", *argv, params.prob_fn );
@@ -168,31 +168,31 @@ int main( int argc, char **argv )
 		fclose( prob_fp );
 	}
 
-	
+
 	/**
 	Parse first line in the BRDF input file
 	**/
-	
+
 	if( fgets( line, MAX_LINE_LEN, stdin ) == NULL ){
 		fprintf( stderr, "%s: error reading data on stdin\n", *argv );
 		exit( EXIT_FAILURE );
 	}
 	strcpy( out_head, line );
-	
+
 	/*read number of angles*/
 	if( get_first_string_token( line, tmp_str1 ) == 0 ){
 		fprintf( stderr, "%s: error reading number of angles from line 1\n", *argv );
 		exit( EXIT_FAILURE );
 	}
 	na_check = atoi( tmp_str1 );
-		
-	/*read number of wavelengths*/		
+
+	/*read number of wavelengths*/
 	if( get_first_string_token( line, tmp_str1 ) == 0 ){
 		fprintf( stderr, "%s: error reading number of wavebands from line 1\n", *argv );
 		exit( EXIT_FAILURE );
 	}
 	nw_check = atoi( tmp_str1 );
-	
+
   /*alloc to hold wavelengths*/
 	if( nw_check < 1 ){
 		fprintf( stderr, "%s: number of wavebands on line 1 must be at least 1 (got %d)\n", *argv, nw_check );
@@ -215,16 +215,16 @@ int main( int argc, char **argv )
 		fprintf( stderr, "%s: expected number of wavelengths (%d) does not match with number found (%d)\n", *argv, nw_check, spect.nw );
 		exit( EXIT_FAILURE );
 	}
-	
-	
+
+
 	/*memory allocations*/
 	spect.rsurf = (double *)malloc( nw_check * sizeof( double ) );
 	spect.rsoil = (double *)malloc( nw_check * sizeof( double ) );
 	spect.rleaf = (double *)malloc( nw_check * sizeof( double ) );
-	spect.tleaf = (double *)malloc( nw_check * sizeof( double ) ); 
+	spect.tleaf = (double *)malloc( nw_check * sizeof( double ) );
 
 	/* alloc for spectra of each component at each waveband*/
-	spect.scomp = (double *)malloc( 4 * nw_check * sizeof( double ) ); 
+	spect.scomp = (double *)malloc( 4 * nw_check * sizeof( double ) );
 
   /*allocs for integral terms*/
 	if( cont.calc_integrals ){
@@ -235,18 +235,18 @@ int main( int argc, char **argv )
 	  params.weights  = (double *)malloc( params.npoints * sizeof( double ) );
 	}
 
-	
+
 	/*set up integration */
 
   if( cont.calc_integrals ){
-    	gauleg( -1., 1., params.abscissa, params.weights, params.npoints ); 	
+    	gauleg( -1., 1., params.abscissa, params.weights, params.npoints );
     	/* Test print....
     	for (i=0;i<params.npoints;i++)
     	  printf( "%d %f %f\n", i, *(params.abscissa+i), *(params.weights+i) );
     	exit(0);
     	*/
 	}
-	
+
 	/*set up spectral stuff here*/
 	soil_vector_1 = default_soil_vector_1 ;
 	soil_vector_2 = default_soil_vector_2 ;
@@ -254,22 +254,22 @@ int main( int argc, char **argv )
 	soil_vector_4 = default_soil_vector_4 ;
 
 	/*soil reflectance*/
-	gortt_price_soil( &spect, soil_vector_1, soil_vector_2, soil_vector_3, soil_vector_4 );	
+	gortt_price_soil( &spect, soil_vector_1, soil_vector_2, soil_vector_3, soil_vector_4 );
 
 	/*leaf reflectance & transmittance*/
 	gortt_prospect_interface( &spect );
-	
-	
+
+
 	printf( "%s", out_head );
 
 	while( fgets( line, MAX_LINE_LEN, stdin ) != NULL ){
-	
+
 		if( sscanf( line, "%lf %lf %lf %lf", &out_vza, &out_vaa, &out_sza, &out_saa ) != 4 ){
 			fprintf( stderr, "%s: error on input, line %d\n", *argv, na+1 );
 			exit( EXIT_FAILURE );
 		}
 		na++;
-		
+
 		geom.vza = DTOR( out_vza ) ;
 		geom.vaa = DTOR( out_vaa ) ;
 		geom.sza = DTOR( out_sza ) ;
@@ -281,7 +281,7 @@ int main( int argc, char **argv )
 		*/
 
 		/*corrections to the angles*/
-				
+
 		/* zenith angles +ve */
 		if ( geom.sza < 0.0 ) {
 			geom.saa += M_PI ;
@@ -291,23 +291,23 @@ int main( int argc, char **argv )
 			geom.vaa += M_PI ;
 			geom.vza *= -1.0 ;
 		}
-		
+
 		/* azimuth angles between 0 & 360 degrees */
-		
+
 		while ( geom.saa > 2 * M_PI )
 			geom.saa -= 2 * M_PI;
-   
+
 		while ( geom.vaa > 2 * M_PI )
 			geom.vaa -= 2 * M_PI;
-   
+
 		while ( geom.saa < 0 )
 			geom.saa += 2 * M_PI;
-   
+
 		while ( geom.vaa < 0 )
 			geom.vaa += 2 * M_PI;
-		
-				
-				
+
+
+
 		geom.raa = geom.saa - geom.vaa ;
 		geom.raa = fabs((geom.raa - 2 * M_PI * (int) (0.5 + geom.raa * M_1_PI * 0.5)));
 
@@ -327,16 +327,16 @@ int main( int argc, char **argv )
 		gortt_set_zenith_dependant_probabilities( &params, &geom );
 		gortt_rsurf( &params, &geom, &spect );
 
-	
+
 	/**
 	LIDAR calculations
 	**/
-	
-	
+
+
 	gortt_lidar( &params, &geom, &spect );
-	
-	
-    /*BRF outputs 
+
+
+    /*BRF outputs
     n.b. the integral routines write over the BRFs so
     must print anything from previous calculations now
     */
@@ -372,19 +372,19 @@ int main( int argc, char **argv )
 			  printf( fmt, *( spect.fasoil + i ) );
 			}
 	  }
-	
+
 	  printf( "\n" );
-	
+
 	}
 
 	if( na_check != na ){
 		fprintf( stderr, "%s: expected number of angles (%d) does not match with number found (%d)\n", *argv, na_check, na );
 		exit( EXIT_FAILURE );
-	}	
-	
-	
+	}
+
+
 	/*deallocations*/
-	
+
 	gortt_dealloc_1d( spect.wavelength );
 	gortt_dealloc_1d( spect.rsurf );
 	gortt_dealloc_1d( spect.rsoil );
@@ -401,37 +401,36 @@ int main( int argc, char **argv )
 
 	}
 
-	if( params.height    != NULL )gortt_dealloc_1d( params.height ); 
-	if( params.height_p  != NULL )gortt_dealloc_1d( params.height_p );  
-	if( params.theta     != NULL )gortt_dealloc_1d( params.theta );  
-	if( params.theta_p   != NULL )gortt_dealloc_1d( params.theta_p );  
+	if( params.height    != NULL )gortt_dealloc_1d( params.height );
+	if( params.height_p  != NULL )gortt_dealloc_1d( params.height_p );
+	if( params.theta     != NULL )gortt_dealloc_1d( params.theta );
+	if( params.theta_p   != NULL )gortt_dealloc_1d( params.theta_p );
 
-	if( params.vb        != NULL )gortt_dealloc_1d( params.vb ); 
-	if( params.k_open    != NULL )gortt_dealloc_1d( params.k_open );  
-	if( params.dk_open   != NULL )gortt_dealloc_1d( params.dk_open );  
-	if( params.lk_up     != NULL )gortt_dealloc_1d( params.lk_up );  
-	if( params.lk_down   != NULL )gortt_dealloc_1d( params.lk_down ); 
-	if( params.k_openep  != NULL )gortt_dealloc_1d( params.k_openep ); 
-	if( params.es        != NULL )gortt_dealloc_1d( params.es );  
-	if( params.factorial != NULL )gortt_dealloc_1d( params.factorial );  
+	if( params.vb        != NULL )gortt_dealloc_1d( params.vb );
+	if( params.k_open    != NULL )gortt_dealloc_1d( params.k_open );
+	if( params.dk_open   != NULL )gortt_dealloc_1d( params.dk_open );
+	if( params.lk_up     != NULL )gortt_dealloc_1d( params.lk_up );
+	if( params.lk_down   != NULL )gortt_dealloc_1d( params.lk_down );
+	if( params.k_openep  != NULL )gortt_dealloc_1d( params.k_openep );
+	if( params.es        != NULL )gortt_dealloc_1d( params.es );
+	if( params.factorial != NULL )gortt_dealloc_1d( params.factorial );
 
-	if( params.fb        != NULL ) gortt_dealloc_2d( params.fb, params.nlayers );  
-	if( params.t_open    != NULL ) gortt_dealloc_2d( params.t_open, params.nlayers ); 
-	if( params.dt_open   != NULL ) gortt_dealloc_2d( params.dt_open, params.nlayers );  
-	if( params.s_p       != NULL ) gortt_dealloc_2d( params.s_p, params.nlayers );  
-	if( params.v_g       != NULL ) gortt_dealloc_2d( params.v_g, params.nlayers );  
-	if( params.p_s0      != NULL ) gortt_dealloc_2d( params.p_s0, params.nlayers );  
-	if( params.p_n0      != NULL ) gortt_dealloc_2d( params.p_n0, params.nlayers );  
-	if( params.epgap     != NULL ) gortt_dealloc_2d( params.epgap, params.nlayers );  
+	if( params.fb        != NULL ) gortt_dealloc_2d( params.fb, params.nlayers );
+	if( params.t_open    != NULL ) gortt_dealloc_2d( params.t_open, params.nlayers );
+	if( params.dt_open   != NULL ) gortt_dealloc_2d( params.dt_open, params.nlayers );
+	if( params.s_p       != NULL ) gortt_dealloc_2d( params.s_p, params.nlayers );
+	if( params.v_g       != NULL ) gortt_dealloc_2d( params.v_g, params.nlayers );
+	if( params.p_s0      != NULL ) gortt_dealloc_2d( params.p_s0, params.nlayers );
+	if( params.p_n0      != NULL ) gortt_dealloc_2d( params.p_n0, params.nlayers );
+	if( params.epgap     != NULL ) gortt_dealloc_2d( params.epgap, params.nlayers );
 
 	if( params.pd_s    	 != NULL ) gortt_dealloc_3d( params.pd_s, params.nlayers, params.nth );
-	
+
 	return( EXIT_SUCCESS );
 
 }
 
 
-void gortt_rsurf( p, g, s )
 /*
 Top level GORT function.
 
@@ -446,9 +445,7 @@ G = signature of sunlit soil
 Z = signature of shaded soil
 
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 {
 
 	double Kc, Kg, Kt, Kz ;
@@ -461,158 +458,158 @@ gortt_spectra *s ;
 	double Kprime_g, Kprime_z ;
 
 	int i ;
-	
 
-	
+
+
 	/*
 	======================
 	Geometric "kernels"
 	======================
 	*/
-	
+
 	g->vza_prime = gortt_prime_theta( p, g->vza );
 	g->sza_prime = gortt_prime_theta( p, g->sza );
-	
-	
+
+
 	/*Sunlit & viewed ground*/
 	Kg = gortt_kg( p, g ) ;
-	
-	
+
+
 	/*sunlit & viewed crown*/
 	Kc = gortt_kc( p, g, Kg ) ;
 	/*Kc = gortt_kc_wenge( p, g, Kg ) ;*/
 	/*Kc = gortt_kc_ambrals( p, g  ) ;*/
-	
-	
+
+
 	/*shaded and viewd ground*/
 	Kz = exp( -( p->lambda * M_PI * pow( p->r, 2 ) ) / cos( g->vza_prime ) ) - Kg ;
-	
-	
+
+
 	/*shaded and viewd crown*/
 	Kt = 1.0 - Kc - Kz - Kg ;
 	Kt = MAX( 0.0, Kt );
-	
+
 
 	/*Kg and Kz normallised by crown shape*/
 	Kprime_g = exp( -( p->lambda*M_PI*p->rr )/cos( g->sza_prime ) ) - Kg ;
 	Kprime_z = 1.0 - exp( -( p->lambda*M_PI*p->rr )/cos( g->vza_prime ) ) - Kprime_g ;
 
 
-	
+
 	/*
 	========================
-	Wavelength dependent 
+	Wavelength dependent
 	bits go inside this loop
 	========================
 	*/
-	
+
 	for( i=0; i<s->nw; i++ ){
-	
+
 		s->n = i ;
-	
+
 		/*
 		set up some spectral values for
 		the efficiency (gamma used a lot).
 		*/
-	
+
 		s->leaf_sscat_albedo = *( s->rleaf + i ) + *( s->tleaf + i ) ;
 		s->leaf_gamma = sqrt( 1 - s->leaf_sscat_albedo ) ;
-	
-	
+
+
 		/*sunlit ground
 		 Could include brdf model here*.
-		 
+
 		 *However - note that gort_energy() assumes a
-		 Lambertian background and so this would have 
+		 Lambertian background and so this would have
 		 to change to accomadate this correctly.
 		*/
-		
+
 		Gd = *( s->rsoil + i ) ;
 		Gf = *( s->rsoil + i ) ;
-	
+
 		G = p->fd*Gd + (1-p->fd)*Gf ;
 
-	
-		
+
+
 		/*shaded ground*/
-	
+
 		/*Zd = ( gortt_t_prime_df( p, g, s ) + p->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
 		Zd = ( gortt_t_prime_df( p, g, s ) + p->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
 		Zf = ( gortt_t_prime_ff( p, g, s ) - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
-			
+
 		Z = p->fd*Zd + (1-p->fd)*Zf ;
 
-	
+
 		/*Sunlit Crown*/
-		
+
 		/*CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
 			  * gortt_kuusk( p, g, s ) * s->leaf_sscat_albedo \
 				* ( 1.0 - gortt_phase_function_assymetry( p, g, s ) ) ) \
 				/ ( 2.0 * cos( g->sza ) * cos( g->vza ) ) ;*/
-				
+
 		CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
 			  * gortt_kuusk( p, g, s ) * s->leaf_sscat_albedo \
 				* ( 1.0 - gortt_phase_function_assymetry( p, g, s ) ) ) \
 				/ ( 2.0 * cos( g->sza_prime ) * cos( g->vza_prime ) ) ;
-		
-						
-		
-		
+
+
+
+
 		CfC = gortt_p_prime_ff( p, g, s ) ;
-		
+
 		CdG = ( Z * Kprime_z + G * Kprime_g ) * p->k_openep[ 0 ] ;
-		
+
 		CfG = ( ( p->k_openep[ 0 ]+p->k_open[ 0 ] )*G + \
 					( 1-(p->k_openep[ 0 ]+p->k_open[ 0 ] ) )*Z ) * p->k_openep[ 0 ] ;
-		
+
 		CdCG = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( p, g, s ) ) \
 				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 				 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
-		
+
 		CfCG = gortt_t_prime_ff( p, g, s ) \
 				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 				 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
-		
-		
+
+
 		Cd = CdC + CdG + CdCG ;
 		Cf = CfC + CfG + CfCG ;
-	
+
 		C = p->fd*Cd + (1-p->fd)*Cf ;
-		
-		
-		
+
+
+
 		/*Shaded crown*/
-		
+
 		/*
 		n.b. - this are the same as CdCG and CfCG
 		*/
-		
+
 		Td = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( p, g, s ) ) \
 			 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
-		
+
 		Tf = gortt_t_prime_ff( p, g, s ) \
 			 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
- 
-		
+
+
 		T = p->fd*Td + (1-p->fd)*Tf ;
-	
-	
+
+
 		/*
 		put the answers in the appropriate place...
 		*/
-	
+
 		*( s->rsurf + i ) = Kc*C + Kg*G + Kt*T + Kz*Z ;
-		
+
 
 		/*fprintf( stderr, "%lf %lf %lf %lf\n", C, G, T, Z);*/
-		
+
 		*( s->scomp + i*4 + 0 ) = C ;
 		*( s->scomp + i*4 + 1 ) = G ;
 		*( s->scomp + i*4 + 2 ) = T ;
 		*( s->scomp + i*4 + 3 ) = Z ;
-	
+
 	}
 
 
@@ -627,9 +624,7 @@ gortt_spectra *s ;
 }
 
 
-double gortt_prime_theta( p, za )
-gortt_parameters *p ;
-double za ;
+double gortt_prime_theta( gortt_parameters *p, double za )
 {
 
 	return( atan( ( p->b/p->r ) * tan( za ) ) );
@@ -638,20 +633,18 @@ double za ;
 
 
 
-double gortt_leaf_angle_distribution( p, za )
-gortt_parameters *p ;
-double za ;
+double gortt_leaf_angle_distribution( gortt_parameters *p, double za )
 {
 
 	double ag, bg, cg, dg ;
-	
+
 	ag = bg = cg = dg = 1 ;
-	
+
 	if( p->lad != LAD_05 ){
 		fprintf( stderr, "gortt currently assumes a G function of 0.5\n" ) ;
 		return( 0.5 );
 	}
-	
+
 	if( p->lad == LAD_PLANOPHILE  ){
 		dg = 0.0 ;
 	}else if( p->lad == LAD_ERECTOPHILE  ){
@@ -669,19 +662,16 @@ double za ;
 		bg = 0.0 ;
 		cg = 0.0 ;
 	}else if( p->lad == LAD_05  	 ){
-		return( 0.5 );	
+		return( 0.5 );
 	}
-	
-	
+
+
 	return( 2.0 / M_PI*( ag+bg*cos( 2.0*cg*za ) ) + dg*sin( za ) );
 
 }
 
 
-void gortt_init_params( p, g ) 
-gortt_parameters *p ;
-gortt_geometry *g ;
-
+void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 {
 
 	int i, j, s_max ;
@@ -699,8 +689,8 @@ gortt_geometry *g ;
 
 	/*
 	* figure out tau.
-	*/ 
-	
+	*/
+
 	p->k = gortt_leaf_angle_distribution( p, g->sza ) ;
 	/*p->elai = p->favd * ( ( 4.0/3.0 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ; */
 	p->elai = p->favd * ( ( 1.333333 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ;
@@ -708,7 +698,7 @@ gortt_geometry *g ;
 
 
 	/*
-	* printf("g.FAVD=%7.4f g.ELAI=%7.4f",g.FAVD, g.ELAI) ; 
+	* printf("g.FAVD=%7.4f g.ELAI=%7.4f",g.FAVD, g.ELAI) ;
 	* While h1 and h2 define the volume in which we find crown centers, we
 	* need to integrate from h1-r to h2+r in order to consider all heights at
 	* which scattering by foliage may occur.  These will be referred to as z1
@@ -739,16 +729,16 @@ gortt_geometry *g ;
 	new version - fix nlayers instead of dz and ds
 	*/
 	/*p->nlayers = (int) ((p->z2 - p->z1) / p->dz) + 1;*/
- 	
-	
+
+
  	p->dz =  (double)(p->z2 - p->z1) / ((double) p->nlayers - 1.0 )  ;
 	p->ds = p->dz ;
- 	p->dz_p = p->dz / p->ellipticity ; 
+ 	p->dz_p = p->dz / p->ellipticity ;
 
- 
+
   p->nh1 =   (int) ((p->h1 - p->z1) / p->dz) + 1 ;
 	p->nh2 =   (int) ((p->h2 - p->z1) / p->dz) + 1 ;
-   
+
 	/*
 	* The following variable relates to the discrete approximation to P(s) at
 	* a given height.  The variable 'ds' is used in the conversions between
@@ -757,9 +747,9 @@ gortt_geometry *g ;
 
 	/*
 	* Figure out the number of angles theta (nth) for use in
-	* various numerical integrations. 
+	* various numerical integrations.
 	*/
-   
+
 	p->nth = (int) ( DTOR(90.0) / p->dth + 0.5 ) + 1;
 
 
@@ -799,9 +789,9 @@ gortt_geometry *g ;
 	}
 
 	 p->factorial[0] = 1;
-   for ( i = 1; i<=p->maxcrowns; i++) 
+   for ( i = 1; i<=p->maxcrowns; i++)
       p->factorial[i] = p->factorial[i - 1]*(double) i;
-			
+
 
 	/*
 	* Initialize height and theta arrays.
@@ -826,12 +816,12 @@ gortt_geometry *g ;
 
 	for ( i=p->nlayers-1; i>=0; i--) {
 		p->height[i] = p->z2 - p->dz * (double)(p->nlayers-1-i);
-		p->height_p[i] = p->height[i]/p->ellipticity ; 
+		p->height_p[i] = p->height[i]/p->ellipticity ;
 	}
 
 	for (i = 0; i < p->nth; i++) {
 		p->theta[i] = p->dth * (double) i;
-		if( p->theta[i] >= M_PI/2.0 ) { 
+		if( p->theta[i] >= M_PI/2.0 ) {
 			p->theta[i]  = M_PI/2.0  - 1.0*M_PI/180.0;
 		}
 
@@ -839,10 +829,10 @@ gortt_geometry *g ;
 		* Get theta prime -- original angles adjusted by ellipticity.
 		*/
 		p->theta_p[i] = atan( tan(p->theta[i]) * p->ellipticity );
-		if( p->theta_p[i] >= M_PI/2.0 ) { 
+		if( p->theta_p[i] >= M_PI/2.0 ) {
 			p->theta_p[i] = M_PI/2.0 - 1.0*M_PI/180.0;
 		}
-	
+
 	}
 
 
@@ -850,21 +840,21 @@ gortt_geometry *g ;
 	Other allocations
 	*/
 
-	 p->vb       = gortt_alloc_1d( p->nlayers ); 
-	 p->k_open   = gortt_alloc_1d( p->nlayers );  
-	 p->dk_open  = gortt_alloc_1d( p->nlayers );  
-	 p->lk_up    = gortt_alloc_1d( p->nlayers );  
-	 p->lk_down  = gortt_alloc_1d( p->nlayers ); 
-	 p->k_openep = gortt_alloc_1d( p->nlayers ); 
-	 p->es       = gortt_alloc_1d( p->nlayers );  
-	 p->fb       = gortt_alloc_2d( p->nlayers , p->nth );  
-	 p->t_open   = gortt_alloc_2d( p->nlayers , p->nlayers ); 
-	 p->dt_open  = gortt_alloc_2d( p->nlayers , p->nlayers );  
-	 p->s_p      = gortt_alloc_2d( p->nlayers , p->nth );  
-	 p->v_g      = gortt_alloc_2d( p->nlayers , p->nth );  
-	 p->p_s0     = gortt_alloc_2d( p->nlayers , p->nth );  
-	 p->p_n0     = gortt_alloc_2d( p->nlayers , p->nth );  
-	 p->epgap    = gortt_alloc_2d( p->nlayers , p->nth );  
+	 p->vb       = gortt_alloc_1d( p->nlayers );
+	 p->k_open   = gortt_alloc_1d( p->nlayers );
+	 p->dk_open  = gortt_alloc_1d( p->nlayers );
+	 p->lk_up    = gortt_alloc_1d( p->nlayers );
+	 p->lk_down  = gortt_alloc_1d( p->nlayers );
+	 p->k_openep = gortt_alloc_1d( p->nlayers );
+	 p->es       = gortt_alloc_1d( p->nlayers );
+	 p->fb       = gortt_alloc_2d( p->nlayers , p->nth );
+	 p->t_open   = gortt_alloc_2d( p->nlayers , p->nlayers );
+	 p->dt_open  = gortt_alloc_2d( p->nlayers , p->nlayers );
+	 p->s_p      = gortt_alloc_2d( p->nlayers , p->nth );
+	 p->v_g      = gortt_alloc_2d( p->nlayers , p->nth );
+	 p->p_s0     = gortt_alloc_2d( p->nlayers , p->nth );
+	 p->p_n0     = gortt_alloc_2d( p->nlayers , p->nth );
+	 p->epgap    = gortt_alloc_2d( p->nlayers , p->nth );
 
 
 	/*
@@ -874,9 +864,9 @@ gortt_geometry *g ;
 		fprintf(stderr, "unable to alloc p->pd_s\n");
 		exit( EXIT_FAILURE );
 	}
-	 
+
 	for( i=0; i<p->nlayers; i++ ){
-      
+
 		if( !(  p->pd_s[i] = (double **)calloc( p->nth, sizeof( double * ) ) ) ){;
 			fprintf(stderr, "unable to alloc p->pd_s[%d]\n", i );
 			exit( EXIT_FAILURE );
@@ -887,9 +877,9 @@ gortt_geometry *g ;
 
 			/*
 			* figure out maximum path length at this height and this angle.
-			* Allocate enough memory to hold all possible s values.	 
+			* Allocate enough memory to hold all possible s values.
 			*/
- 
+
 			/*s_max = gortt_s_to_index( p ,(p->z2 - p->height[i]) / cos( p->theta_p[j] ) );*/
 
 			s_max = gortt_s_to_index( p ,(p->z2_p - p->height_p[i]) / cos( p->theta_p[j] ) );
@@ -898,18 +888,18 @@ gortt_geometry *g ;
 			fprintf(stderr,"s_max %d\n",s_max);
 			fflush( stderr );
 			*/
-			
+
 			p->pd_s[i][j] = gortt_alloc_1d( s_max + PD_S_BUFF ) ;
-			
+
 			/*
 			if( !(  p->pd_s[i][j] = ( double *)calloc( ( s_max+PD_S_BUFF ) , sizeof( double ) ) ) ){;
 				fprintf(stderr, "unable to alloc p->pd_s[%d]\n", i );
 				exit( EXIT_FAILURE );
-			}	
+			}
 			*/
 
 		}
-   
+
 	}
 
 
@@ -918,30 +908,28 @@ gortt_geometry *g ;
 
 
 
-void gortt_set_zenith_dependant_probabilities( p, g ) 
 /*
 linearly interoplate the gap probabilities to get the
 probs. at the required zenith angle.
 Requires that p->p_n0 and p->epgap have been populated.
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
+void gortt_set_zenith_dependant_probabilities( gortt_parameters *p, gortt_geometry *g )
 {
 
 	int cindex ;
 	int findex ;
 	double d, pos ;
-		
-		
-	/*solar zenith*/	
-	
+
+
+	/*solar zenith*/
+
 	pos = fabs( g->sza ) / p->dth ;
-	
+
 	cindex = ceil( pos );
 	findex = floor( pos );
-	
+
 	d = pos - findex ;
-	
+
 	p->p_neq0_heq0_sza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
 	p->p_ngt0_heq0_sza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
 
@@ -949,12 +937,12 @@ gortt_geometry *g ;
 	/*view zenith*/
 
 	pos = fabs( g->vza ) / p->dth ;
-	
+
 	cindex = ceil( pos );
 	findex = floor( pos );
-	
+
 	d = pos - findex ;
-	
+
 	p->p_neq0_heq0_vza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
 	p->p_ngt0_heq0_vza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
 
@@ -966,12 +954,11 @@ gortt_geometry *g ;
 
 
 
-double * gortt_alloc_1d( n )
-int n ;
+double * gortt_alloc_1d( int n )
 {
 
 	double *r;
-	
+
 	if (! ( r = (double *) calloc( n, sizeof(double) ) ) ) {
 		fprintf(stderr, "Memory allocation failed (gortt_alloc_1d)\n");
 		exit( EXIT_FAILURE );
@@ -981,69 +968,63 @@ int n ;
 
 }
 
-void gortt_dealloc_1d( d )
-double *d ;
+void gortt_dealloc_1d( double *d )
 {
 
 	free( d );
-	
+
 	return;
 
 }
 
-double ** gortt_alloc_2d( n, m )
-int n, m ;
+double ** gortt_alloc_2d( int n, int m )
 {
 
 
 	int q;
 	double **r;
 
-   
+
 	/*n.b. sizeof(double *), not sizeof(double) - this is a row of pointers*/
 	if (! ( r = (double **) calloc( (unsigned) n, sizeof(double *) ) ) ) {
 		fprintf(stderr, "Memory allocation failed (gortt_alloc_2d)\n");
 		exit( EXIT_FAILURE );
 	}
-	 
+
 	for( q=0; q<n; q++)
 		r[q] = gortt_alloc_1d( m );
-	
+
 
 	return( r );
 
 }
 
-void gortt_dealloc_2d( d, n )
-double **d ;
-int n;
+void gortt_dealloc_2d( double **d, int n )
 {
 
 	int q ;
 
 	for( q=0; q<n; q++) gortt_dealloc_1d( d[ q ] );
 	free( d );
-	
+
 	return;
 
 }
 
-void gortt_dealloc_3d( d, n, m )
-double ***d ;
-int n, m;
+void gortt_dealloc_3d( double ***d, int n, int m )
 {
 
 	int q, r ;
 
-	for( q=0; q<n; q++){ 
-		for( r=0; r<m; r++){ 
+	for( q=0; q<n; q++){
+		for( r=0; r<m; r++){
 			free( d[ q ][ r ] );
 		}
 		free( d[ q ] );
 	}
-	
+
 	free( d );
-	
+
 	return;
 
 }
@@ -1068,104 +1049,98 @@ NULL, and atof/strcpy then segfault.
 }
 
 
-void gortt_cl_parser( argc, argv, p, g, s, c )
-int argc;
-char **argv;
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
-gortt_control *c ;
+void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_geometry *g, gortt_spectra *s, gortt_control *c )
 {
 
 
 	int i, use_true_p=FALSE, use_lai=FALSE;
 	float hb=2.0, br=1.0, pcc=0.5, lai=2.0;
-	
+
 	p->read_prob_file=FALSE ;
 	p->write_prob_file=FALSE;
 	p->use_user_beta=FALSE ;
-	
-	
-	
+
+
+
 	for( i=1; i<argc; i++ ){
 
 		if( *argv[ i ] == '-' ){
-		
-			/**/ if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-h2", 3 ) )     p->h2       = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-lambda", 7 ) ) p->lambda   = atof( gortt_next_arg( argc, argv, &i ) ); 
+
+			/**/ if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-h2", 3 ) )     p->h2       = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-lambda", 7 ) ) p->lambda   = atof( gortt_next_arg( argc, argv, &i ) );
 
 
-			else if( !strncmp( argv[ i ], "-HB", 3 ) )   { use_true_p=TRUE ;  hb = atof( gortt_next_arg( argc, argv, &i ) ); } 
+			else if( !strncmp( argv[ i ], "-HB", 3 ) )   { use_true_p=TRUE ;  hb = atof( gortt_next_arg( argc, argv, &i ) ); }
 			else if( !strncmp( argv[ i ], "-BR", 3 ) )   { use_true_p=TRUE ;  br = atof( gortt_next_arg( argc, argv, &i ) ); }
 			else if( !strncmp( argv[ i ], "-PCC", 7 ) )  { use_true_p=TRUE ;  pcc = atof( gortt_next_arg( argc, argv, &i ) ); }
-			
+
 			else if( !strncmp( argv[ i ], "-LAI", 7 ) )  { use_lai=TRUE ;  lai = atof( gortt_next_arg( argc, argv, &i ) ); }
 
-			
-			else if( !strncasecmp( argv[ i ], "-beta", 5 ) ){ p->use_user_beta=TRUE; p->beta=atof( gortt_next_arg( argc, argv, &i ) );} 
 
-			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );} 
-			
+			else if( !strncasecmp( argv[ i ], "-beta", 5 ) ){ p->use_user_beta=TRUE; p->beta=atof( gortt_next_arg( argc, argv, &i ) );}
+
+			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );}
+
 			else if( !strncmp( argv[ i ], "-alb_leaf", 9 ) ){
 				s->is_user_leaf = TRUE ;
 				s->user_r_leaf = atof( gortt_next_arg( argc, argv, &i ) ) ;
-				
+
 			}
-			
+
 			else if( !strncmp( argv[ i ], "-alb_soil", 9 ) ){
 				s->is_user_soil = TRUE ;
 				s->is_file_soil = FALSE ;
 				s->user_r_soil = atof( gortt_next_arg( argc, argv, &i ) ) ;
-				
+
 			}
 
 			else if( !strncmp( argv[ i ], "-soil_spectra", 10 ) ){
 				s->is_user_soil = FALSE ;
 				s->is_file_soil = TRUE ;
 				strcpy( s->soil_file, gortt_next_arg( argc, argv, &i ) );
-				
+
 			}
-			
+
 
 			else if( !strncmp( argv[ i ], "-prnspec", 7 ) ) c->print_comp_spectra=TRUE;
-			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;			
+			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
-			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;			
-			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;			
-			
+			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;
+			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;
+
 			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, gortt_next_arg( argc, argv, &i ) );}
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;
-			
+
 			/*prospect*/
-			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-cm", 3 ) )  s->p_Cm      = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-cm", 3 ) )  s->p_Cm      = atof( gortt_next_arg( argc, argv, &i ) );
 
 			/*price*/
-			else if( !strncasecmp( argv[ i ], "-rsl1", 5 ) )  s->rsl1    = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-rsl2", 5 ) )  s->rsl2    = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-rsl3", 5 ) )  s->rsl3    = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-rsl4", 5 ) )  s->rsl4    = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-rsl1", 5 ) )  s->rsl1    = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-rsl2", 5 ) )  s->rsl2    = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-rsl3", 5 ) )  s->rsl3    = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-rsl4", 5 ) )  s->rsl4    = atof( gortt_next_arg( argc, argv, &i ) );
 
 			/*leave these at the bottom! (so as not to catch other opts)*/
-			else if( !strncasecmp( argv[ i ], "-b", 2 ) )      p->b        = atof( gortt_next_arg( argc, argv, &i ) ); 
-			else if( !strncasecmp( argv[ i ], "-r", 2 ) )      p->r        = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-b", 2 ) )      p->b        = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncasecmp( argv[ i ], "-r", 2 ) )      p->r        = atof( gortt_next_arg( argc, argv, &i ) );
 
 
 
 
 
-			
+
 			else if( !strncasecmp( argv[ i ], "-u", 2 ) ){  gortt_usage( argv[ 0 ] ); exit( EXIT_SUCCESS ) ; }
-			
+
 			else{
-			
+
 				fprintf( stderr, "%s: unknown option on command line: %s\n", argv[ 0 ], argv[ i ] );
 				fprintf( stderr, "(use the option -u to see brief usage instructions)\n" );
 				exit( EXIT_FAILURE );
@@ -1173,29 +1148,29 @@ gortt_control *c ;
 			}
 
 		}else{
-		
+
 			fprintf( stderr, "%s: unknown argument on command line: %s\n", argv[ 0 ], argv[ 1 ] );
 			fprintf( stderr, "(use the option -u to see brief usage instructions)\n" );
 			exit( EXIT_FAILURE );
-		
+
 		}
 
 	}
 
 	if( use_true_p ){
-	
+
 		p->r=10. ;
 		p->b=br*p->r ;
 		p->h1=p->b*2. ;
 		p->h2=hb*p->b+p->h1 ;
 		p->lambda=pcc/(p->r*p->r*M_PI) ;
-	
+
 	}
 
 	if( use_lai ){
-	
+
 		p->favd=lai*3./(p->lambda*p->r*p->r*M_PI*p->b*4.0) ;
-	
+
 	}
 
 
@@ -1214,11 +1189,11 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "where N is the number of view--illumination geometries\nM is the number of wavelengths and\n"  );
 	fprintf( stderr, "W_i (i=1,M) are the wavelengths at which to predict the canopy reflectance\n"  );
 	fprintf( stderr, "The rest of the input data is four columns of ascii:\nview_zenith view_azimuth solar_zenith solar azimuth\n\n"  );
-	
+
 
 	fprintf( stderr, "The command line options are:\n"  );
 
-	
+
   fprintf( stderr, "\n============ Crown geometry options:\n" );
 
 	fprintf( stderr, "-beta arg\tforce the proportion of mutual shadowing to arg\n"  );
@@ -1240,7 +1215,7 @@ void gortt_usage( char *bin_name )
 
 
 	fprintf( stderr, "\nThe above old style options refer to the original GORT paper and the \n"  );
-	fprintf( stderr, "new style options are as they are expressed in the Quaife et al. (2008) \n"  );	
+	fprintf( stderr, "new style options are as they are expressed in the Quaife et al. (2008) \n"  );
 	fprintf( stderr, "DALEC paper. As soon as a new style option is specified all old style \n"  );
 	fprintf( stderr, "options are ignored. Note that they are same thing - the code simply uses\n"  );
 	fprintf( stderr, "the new style options to calculate the old ones but the new ones are \n"  );
@@ -1254,7 +1229,7 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-LAI  arg\tset the leaf area index (m2/m2) for the scene to arg\n"  );
 
 	fprintf( stderr, "\n============ Prospect leaf options:\n" );
-	
+
 	fprintf( stderr, "-N arg  \tset the leaf structure variable to arg\n"  );
 	fprintf( stderr, "-Cab arg\tset the leaf chlorophyl content (µg.cm-2) to arg\n"  );
 	fprintf( stderr, "-Cw arg \tset the equivelant leaf water thickness (cm) to arg\n"  );
@@ -1262,15 +1237,15 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-Anth arg \tset the anthocyanin content (µg.cm-2) to arg\n"  );
 	fprintf( stderr, "-Cbrown arg \tset the /brown pigment content (arbitrary units) to arg\n"  );
 	fprintf( stderr, "-Cm arg \tset the leaf mass per unit area (g.cm-2) to arg\n"  );
-	
-	
-	
+
+
+
 	fprintf( stderr, "\n============ Price soil spectra options:\n" );
 	fprintf( stderr, "-rsl1 arg \tset the weight of the first soil vector to arg\n"  );
 	fprintf( stderr, "-rsl2 arg \tset the weight of the second soil vector to arg\n"  );
 	fprintf( stderr, "-rsl3 arg \tset the weight of the third soil vector to arg\n"  );
 	fprintf( stderr, "-rsl4 arg \tset the weight of the fourth soil vector to arg\n"  );
-	
+
 	fprintf( stderr, "\n============ User override for spectral properties:\n" );
 	fprintf( stderr, "-alb_leaf     arg \tset leaf albedo to arg (turns prospect off)**\n"  );
 	fprintf( stderr, "-alb_soil     arg \tset soil albedo to arg (turns price off)**\n"  );
@@ -1302,9 +1277,7 @@ void gortt_usage( char *bin_name )
 }
 
 
-char	get_first_string_token( line, token )
-char	*line;
-char	*token;
+char get_first_string_token( char *line, char *token )
 {
 
 	int	i=0, j=0;
@@ -1313,80 +1286,78 @@ char	*token;
 	/* at the end of the line        */
 
 	if( *line == '\0' ) return( 0 );
-	
+
 	/* Skip leading white space and */
 	/* return zero if end of string */
 	/* is encountered               */
-	
-	while( isspace( *(line+i) ) ) 
+
+	while( isspace( *(line+i) ) )
 		if( *(line+( ++i )) == '\0' ) return( 0 );
-	
-	
-	/* Put the first block of non white 
+
+
+	/* Put the first block of non white
 	   space characters into element */
-	
+
 	while( ! isspace( *(line+i) ) ){
 		if( ( token[j++] = *(line+(i++) ) ) == '\0' ){
-		
+
 			*line = '\0';
 			return( 1 );
-		
+
 		}
 	}
-	
-	
+
+
 	/*put a NULL terminator in at j - (*) */
-	
+
 	token[ j ] = '\0' ;
-	
+
 	/* Copy remainder of line into the beggining */
 	/* of itself */
-	
+
 	for( j=0; ( *(line+j)=*(line+i) ) != '\0' ; ++j, ++i );
-	
-	
-	
+
+
+
 	return( 1 );
 
 }
 
 
-void	gortt_price_soil( s, sv1, sv2, sv3, sv4 )
-gortt_spectra *s ;
-double *sv1, *sv2, *sv3, *sv4 ;
+void gortt_price_soil( gortt_spectra *s, double *sv1, double *sv2, double *sv3, double *sv4 )
 {
 
 
 	int upper, lower, i ;
 	double fraction ;
-	
+
 	double rs_lower, rs_upper ;
-	
+
 	for( i=0; i<s->nw; i++ ){
-	
+
 		if( *( s->wavelength +i ) < 400 || *( s->wavelength +i ) > 2500 ){
 			fprintf( stderr, "gortt_price_soil: wavlength out of range (400-2500)\n" );
 			exit( EXIT_FAILURE );
 		}
 
-	
+
 		if( s->is_user_soil ){
-		
+
 			*(s->rsoil + i) = s->user_r_soil ;
-		
+
 		}else{
-		
+
 			upper = 1. + (*( s->wavelength +i )-400) / 5.0 ;
 			lower = (*( s->wavelength +i )-400) / 5.0 ;
-		
+
 			fraction = (double) ( *( s->wavelength +i ) - 400. ) / 5.0 - lower ;
-	
-	
+
+
 			rs_lower = s->rsl1 * *( sv1 + lower ) + s->rsl2 * *( sv2 + lower ) +  s->rsl3 * *( sv3 + lower ) + s->rsl4 * *( sv4 + lower ) ;
 			rs_upper = s->rsl1 * *( sv1 + upper ) + s->rsl2 * *( sv2 + upper ) +  s->rsl3 * *( sv3 + upper ) + s->rsl4 * *( sv4 + upper ) ;
-	
+
 			*(s->rsoil + i) = rs_lower * ( 1 - fraction ) + rs_upper * fraction ;
-		
+
 		}
 
 	}
@@ -1396,12 +1367,11 @@ double *sv1, *sv2, *sv3, *sv4 ;
 }
 
 
-void gortt_prospect_interface( s )
-gortt_spectra *s ;
+void gortt_prospect_interface( gortt_spectra *s )
 {
 
 	double  prospect_out[PROSPECT_NWBANDS*2];
-	
+
 	int upper, lower, i ;
 	float fraction ;
 
@@ -1412,8 +1382,8 @@ gortt_spectra *s ;
 	/*for( i=0; i<2100; i++ )
 	        fprintf(stderr, "%d %f %f\n",400+i,prospect_out[i],prospect_out[i+PROSPECT_NWBANDS]);
 	*/
-	
-	
+
+
 	for( i=0; i<s->nw; i++ ){
 		if( *( s->wavelength +i ) < 400 || *( s->wavelength +i ) > 2500 ){
 			fprintf( stderr, "gortt_prospect_interface: wavlength out of range (400-2500)\n" );
@@ -1422,22 +1392,22 @@ gortt_spectra *s ;
 
 		if( s->is_user_leaf ){
 			*(s->rleaf + i) = s->user_r_leaf / 2.0 ;
-			*(s->tleaf + i) = s->user_r_leaf / 2.0 ;		
-		
+			*(s->tleaf + i) = s->user_r_leaf / 2.0 ;
+
 		}else{
-			/*get the leaf optics for the desired wavelength*/	
+			/*get the leaf optics for the desired wavelength*/
 			upper = 1 + (*( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN ;
 			lower = (*( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN ;
-		
+
 			fraction = (float) ( *( s->wavelength +i )-PROSPECT_LOWER_WL) / PROSPECT_SPECTRAL_RESLN - lower ;
-	
+
 			*(s->rleaf + i) = prospect_out[lower] * (1-fraction) + prospect_out[upper] * fraction ;
 			*(s->tleaf + i) = prospect_out[lower+PROSPECT_NWBANDS] * (1-fraction)\
 			                + prospect_out[upper+PROSPECT_NWBANDS] * fraction ;
 		}
-	
+
 	}
-	
+
 	return ;
 }
 
@@ -1453,8 +1423,7 @@ File must be in ascending order and cover the range 400<->2500. It
 may have values outside this range and the sampling interval is arbitrary
 and need not be constant.
 **/
-void	gortt_read_soil_lut( s )
-gortt_spectra *s;
+void gortt_read_soil_lut( gortt_spectra *s )
 {
 
 
@@ -1463,7 +1432,7 @@ gortt_spectra *s;
 	int n=0, i, index ;
 	double this_wl, this_rs ;
 	double last_wl, last_rs ;
-	
+
 	if( ( fp = fopen( s->soil_file, "r" ) ) == NULL ){
 		fprintf( stderr, "gortt: cannot open file: %s\n", s->soil_file );
 		exit( EXIT_FAILURE );
@@ -1476,25 +1445,25 @@ gortt_spectra *s;
 			fprintf( stderr, "gortt: error in soil file (%s), line %d\n", s->soil_file, n+1 );
 			exit( EXIT_FAILURE );
 		}
-		
+
 		if( n==1 && this_wl > 400 ){
 			fprintf( stderr, "gortt: error in soil file (%s), first wavelength (%lf) should be <=400\n", s->soil_file, this_wl );
 			exit( EXIT_FAILURE );
-			
+
 		}
-		
+
 		if( n>1 ){
-		
+
 			for( i=ceil( last_wl ); i<=floor( this_wl ); i++ ){
-			
+
 				index=i-400;
-				
+
 				if( (index>=0) && (index<=2100) )
-					s->soil_spectra[ index ] = last_rs+(i-last_wl)/(this_wl-last_wl)*(this_rs-last_rs) ; 
+					s->soil_spectra[ index ] = last_rs+(i-last_wl)/(this_wl-last_wl)*(this_rs-last_rs) ;
 			}
-		
+
 		}
-		
+
 		last_wl=this_wl;
 		last_rs=this_rs;
 
@@ -1502,13 +1471,13 @@ gortt_spectra *s;
 
 	if( last_wl < 2500 ){
 		fprintf( stderr, "gortt: error in soil file (%s), last wavelength (%lf) should be >=2500\n", s->soil_file, last_wl );
-		exit( EXIT_FAILURE );		
+		exit( EXIT_FAILURE );
 	}
 
-	
+
 	for( i=0;i<=2100;i++ ) printf( "%d %lf\n", i+400, s->soil_spectra[ i ] ) ;
 	exit( EXIT_FAILURE );
-	
+
 
 
 	fclose( fp );

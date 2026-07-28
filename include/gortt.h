@@ -18,14 +18,14 @@
 #define LAD_05 100
 
 #ifndef FALSE
-#define FALSE 0 
+#define FALSE 0
 #endif
 
 #ifndef TRUE
-#define TRUE 1 
+#define TRUE 1
 #endif
 
-#define MAX_LINE_LEN 1000 
+#define MAX_LINE_LEN 1000
 
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
@@ -34,7 +34,7 @@
 
 
 /* new 09/10/12:
-A structure to hold control variables, 
+A structure to hold control variables,
 e.g. to decide what ouput to print etc
 */
 
@@ -55,17 +55,17 @@ typedef struct  {
 		double vaa ;
 		double sza ;
 		double saa ;
-		
+
 		double raa ;
 		double vza_prime ;
 		double sza_prime ;
-		
+
 		double Kc ;
 		double Kg ;
 		double Kt ;
 		double Kz ;
-		
-		
+
+
 } gortt_geometry ;
 
 
@@ -76,52 +76,52 @@ typedef struct  {
 		double *tleaf ;
 		double *rsurf ;
 		double *scomp ;
-		
+
 		/*intgral terms*/
 		double *albedo ;
 		double *favegt ;
 		double *fasoil ;
-		
+
 		/*number of wavebands*/
-		int nw ; 
+		int nw ;
 		/*counter!*/
-		int n ; 
-		
+		int n ;
+
 		/*functions of the above*/
 		double leaf_sscat_albedo ;
 		double leaf_gamma ;
-		
+
 		/*leaf & soil properties*/
-				
+
 		double p_N ;
-		double p_Cab; 
-		double p_Car; 
-		double p_Anth; 
+		double p_Cab;
+		double p_Car;
+		double p_Anth;
 		double p_Cbrown;
 		double p_Cw;
 		double p_Cm;
-		
+
 		double rsl1;
 		double rsl2;
 		double rsl3;
 		double rsl4;
-		
+
 		/*user specified rho leaf & soil*/
-		
+
 		int is_user_leaf ;
 		int is_user_soil ;
 		double user_r_leaf ;
 		double user_r_soil ;
-		
+
 		int is_file_soil ;
 		char soil_file[ MAX_LINE_LEN ] ;
 		double soil_spectra[2101] ;
-		
+
 		} gortt_spectra ;
 
 
 typedef struct  {
-		
+
 		double r ;
 		double rr ;
 		double rrr ;
@@ -148,23 +148,23 @@ typedef struct  {
 		double ellipticity ;
 
         /*diffuse fraction*/
-        unsigned short use_user_fd ; 
+        unsigned short use_user_fd ;
 		double fd ;
 
-		
+
 		int nh_es ;
 		int nh1 ;
 		int nh2 ;
-		
+
 		int nlayers ;
 		int maxcrowns ;
-		
+
 		double dz ;
 		double dz_p ;
 		double ds ;
 		double dth ;
 		int nth ;
-		
+
 		double *height ;
 		double *height_p ;
 		double *theta ;
@@ -176,9 +176,9 @@ typedef struct  {
 		double *lk_up ;
 		double *lk_down ;
 		double *es ;
-	
+
 		double *factorial ;
-	
+
 		double **fb ;
 		double **t_open ;
 		double **dt_open ;
@@ -187,28 +187,28 @@ typedef struct  {
 		double **p_s0 ;
 		double **p_n0 ;
 		double **epgap ;
-		
+
 		double ***pd_s ;
-				
+
 		int lad ;
-		
+
 		double p_neq0_heq0_sza ;
 		double p_ngt0_heq0_sza ;
 		double p_neq0_heq0_vza ;
 		double p_ngt0_heq0_vza ;
-		
+
 		int read_prob_file ;
 		char prob_fn[ MAX_LINE_LEN ] ;
 		int write_prob_file ;
-		
+
 		int use_user_beta ;
 		double beta ;
-		
+
 		/*for integrating*/
 		int npoints ;
 		double *abscissa ;
 		double *weights ;
-		
+
 		} gortt_parameters ;
 
 

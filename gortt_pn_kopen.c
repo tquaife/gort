@@ -14,6 +14,8 @@ void gortt_gap_probabilities( gortt_parameters *p, gortt_geometry *g )
 
 	int s_max_p ;
 
+	double v_g ;	/* Vgamma at this height and theta */
+
 	/*
 	Find probabilities of photon not hitting a
 	crown, given height and theta
@@ -24,8 +26,8 @@ void gortt_gap_probabilities( gortt_parameters *p, gortt_geometry *g )
 			/*
 			* Find P(n=0), using Vgamma.
 			*/
-			p->v_g[h][t] = gortt_crown_proj_volume( p, p->theta_p[t], p->height_p[h]  );
-			p->p_n0[h][t] = exp(-1.0 * p->lv_p * p->v_g[h][t] );
+			v_g = gortt_crown_proj_volume( p, p->theta_p[t], p->height_p[h]  );
+			p->p_n0[h][t] = exp(-1.0 * p->lv_p * v_g );
 		}
 	}
 
@@ -70,58 +72,8 @@ void gortt_gap_probabilities( gortt_parameters *p, gortt_geometry *g )
 
 
 
-	gortt_calc_vb( p ) ;
-	gortt_calc_fb( p ) ;
-	gortt_calc_t_open( p );
 	gortt_calc_epgap( p );
 	gortt_calc_kopen( p );
-
-
-	/*
-	==================================================================
-	*/
-
-#ifdef PRINT_PROBAILITY_ARRAYS
-
-	printf( "---------------------------------\n" );
-	printf( "vb:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->vb[i] );
-	printf( "----\nk_open:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->k_open[i] );
-	printf( "----\ndk_open:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->dk_open[i] );
-	printf( "----\nlk_up:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->lk_up[i] );
-	printf( "----\nlk_down:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->lk_down[i] );
-	printf( "----\nk_openep:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->k_openep[i] );
-	printf( "----\nes:\n" );
-	for( i=0; i<p->nlayers; i++ ) printf( "%f\n", p->es[i] );
-	printf( "----\nt_open:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nlayers; h++ )printf( "%f\n", p->t_open[i][h] );
-	printf( "----\ndt_open:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nlayers; h++ )printf( "%f\n", p->dt_open[i][h] );
-	printf( "----\nfb:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->fb[i][h] );
-	printf( "----\ns_p:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->s_p[i][h] );
-	printf( "----\nv_g:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->v_g[i][h] );
-	printf( "----\np_s0:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->p_s0[i][h] );
-	printf( "----\np_n0:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->p_n0[i][h] );
-	printf( "----\nepgap:\n" );
-	for( i=0; i<p->nlayers; i++ )for( h=0; h<p->nth; h++ )printf( "%f\n", p->epgap[i][h] );
-	*/
-
-#endif /*PRINT_PROBAILITY_ARRAYS*/
-
-	/*
-	==================================================================
-	*/
-
 
 	return ;
 }
@@ -326,10 +278,6 @@ void gortt_calc_kopen( gortt_parameters *p )
 
 	double tmp1, tmp1_last;
 	double tmp2, tmp2_last;
-	double tmp3, tmp3_last;
-
-	double gtau0;
-	double gtau;
 	int h, t;
 
 
@@ -337,11 +285,9 @@ void gortt_calc_kopen( gortt_parameters *p )
 
 		p->k_open[h] = 0.0 ;
 		p->k_openep[h] = 0.0;
-		p->dk_open[h] = 0.0 ;
 
 		tmp1_last = p->p_n0[h][0] * sin(2.0*p->theta[0]);
 		tmp2_last = p->epgap[h][0] * sin(2.0*p->theta[0]);
-		tmp3_last = p->p_s0[h][0] * sin(2.0*p->theta[0]);
 
 		for (t = 1; t < p->nth; t++) {
 
@@ -353,17 +299,7 @@ void gortt_calc_kopen( gortt_parameters *p )
 			p->k_openep[h] += (tmp2 + tmp2_last) / 2.0 * p->dth;
 			tmp2_last = tmp2;
 
-			tmp3 = p->p_s0[h][t] * sin(2.0*p->theta[t]);
-			p->dk_open[h] += (tmp3 + tmp3_last) / 2.0 * p->dth;
-			tmp3_last = tmp3;
-
 		}
-
-		gtau0 =  p->k * p->elai / ( 1.0-p->k_open[h] ) ;
-		gtau0 /= p->z2 - p->z1;
-
-		gtau =  p->k * p->elai ;
-		gtau /= p->z2 - p->z1;
 
 		/*
     if(h==0) printf("\n%8.4f %8.4f",p->k_open[h],p->k_openep[h]);
@@ -414,21 +350,21 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 	/*double	temp2;*/
 	double	s;
 
-	/* mean crowns */
-	double	n_mean;
-
 	/*double	tmp_Lv; */
 
 	/*
-	* The ES[] array contains values indicating the average distance that a
-	* beam must pass through a single crown in order to reach a given height.
+	* es is the average distance that a beam must pass through a single
+	* crown in order to reach this height. s_p is the after-entering-the-
+	* crown pathlength for the current sp_i. Both used to be arrays on
+	* gortt_parameters, but neither is read outside this function and
+	* neither was indexed by everything it varies with.
 	*/
 
+	double	es;
+	double	s_p;
 
-	p->es[h] = gortt_get_es( p, h, t );
 
-
-	n_mean = 0.0 ;
+	es = gortt_get_es( p, h, t );
 
 	/*
 	* Iterate over our possible s' (s_p[]) values.  The s' values are
@@ -444,7 +380,7 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 		* associated with a given zenith angle and within-canopy height.
 		*/
 
-		p->s_p[sp_i][t] = (double)(p->height_p[sp_i] - p->height_p[h]) / cos(p->theta_p[t]);
+		s_p = (double)(p->height_p[sp_i] - p->height_p[h]) / cos(p->theta_p[t]);
 
 		if(sp_i == ( p->nlayers-1 ) ) {
 			/*
@@ -488,7 +424,7 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 			* Get the mean within-crown pathlength.
 			*/
 
-			s = p->s_p[sp_i][t] * (1.0 - exp(-1.0 * (double) n * p->es[h] / p->s_p[sp_i][t]));
+			s = s_p * (1.0 - exp(-1.0 * (double) n * es / s_p));
 
 			/* convert back to original elliptical dimension
 			s *= g.ellipticity * cos(theta_p[t])/cos(theta[t]); */
@@ -501,7 +437,6 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 			* particular after-entering-the-crown pathlength.
 			*/
 
-			n_mean += (float) n * P_n * P_s_p;
 			p->pd_s[h][t][gortt_s_to_index( p, s )] += P_n * P_s_p;
 
 
@@ -575,7 +510,6 @@ double gortt_get_s( gortt_parameters *p, int z, double h, int th )
 	}else{
 
 		double proj_area = 0.0;
-		double r_p = 0.0;
 		double V_sphere = 0.0;
 		double V_slice = 0.0;
 		double V_tot = 0.0;
@@ -585,7 +519,6 @@ double gortt_get_s( gortt_parameters *p, int z, double h, int th )
 		V_sphere = 4.0 * M_PI * p->rrr / 3.0;
 
 		zdiff = fabs(h - p->height_p[z]);
-		r_p = sqrt( p->rr - zdiff * zdiff );
 
 		ht = p->r - zdiff;
 		V_slice = M_PI * ht * ht / 3.0 * (3.0 * p->r - ht);
@@ -743,7 +676,7 @@ double gortt_vol( gortt_parameters *p, int h, int h_s, int t, double h_b )
 
 static double gortt_trisec( double hh, double hh_b, double th, double r )
 {
-    double x, h_0, tmp;
+    double x, tmp;
     double b, a1, a2;
 /*    int noint = 20; */
     int noint = 20;
@@ -751,11 +684,11 @@ static double gortt_trisec( double hh, double hh_b, double th, double r )
     tmp = (hh - hh_b);
 
 /*    printf("\n trisec: %6.2f", r*r-tmp*tmp); */
-    h_0 =  1.0 * tmp*cos(th) + sqrt(r*r- tmp*tmp)*sin(th);
     x   = -1.0 * tmp*sin(th) + sqrt(r*r- tmp*tmp)*cos(th);
 
     b = - tmp/sin(th);    /* input parm for triangle volume calculation  */
-/*    b = x - h_0/tan(th);   input parm for triangle volume calculation  */
+/*    h_0 = tmp*cos(th) + sqrt(r*r-tmp*tmp)*sin(th);
+      b   = x - h_0/tan(th);   alternative input parm for triangle volume  */
     a1 = x ;              /* input parm for sector   volume calculation  */
     a2 = r;               /* input parm for sector   volume calculation  */
 
@@ -889,156 +822,6 @@ static double gortt_cylind( double r, double h1, double h2, double h )
 	return(volume);
 }
 
-
-
-/*
-* Fill the Vb array.  Vb(h) is the volume of a sphere centered at height
-* h, intersected by h1 and h2 planes.  So we first calculate the total
-* volume, then subtract the volumes of intersected sectors, if necessary.
-*/
-void gortt_calc_vb( gortt_parameters *p )
-{
-
-	int i;
-	double Vol;
-	double tmp;
-
-	for (i = 0; i < p->nlayers; i++) {
-		Vol = 4.0 * M_PI * p->rrr / 3.0;
-
-		if (p->height_p[i] + p->r > p->h2_p ) {
-			tmp = p->height_p[i] + p->r - p->h2_p;
-			Vol -= M_PI * tmp * tmp * (3.0 * p->r - tmp) / 3.0;
-		}
-		if (p->height_p[i] - p->r < p->h1_p) {
-			tmp = p->h1_p - (p->height_p[i] - p->r);
-			Vol -= M_PI * tmp * tmp * (3.0 * p->r - tmp) / 3.0;
-		}
-
-		/*new (08/10/12): catch for volumes < 0
-		The numerical way the above calculation is done
-		means that sometimes very tiny negative numbers
-		come out - which is wrong and causes later
-		functions to barf.
-		Also added error condition just in case we run
-		scenarios were larger -ve volumes are calculated.
-		They will probably never happen but should trap
-		them if they occur:
-		*/
-
-	  if( Vol < -0.0000001 ){
-	    fprintf( stderr, "%s (line %d): Significant negative volume calculated in gortt_calc_vb\n", __FILE__, __LINE__ );
-	    exit( EXIT_FAILURE );
-	  }
-	  if( Vol<0 ) Vol=0.0;
-
-	  p->vb[i] = Vol;
-	}
-
-	return ;
-
-}
-
-
-void gortt_calc_fb( gortt_parameters *p )
-{
-	int i,t;
-	double d;
-
-	for(t=0; t<p->nth; t++) {
-		for (i = 0; i < p->nlayers; i++) {
-
-      /*new (09/10/12):
-      Added a condition to trap divide by zero when
-      p_n0 == 1, which results in a nan in the fb table.
-      Sets d to DBL_MIN*2. Makes no difference to outputs
-      on tested scenarios.
-      */
-      d = (1.0 - p->p_n0[i][t]);
-      if( d < DBL_MIN*2. ) d = DBL_MIN*2. ;
-			p->fb[i][t] = (1.0 - exp(-p->lv_p * p->vb[i])) / d;
-
-			/*Old line... OK to remove:
-			p->fb[i][t] = (1.0 - exp(-p->lv_p * p->vb[i])) / (1.0 - p->p_n0[i][t]);
-      */
-
-      /* Checking print... OK to remove:
-      fprintf( stderr, "%f ", p->fb[i][t] );
-      */
-
-		}
-	}
-
-	return ;
-}
-
-
-
-/*
-* Calculate the mean passing through crown gap
-*/
-void gortt_calc_t_open( gortt_parameters *p )
-{
-
-	int h, z, t, n, k;
-	double T, dT;
-	double temp1, ds, s, s_p, P_n;
-
-	/*
-	Hasn't this already been done?
-	*/
-
-	p->factorial[0] = 1;
-	for (k = 1; k <= p->maxcrowns; k++)
-		p->factorial[k] = p->factorial[k - 1] * (double) k;
-
-
-	for(z = 0; z<p->nlayers; z++) {
-		for(h = p->nlayers-1; h >= z  ; h--) {
-			p->t_open[h][z] = 0.0;
-			p->dt_open[h][z] = 0.0;
-			if( z != h ) {
-				for(t = 0; t < p->nth; t++) {
-
-					/*set tau here?*/
-
-					T = 0.0;
-					dT = 0.0;
-					s_p = fabs(p->height_p[z] - p->height_p[h])/cos(p->theta_p[t]) ;
-
-					for (n = 1; n <= p->maxcrowns; n++) {
-						s = s_p *(1.0 - exp(-n*gortt_get_es(p, z, t)/s_p) );
-						temp1 = p->lv_p * M_PI * p->r * p->r * s_p;
-						P_n = (pow(temp1, (double) n) * exp(-temp1))/
-							(p->factorial[n] * (1.0 - exp(-temp1)));
-						T += P_n * exp(- s * p->tau_p);
-						ds = (1.0 - exp(p->lv_p * p->vb[z]))*p->dz_p/cos(p->theta_p[t]);
-						dT += P_n * exp(-s * p->tau_p)*(1.0-exp(p->tau_p*ds));
-					}
-
-					p->t_open[h][z] += sin(2.0*p->theta[t]) * T * p->dth;
-					p->dt_open[h][z] += sin(2.0*p->theta[t]) * dT * p->dth;
-					p->t_open[z][h] = p->t_open[h][z];
-					p->dt_open[z][h] = p->dt_open[h][z];
-
-				}
-			}else{
-				for(t = 0; t < p->nth; t++) {
-
-					/*set tau here?*/
-
-					ds = 0.5*(1.0 - exp(-p->lv_p * p->vb[z]))*p->dz_p/cos(p->theta_p[t]);
-					dT = 1.0-exp(-p->tau_p * ds) ;
-					p->dt_open[h][z] += sin(2.0*p->theta[t]) * dT * p->dth;
-
-				}
-			}
-		}
-	}
-
-	return ;
-
-}
 
 
 

@@ -406,20 +406,10 @@ int main( int argc, char **argv )
 	if( params.theta     != NULL )gortt_dealloc_1d( params.theta );
 	if( params.theta_p   != NULL )gortt_dealloc_1d( params.theta_p );
 
-	if( params.vb        != NULL )gortt_dealloc_1d( params.vb );
 	if( params.k_open    != NULL )gortt_dealloc_1d( params.k_open );
-	if( params.dk_open   != NULL )gortt_dealloc_1d( params.dk_open );
-	if( params.lk_up     != NULL )gortt_dealloc_1d( params.lk_up );
-	if( params.lk_down   != NULL )gortt_dealloc_1d( params.lk_down );
 	if( params.k_openep  != NULL )gortt_dealloc_1d( params.k_openep );
-	if( params.es        != NULL )gortt_dealloc_1d( params.es );
 	if( params.factorial != NULL )gortt_dealloc_1d( params.factorial );
 
-	if( params.fb        != NULL ) gortt_dealloc_2d( params.fb, params.nlayers );
-	if( params.t_open    != NULL ) gortt_dealloc_2d( params.t_open, params.nlayers );
-	if( params.dt_open   != NULL ) gortt_dealloc_2d( params.dt_open, params.nlayers );
-	if( params.s_p       != NULL ) gortt_dealloc_2d( params.s_p, params.nlayers );
-	if( params.v_g       != NULL ) gortt_dealloc_2d( params.v_g, params.nlayers );
 	if( params.p_s0      != NULL ) gortt_dealloc_2d( params.p_s0, params.nlayers );
 	if( params.p_n0      != NULL ) gortt_dealloc_2d( params.p_n0, params.nlayers );
 	if( params.epgap     != NULL ) gortt_dealloc_2d( params.epgap, params.nlayers );
@@ -759,19 +749,9 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->height_p = NULL ;
 	p->theta = NULL ;
 	p->theta_p = NULL ;
-	p->vb = NULL ;
 	p->k_open = NULL ;
 	p->k_openep = NULL ;
-	p->dk_open = NULL ;
-	p->lk_up = NULL ;
-	p->lk_down = NULL ;
-	p->es = NULL ;
 	p->factorial = NULL ;
-	p->fb = NULL ;
-	p->t_open = NULL ;
-	p->dt_open = NULL ;
-	p->s_p = NULL ;
-	p->v_g = NULL;
 	p->p_s0 = NULL ;
 	p->p_n0 = NULL ;
 	p->epgap = NULL ;
@@ -840,18 +820,8 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	Other allocations
 	*/
 
-	 p->vb       = gortt_alloc_1d( p->nlayers );
 	 p->k_open   = gortt_alloc_1d( p->nlayers );
-	 p->dk_open  = gortt_alloc_1d( p->nlayers );
-	 p->lk_up    = gortt_alloc_1d( p->nlayers );
-	 p->lk_down  = gortt_alloc_1d( p->nlayers );
 	 p->k_openep = gortt_alloc_1d( p->nlayers );
-	 p->es       = gortt_alloc_1d( p->nlayers );
-	 p->fb       = gortt_alloc_2d( p->nlayers , p->nth );
-	 p->t_open   = gortt_alloc_2d( p->nlayers , p->nlayers );
-	 p->dt_open  = gortt_alloc_2d( p->nlayers , p->nlayers );
-	 p->s_p      = gortt_alloc_2d( p->nlayers , p->nth );
-	 p->v_g      = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->p_s0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->p_n0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->epgap    = gortt_alloc_2d( p->nlayers , p->nth );

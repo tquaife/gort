@@ -170,7 +170,7 @@ void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double Kg, double 
 	double phase_prime, Gamma, Gamma_v, Gamma_c, Gamma_i ;
 	double overlap, Mv, Mi, M ;
 	double PvMv, PiMi, Po ;
-	double theta_Mi, theta_Mv, D ;
+	double theta_Mi, D ;
 
 	/*double f, F, beta ; */
 
@@ -189,7 +189,6 @@ void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double Kg, double 
 	M = 1.0 - ( 1.0 - Kg )/( p->lambda * Gamma ) ;
 
 	theta_Mi = acos( 1.0 - 2.0*Mi );
-	theta_Mv = acos( 1.0 - 2.0*Mv );
 
 	/*IGARSS 92 paper*/
 

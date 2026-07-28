@@ -169,21 +169,11 @@ typedef struct  {
 		double *height_p ;
 		double *theta ;
 		double *theta_p ;
-		double *vb ;
 		double *k_open ;
 		double *k_openep ;
-		double *dk_open ;
-		double *lk_up ;
-		double *lk_down ;
-		double *es ;
 
 		double *factorial ;
 
-		double **fb ;
-		double **t_open ;
-		double **dt_open ;
-		double **s_p ;
-		double **v_g ;
 		double **p_s0 ;
 		double **p_n0 ;
 		double **epgap ;
@@ -269,9 +259,6 @@ double gortt_get_s( gortt_parameters *, int, double, int );
 double gortt_get_pcc( gortt_parameters *, double  );
 double gortt_vol( gortt_parameters *, int, int, int, double ) ;
 
-void   gortt_calc_vb( gortt_parameters * );
-void   gortt_calc_fb( gortt_parameters * );
-void   gortt_calc_t_open( gortt_parameters * );
 void   gortt_calc_epgap( gortt_parameters * );
 double gortt_calc_pgap( gortt_parameters *, double, double );
 void   gortt_calc_kopen( gortt_parameters * );

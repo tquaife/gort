@@ -61,7 +61,10 @@ bug shows up as a deliberate, reviewable change.
   rejected as an unknown option. `prospect-anth` exercises the spelling that
   does work.
 
-Not yet covered: an option that takes a value, given as the last word on the
-command line (e.g. `gortt -Cab`), reads `argv[argc] == NULL` and segfaults.
-The shell's crash message depends on `ulimit`, so pinning it would make the
-suite environment-dependent. Add a case once the missing-argument check is in.
+## Input-validation cases
+
+`badmissingval`, `badmissingval2`, `badnowl` and `badwlcount` cover crashes
+that were fixed once the suite exposed them: a value-taking option given as
+the last word on the command line used to read `argv[argc] == NULL`, and a
+header line listing more wavebands than it declared used to write past the end
+of the wavelength array before the count check downstream noticed.

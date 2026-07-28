@@ -62,3 +62,10 @@ badarg          -           notanargument
 badcount        badcount.in
 badwl           badwl.in
 badangle        badangle.in
+badnowl         badnowl.in
+# header declares 2 wavebands but lists 6: used to write all 6 into a
+# 2-element array before the count check downstream noticed
+badwlcount      badwlcount.in
+# value-taking option as the last word: used to read argv[argc] == NULL
+badmissingval   -           -Cab
+badmissingval2  -           -LAI 4.0 -P

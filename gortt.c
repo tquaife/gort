@@ -194,13 +194,23 @@ int main( int argc, char **argv )
 	nw_check = atoi( tmp_str1 );
 	
   /*alloc to hold wavelengths*/
+	if( nw_check < 1 ){
+		fprintf( stderr, "%s: number of wavebands on line 1 must be at least 1 (got %d)\n", *argv, nw_check );
+		exit( EXIT_FAILURE );
+	}
 	spect.wavelength = (double *)malloc( nw_check * sizeof( double ) );
-	
-	/*read wavelengths*/
+
+	/*read wavelengths.
+	n.b. keep counting past nw_check, so that a header line listing more
+	wavebands than it declares is still caught below, but do not store
+	them - the array only has room for nw_check of them.*/
 	spect.nw = 0;
-	while( get_first_string_token( line, tmp_str1 ) )
-		spect.wavelength[ spect.nw++ ] = atof( tmp_str1 );
-	
+	while( get_first_string_token( line, tmp_str1 ) ){
+		if( spect.nw < nw_check )
+			spect.wavelength[ spect.nw ] = atof( tmp_str1 );
+		spect.nw++ ;
+	}
+
 	if( nw_check != spect.nw ){
 		fprintf( stderr, "%s: expected number of wavelengths (%d) does not match with number found (%d)\n", *argv, nw_check, spect.nw );
 		exit( EXIT_FAILURE );
@@ -990,7 +1000,8 @@ int n, m ;
 	double **r;
 
    
-	if (! ( r = (double **) calloc( (unsigned) n, sizeof(double) ) ) ) {
+	/*n.b. sizeof(double *), not sizeof(double) - this is a row of pointers*/
+	if (! ( r = (double **) calloc( (unsigned) n, sizeof(double *) ) ) ) {
 		fprintf(stderr, "Memory allocation failed (gortt_alloc_2d)\n");
 		exit( EXIT_FAILURE );
 	}
@@ -1039,6 +1050,24 @@ int n, m;
 
 
 
+static char *gortt_next_arg( int argc, char **argv, int *i )
+/*
+Return the value following the option at argv[*i], advancing *i onto it.
+
+Without the bounds check, an option that takes a value and is given as the
+last word on the command line ("gortt -Cab") reads argv[argc], which is
+NULL, and atof/strcpy then segfault.
+*/
+{
+	if( *i + 1 >= argc ){
+		fprintf( stderr, "%s: option %s requires a value\n", argv[ 0 ], argv[ *i ] );
+		exit( EXIT_FAILURE );
+	}
+
+	return( argv[ ++(*i) ] );
+}
+
+
 void gortt_cl_parser( argc, argv, p, g, s, c )
 int argc;
 char **argv;
@@ -1062,40 +1091,40 @@ gortt_control *c ;
 
 		if( *argv[ i ] == '-' ){
 		
-			/**/ if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-h2", 3 ) )     p->h2       = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-lambda", 7 ) ) p->lambda   = atof( argv[ ++i ] ); 
+			/**/ if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-h2", 3 ) )     p->h2       = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-lambda", 7 ) ) p->lambda   = atof( gortt_next_arg( argc, argv, &i ) ); 
 
 
-			else if( !strncmp( argv[ i ], "-HB", 3 ) )   { use_true_p=TRUE ;  hb = atof( argv[ ++i ] ); } 
-			else if( !strncmp( argv[ i ], "-BR", 3 ) )   { use_true_p=TRUE ;  br = atof( argv[ ++i ] ); }
-			else if( !strncmp( argv[ i ], "-PCC", 7 ) )  { use_true_p=TRUE ;  pcc = atof( argv[ ++i ] ); }
+			else if( !strncmp( argv[ i ], "-HB", 3 ) )   { use_true_p=TRUE ;  hb = atof( gortt_next_arg( argc, argv, &i ) ); } 
+			else if( !strncmp( argv[ i ], "-BR", 3 ) )   { use_true_p=TRUE ;  br = atof( gortt_next_arg( argc, argv, &i ) ); }
+			else if( !strncmp( argv[ i ], "-PCC", 7 ) )  { use_true_p=TRUE ;  pcc = atof( gortt_next_arg( argc, argv, &i ) ); }
 			
-			else if( !strncmp( argv[ i ], "-LAI", 7 ) )  { use_lai=TRUE ;  lai = atof( argv[ ++i ] ); }
+			else if( !strncmp( argv[ i ], "-LAI", 7 ) )  { use_lai=TRUE ;  lai = atof( gortt_next_arg( argc, argv, &i ) ); }
 
 			
-			else if( !strncasecmp( argv[ i ], "-beta", 5 ) ){ p->use_user_beta=TRUE; p->beta=atof( argv[ ++i ] );} 
+			else if( !strncasecmp( argv[ i ], "-beta", 5 ) ){ p->use_user_beta=TRUE; p->beta=atof( gortt_next_arg( argc, argv, &i ) );} 
 
-			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->fd=1.0-atof( argv[ ++i ] );} 
+			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );} 
 			
 			else if( !strncmp( argv[ i ], "-alb_leaf", 9 ) ){
 				s->is_user_leaf = TRUE ;
-				s->user_r_leaf = atof( argv[ ++i ] ) ;
+				s->user_r_leaf = atof( gortt_next_arg( argc, argv, &i ) ) ;
 				
 			}
 			
 			else if( !strncmp( argv[ i ], "-alb_soil", 9 ) ){
 				s->is_user_soil = TRUE ;
 				s->is_file_soil = FALSE ;
-				s->user_r_soil = atof( argv[ ++i ] ) ;
+				s->user_r_soil = atof( gortt_next_arg( argc, argv, &i ) ) ;
 				
 			}
 
 			else if( !strncmp( argv[ i ], "-soil_spectra", 10 ) ){
 				s->is_user_soil = FALSE ;
 				s->is_file_soil = TRUE ;
-				strcpy( s->soil_file, argv[ ++i ] );
+				strcpy( s->soil_file, gortt_next_arg( argc, argv, &i ) );
 				
 			}
 			
@@ -1106,27 +1135,27 @@ gortt_control *c ;
 			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;			
 			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;			
 			
-			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, argv[ ++i ] );}
+			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, gortt_next_arg( argc, argv, &i ) );}
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;
 			
 			/*prospect*/
-			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-cm", 3 ) )  s->p_Cm      = atof( argv[ ++i ] ); 
+			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-cm", 3 ) )  s->p_Cm      = atof( gortt_next_arg( argc, argv, &i ) ); 
 
 			/*price*/
-			else if( !strncasecmp( argv[ i ], "-rsl1", 5 ) )  s->rsl1    = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-rsl2", 5 ) )  s->rsl2    = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-rsl3", 5 ) )  s->rsl3    = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-rsl4", 5 ) )  s->rsl4    = atof( argv[ ++i ] ); 
+			else if( !strncasecmp( argv[ i ], "-rsl1", 5 ) )  s->rsl1    = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-rsl2", 5 ) )  s->rsl2    = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-rsl3", 5 ) )  s->rsl3    = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-rsl4", 5 ) )  s->rsl4    = atof( gortt_next_arg( argc, argv, &i ) ); 
 
 			/*leave these at the bottom! (so as not to catch other opts)*/
-			else if( !strncasecmp( argv[ i ], "-b", 2 ) )      p->b        = atof( argv[ ++i ] ); 
-			else if( !strncasecmp( argv[ i ], "-r", 2 ) )      p->r        = atof( argv[ ++i ] ); 
+			else if( !strncasecmp( argv[ i ], "-b", 2 ) )      p->b        = atof( gortt_next_arg( argc, argv, &i ) ); 
+			else if( !strncasecmp( argv[ i ], "-r", 2 ) )      p->r        = atof( gortt_next_arg( argc, argv, &i ) ); 
 
 
 

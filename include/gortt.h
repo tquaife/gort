@@ -216,13 +216,13 @@ typedef struct  {
 /*TQ's implimentation of the GORT paper*/
 void   gortt_rsurf( gortt_parameters *, gortt_geometry *, gortt_spectra * );
 void   gortt_gap_probabilities( gortt_parameters *, gortt_geometry * );
+void   gortt_gap_probabilities_Q08( gortt_parameters *, gortt_geometry * );
 void   gortt_set_zenith_dependant_probabilities( gortt_parameters *, gortt_geometry * );
 double gortt_prime_theta( gortt_parameters *, double  );
 double gortt_kg( gortt_parameters *, gortt_geometry * );
 double gortt_kc( gortt_parameters *, gortt_geometry *, double );
 void   gortt_kc_fFbeta( gortt_parameters *, gortt_geometry *, double, double *, double *, double * );
 double gortt_kc_PP_only( gortt_parameters *, gortt_geometry *, double );
-double gortt_kc_wenge( gortt_parameters *, gortt_geometry *, double );
 double gortt_kc_ambrals( gortt_parameters *, gortt_geometry * 	);
 double gortt_overlap( gortt_parameters *, gortt_geometry * );
 double gortt_t_prime_df( gortt_parameters *, gortt_geometry *, gortt_spectra * );
@@ -293,7 +293,6 @@ void   prospect_DB_( double *, double *, double *, double *, double *, double *,
 
 /*read soil spectra*/
 void	gortt_read_soil_lut( gortt_spectra * );
-double	gortt_get_rsoil_lut( gortt_spectra *, double * );
 
 
 /*parsing and usage*/

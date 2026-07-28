@@ -5,6 +5,25 @@
 #include<ctype.h>
 #include<gortt.h>
 #include<soil_rho.h>
+/*
+Driver-internal helpers. These are the decomposition of what used to be a
+single ~370 line main(). They are the program's plumbing rather than part
+of the model, so they are static here rather than declared in gortt.h.
+*/
+
+static void gortt_set_output_format( char *, int, char * );
+static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control * );
+static void gortt_compute_probabilities( gortt_parameters *, gortt_geometry *, gortt_control * );
+static void gortt_write_prob_file( gortt_parameters * );
+static void gortt_read_prob_file( gortt_parameters *, char * );
+static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
+static void gortt_alloc_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
+static void gortt_free_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
+static void gortt_set_geometry( gortt_geometry *, double, double, double, double );
+static void gortt_run_geometry( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+static void gortt_print_result( gortt_parameters *, gortt_geometry *, gortt_spectra *,
+                                gortt_control *, char *, double, double, double, double );
+
 
 int main( int argc, char **argv )
 {
@@ -14,109 +33,15 @@ int main( int argc, char **argv )
 	gortt_spectra spect ;
 	gortt_control cont ;
 
-	int i, j, nw_check, na_check, na=0 ;
+	char line[ MAX_LINE_LEN ], out_head[ MAX_LINE_LEN ] ;
+	char fmt[ 16 ] ;
 
-	double x1, x2 ;
-
-	char line[ MAX_LINE_LEN ], out_head[ MAX_LINE_LEN ], tmp_str1[ MAX_LINE_LEN ];
-
-	FILE *prob_fp ;
-
-	double *soil_vector_1, *soil_vector_2, *soil_vector_3, *soil_vector_4 ;
+	int na_check, na=0 ;
 	double out_vza, out_vaa, out_sza, out_saa ;
 
-	char fmt[ 16 ] ;
-	char *prec_env ;
 
-	/*
-	Initialise control structure
-	*/
-
-	/*
-	Output precision for the reflectance/albedo columns. The default "%f"
-	gives 4 significant figures, which is too coarse to see a small change
-	in the numerics. Setting GORTT_PREC to a number of significant digits
-	(17 round-trips a double exactly) raises it. Intended for regression
-	testing - see tests/run.sh - hence an environment variable rather than
-	a command line option.
-	*/
-
-	strcpy( fmt, "%f " );
-	if( ( prec_env = getenv( "GORTT_PREC" ) ) != NULL ){
-		int prec = atoi( prec_env );
-		if( prec < 1 || prec > 17 ){
-			fprintf( stderr, "%s: GORTT_PREC must be between 1 and 17\n", *argv );
-			exit( EXIT_FAILURE );
-		}
-		/*n.b. built from an integer, never from the string itself*/
-		sprintf( fmt, "%%.%dg ", prec );
-	}
-
-    cont.print_comp_spectra=FALSE ;
-    cont.print_comp_proport=FALSE ;
-    cont.calc_integrals=FALSE ;
-    cont.use_q08_pn_kopen=FALSE ;
-    cont.lidar_mode=FALSE ;
-
-	spect.rsl1=0.2 ;
-	spect.rsl2=0.1 ;
-	spect.rsl3=0.03726 ;
-	spect.rsl4=-0.002426 ;
-
-	spect.is_user_leaf=FALSE ;
-	spect.is_user_soil=FALSE ;
-	spect.is_file_soil=FALSE ;
-
-
-	/*
-	default prospect values taken from the main.f90
-	file in the PROSPECT-D main repositpry
-	*/
-
-	spect.p_N= 1.2;    // structure coefficient
-	spect.p_Cab= 30.;  // chlorophyll content (µg.cm-2)
-	spect.p_Car= 10.;  // carotenoid content (µg.cm-2)
-	spect.p_Anth= 1.0; // anthocyanin content (µg.cm-2)
-	spect.p_Cbrown = 0.0; //brown pigment content (arbitrary units)
-	spect.p_Cw = 0.015;	// EWT (cm)
-	spect.p_Cm = 0.009;	// leaf mass per unit area (g.cm-2)
-
-
-	geom.vza = 0. ;
-	geom.vaa = 0. ;
-	geom.sza = 0. ;
-	geom.saa = 0. ;
-
-	params.lambda = 0.405 ;
-	params.r = 0.76 ;
-	params.b = 3.55263 * params.r ;
-	params.h1 = 3.0 ;
-	params.h2 = 8.5 ;
-	params.favd = 0.858 ;
-
-	params.dz  = 0.20 ;
-	params.ds  = 0.20 ;
-	params.dth = DTOR( 1 ) ;
-
-	params.nlayers = 15 ;
-
-	/*direct/diffuse term*/
-	/*params.fd = 1.0 ;*/
-	/*params.fd = 0.903 ;*/
-
-	/*params.lad = LAD_EXTREMOPHILE ;*/
-	params.lad = LAD_05 ;
-
-	/*the following prob.
-	don't need changing*/
-	params.maxcrowns = 30 ;
-	params.nh_es = 20 ;
-
-  /*number integral points*/
-	params.npoints=32 ;
-
-  /*diffuse radiation*/
-	params.use_user_fd=FALSE ;
+	gortt_set_output_format( fmt, sizeof( fmt ), *argv );
+	gortt_set_defaults( &params, &geom, &spect, &cont );
 
 	gortt_cl_parser( argc, argv, &params, &geom, &spect, &cont ) ;
 
@@ -135,126 +60,38 @@ int main( int argc, char **argv )
 	probabilities:
 	**/
 
-	/*1) calculate own probabilities if not reading from */
+	/*1) calculate own probabilities if not reading from file*/
 	if( params.read_prob_file == FALSE )
-	    if( cont.use_q08_pn_kopen == TRUE )
-		    gortt_gap_probabilities_Q08( &params, &geom ) ;
-        else
-		    gortt_gap_probabilities( &params, &geom ) ;
+		gortt_compute_probabilities( &params, &geom, &cont );
 
-  /*2) write probability file for later use*/
+	/*2) write probability file for later use.
+	n.b. this returns before stdin is read at all*/
 	if( params.write_prob_file == TRUE ){
-		for( j=0; j<90; j++ )
-			printf( "%d %0.40f %0.40f\n", j, params.p_n0[0][j], params.epgap[0][j] );
-		printf( "-1 %0.40f %0.40f\n",  params.k_open[0], params.k_openep[0]  );
+		gortt_write_prob_file( &params );
 		return( EXIT_SUCCESS );
 	}
 
-  /*3) read existing probability file*/
-	if( params.read_prob_file == TRUE ){
-		if( ( prob_fp = fopen( params.prob_fn, "r") ) == NULL ){
-			fprintf( stderr, "%s: error opening probability file: %s\n", *argv, params.prob_fn );
-			exit( EXIT_FAILURE );
-		}
-		while( fscanf( prob_fp, "%d %lf %lf", &j, &x1, &x2 ) == 3 ){
-			if( j>=0 ){
-				params.p_n0[0][j]=x1;
-				params.epgap[0][j]=x2;
-			}else{
-				params.k_open[0]=x1;
-				params.k_openep[0] =x2;
-			}
-		}
-		fclose( prob_fp );
-	}
+	/*3) read existing probability file*/
+	if( params.read_prob_file == TRUE )
+		gortt_read_prob_file( &params, *argv );
 
 
 	/**
 	Parse first line in the BRDF input file
 	**/
 
-	if( fgets( line, MAX_LINE_LEN, stdin ) == NULL ){
-		fprintf( stderr, "%s: error reading data on stdin\n", *argv );
-		exit( EXIT_FAILURE );
-	}
-	strcpy( out_head, line );
+	gortt_read_header( stdin, &spect, &na_check, out_head, *argv );
 
-	/*read number of angles*/
-	if( get_first_string_token( line, tmp_str1 ) == 0 ){
-		fprintf( stderr, "%s: error reading number of angles from line 1\n", *argv );
-		exit( EXIT_FAILURE );
-	}
-	na_check = atoi( tmp_str1 );
+	gortt_alloc_outputs( &params, &spect, &cont );
 
-	/*read number of wavelengths*/
-	if( get_first_string_token( line, tmp_str1 ) == 0 ){
-		fprintf( stderr, "%s: error reading number of wavebands from line 1\n", *argv );
-		exit( EXIT_FAILURE );
-	}
-	nw_check = atoi( tmp_str1 );
-
-  /*alloc to hold wavelengths*/
-	if( nw_check < 1 ){
-		fprintf( stderr, "%s: number of wavebands on line 1 must be at least 1 (got %d)\n", *argv, nw_check );
-		exit( EXIT_FAILURE );
-	}
-	spect.wavelength = (double *)malloc( nw_check * sizeof( double ) );
-
-	/*read wavelengths.
-	n.b. keep counting past nw_check, so that a header line listing more
-	wavebands than it declares is still caught below, but do not store
-	them - the array only has room for nw_check of them.*/
-	spect.nw = 0;
-	while( get_first_string_token( line, tmp_str1 ) ){
-		if( spect.nw < nw_check )
-			spect.wavelength[ spect.nw ] = atof( tmp_str1 );
-		spect.nw++ ;
-	}
-
-	if( nw_check != spect.nw ){
-		fprintf( stderr, "%s: expected number of wavelengths (%d) does not match with number found (%d)\n", *argv, nw_check, spect.nw );
-		exit( EXIT_FAILURE );
-	}
-
-
-	/*memory allocations*/
-	spect.rsurf = (double *)malloc( nw_check * sizeof( double ) );
-	spect.rsoil = (double *)malloc( nw_check * sizeof( double ) );
-	spect.rleaf = (double *)malloc( nw_check * sizeof( double ) );
-	spect.tleaf = (double *)malloc( nw_check * sizeof( double ) );
-
-	/* alloc for spectra of each component at each waveband*/
-	spect.scomp = (double *)malloc( 4 * nw_check * sizeof( double ) );
-
-  /*allocs for integral terms*/
-	if( cont.calc_integrals ){
-	  spect.albedo = (double *)malloc( nw_check * sizeof( double ) );
-	  spect.favegt = (double *)malloc( nw_check * sizeof( double ) );
-	  spect.fasoil = (double *)malloc( nw_check * sizeof( double ) );
-	  params.abscissa = (double *)malloc( params.npoints * sizeof( double ) );
-	  params.weights  = (double *)malloc( params.npoints * sizeof( double ) );
-	}
-
-
-	/*set up integration */
-
-  if( cont.calc_integrals ){
-    	gauleg( -1., 1., params.abscissa, params.weights, params.npoints );
-    	/* Test print....
-    	for (i=0;i<params.npoints;i++)
-    	  printf( "%d %f %f\n", i, *(params.abscissa+i), *(params.weights+i) );
-    	exit(0);
-    	*/
-	}
-
-	/*set up spectral stuff here*/
-	soil_vector_1 = default_soil_vector_1 ;
-	soil_vector_2 = default_soil_vector_2 ;
-	soil_vector_3 = default_soil_vector_3 ;
-	soil_vector_4 = default_soil_vector_4 ;
+	/*
+	Soil and leaf spectra do not depend on the viewing geometry,
+	so are calculated once here rather than inside the loop.
+	*/
 
 	/*soil reflectance*/
-	gortt_price_soil( &spect, soil_vector_1, soil_vector_2, soil_vector_3, soil_vector_4 );
+	gortt_price_soil( &spect, default_soil_vector_1, default_soil_vector_2,
+	                          default_soil_vector_3, default_soil_vector_4 );
 
 	/*leaf reflectance & transmittance*/
 	gortt_prospect_interface( &spect );
@@ -270,110 +107,19 @@ int main( int argc, char **argv )
 		}
 		na++;
 
-		geom.vza = DTOR( out_vza ) ;
-		geom.vaa = DTOR( out_vaa ) ;
-		geom.sza = DTOR( out_sza ) ;
-		geom.saa = DTOR( out_saa ) ;
-
-		/*
-		correct angles for suitability with code (see walthall.c)
-		make sure raa is correct too...
-		*/
-
-		/*corrections to the angles*/
-
-		/* zenith angles +ve */
-		if ( geom.sza < 0.0 ) {
-			geom.saa += M_PI ;
-			geom.sza *= -1.0 ;
-		}
-		if ( geom.vza < 0.0 ) {
-			geom.vaa += M_PI ;
-			geom.vza *= -1.0 ;
-		}
-
-		/* azimuth angles between 0 & 360 degrees */
-
-		while ( geom.saa > 2 * M_PI )
-			geom.saa -= 2 * M_PI;
-
-		while ( geom.vaa > 2 * M_PI )
-			geom.vaa -= 2 * M_PI;
-
-		while ( geom.saa < 0 )
-			geom.saa += 2 * M_PI;
-
-		while ( geom.vaa < 0 )
-			geom.vaa += 2 * M_PI;
-
-
-
-		geom.raa = geom.saa - geom.vaa ;
-		geom.raa = fabs((geom.raa - 2 * M_PI * (int) (0.5 + geom.raa * M_1_PI * 0.5)));
-
-
-
-		geom.vza_prime = gortt_prime_theta( &params, geom.vza );
-		geom.sza_prime = gortt_prime_theta( &params, geom.sza );
-
-		/*this is needed by the kuusk function*/
-		params.k_vza = gortt_leaf_angle_distribution( &params, geom.vza ) ;
-
-		/*From Ni et al. '99*/
-		if( ! params.use_user_fd )
-		  params.fd = cos( geom.sza ) / ( cos( geom.sza ) + 0.09 );
+		gortt_set_geometry( &geom, out_vza, out_vaa, out_sza, out_saa );
 
 		/*gortt*/
-		gortt_set_zenith_dependant_probabilities( &params, &geom );
-		gortt_rsurf( &params, &geom, &spect );
+		gortt_run_geometry( &params, &geom, &spect );
 
+		/**
+		LIDAR calculations
+		**/
 
-	/**
-	LIDAR calculations
-	**/
+		gortt_lidar( &params, &geom, &spect );
 
-
-	gortt_lidar( &params, &geom, &spect );
-
-
-    /*BRF outputs
-    n.b. the integral routines write over the BRFs so
-    must print anything from previous calculations now
-    */
-		/*the angles are echoes of the input, so are left at %f*/
-		printf( "%f %f %f %f ", out_vza, out_vaa, out_sza, out_saa );
-		for( i=0; i<spect.nw; i++ ){
-			printf( fmt, *( spect.rsurf + i ) );
-      if( cont.print_comp_spectra==TRUE ){
-			  printf( "{ " );
-			  printf( fmt, *(spect.scomp+i*4+0) );
-			  printf( fmt, *(spect.scomp+i*4+1) );
-			  printf( fmt, *(spect.scomp+i*4+2) );
-			  printf( fmt, *(spect.scomp+i*4+3) );
-			  printf( "} " );
-			}
-		}
-    if( cont.print_comp_proport==TRUE ){
-		  printf( "[ " );
-		  printf( fmt, geom.Kc );
-		  printf( fmt, geom.Kg );
-		  printf( fmt, geom.Kt );
-		  printf( fmt, geom.Kz );
-		  printf( "] " );
-		}
-
-
-		/*integral terms*/
-		if( cont.calc_integrals ){
-		  gortt_energy( &params, &geom, &spect );
-	    for( i=0; i<spect.nw; i++ ){
-			  printf( fmt, *( spect.albedo + i ) );
-			  printf( fmt, *( spect.favegt + i ) );
-			  printf( fmt, *( spect.fasoil + i ) );
-			}
-	  }
-
-	  printf( "\n" );
+		gortt_print_result( &params, &geom, &spect, &cont, fmt,
+		                    out_vza, out_vaa, out_sza, out_saa );
 
 	}
 
@@ -382,41 +128,436 @@ int main( int argc, char **argv )
 		exit( EXIT_FAILURE );
 	}
 
-
-	/*deallocations*/
-
-	gortt_dealloc_1d( spect.wavelength );
-	gortt_dealloc_1d( spect.rsurf );
-	gortt_dealloc_1d( spect.rsoil );
-	gortt_dealloc_1d( spect.rleaf );
-	gortt_dealloc_1d( spect.tleaf );
-	gortt_dealloc_1d( spect.scomp );
-
-  if( cont.calc_integrals ){
-	  gortt_dealloc_1d( spect.albedo );
-	  gortt_dealloc_1d( spect.favegt );
-	  gortt_dealloc_1d( spect.fasoil );
-	  gortt_dealloc_1d( params.abscissa );
-	  gortt_dealloc_1d( params.weights );
-
-	}
-
-	if( params.height    != NULL )gortt_dealloc_1d( params.height );
-	if( params.height_p  != NULL )gortt_dealloc_1d( params.height_p );
-	if( params.theta     != NULL )gortt_dealloc_1d( params.theta );
-	if( params.theta_p   != NULL )gortt_dealloc_1d( params.theta_p );
-
-	if( params.k_open    != NULL )gortt_dealloc_1d( params.k_open );
-	if( params.k_openep  != NULL )gortt_dealloc_1d( params.k_openep );
-	if( params.factorial != NULL )gortt_dealloc_1d( params.factorial );
-
-	if( params.p_s0      != NULL ) gortt_dealloc_2d( params.p_s0, params.nlayers );
-	if( params.p_n0      != NULL ) gortt_dealloc_2d( params.p_n0, params.nlayers );
-	if( params.epgap     != NULL ) gortt_dealloc_2d( params.epgap, params.nlayers );
-
-	if( params.pd_s    	 != NULL ) gortt_dealloc_3d( params.pd_s, params.nlayers, params.nth );
+	gortt_free_outputs( &params, &spect, &cont );
 
 	return( EXIT_SUCCESS );
+
+}
+
+
+/*
+Output precision for the reflectance/albedo columns. The default "%f"
+gives 4 significant figures, which is too coarse to see a small change
+in the numerics. Setting GORTT_PREC to a number of significant digits
+(17 round-trips a double exactly) raises it. Intended for regression
+testing - see tests/run.sh - hence an environment variable rather than
+a command line option.
+*/
+static void gortt_set_output_format( char *fmt, int len, char *bin_name )
+{
+
+	char *prec_env ;
+	int prec ;
+
+	strcpy( fmt, "%f " );
+
+	if( ( prec_env = getenv( "GORTT_PREC" ) ) == NULL ) return ;
+
+	prec = atoi( prec_env );
+
+	if( prec < 1 || prec > 17 ){
+		fprintf( stderr, "%s: GORTT_PREC must be between 1 and 17\n", bin_name );
+		exit( EXIT_FAILURE );
+	}
+
+	/*n.b. built from an integer, never from the string itself*/
+	snprintf( fmt, len, "%%.%dg ", prec );
+
+	return ;
+
+}
+
+
+/*
+Model defaults, applied before the command line is parsed so that any
+option overrides them.
+*/
+static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s, gortt_control *c )
+{
+
+	c->print_comp_spectra=FALSE ;
+	c->print_comp_proport=FALSE ;
+	c->calc_integrals=FALSE ;
+	c->use_q08_pn_kopen=FALSE ;
+	c->lidar_mode=FALSE ;
+
+	s->rsl1=0.2 ;
+	s->rsl2=0.1 ;
+	s->rsl3=0.03726 ;
+	s->rsl4=-0.002426 ;
+
+	s->is_user_leaf=FALSE ;
+	s->is_user_soil=FALSE ;
+	s->is_file_soil=FALSE ;
+
+
+	/*
+	default prospect values taken from the main.f90
+	file in the PROSPECT-D main repositpry
+	*/
+
+	s->p_N= 1.2;    /* structure coefficient */
+	s->p_Cab= 30.;  /* chlorophyll content (µg.cm-2) */
+	s->p_Car= 10.;  /* carotenoid content (µg.cm-2) */
+	s->p_Anth= 1.0; /* anthocyanin content (µg.cm-2) */
+	s->p_Cbrown = 0.0; /* brown pigment content (arbitrary units) */
+	s->p_Cw = 0.015;	/* EWT (cm) */
+	s->p_Cm = 0.009;	/* leaf mass per unit area (g.cm-2) */
+
+
+	g->vza = 0. ;
+	g->vaa = 0. ;
+	g->sza = 0. ;
+	g->saa = 0. ;
+
+	p->lambda = 0.405 ;
+	p->r = 0.76 ;
+	p->b = 3.55263 * p->r ;
+	p->h1 = 3.0 ;
+	p->h2 = 8.5 ;
+	p->favd = 0.858 ;
+
+	p->dz  = 0.20 ;
+	p->ds  = 0.20 ;
+	p->dth = DTOR( 1 ) ;
+
+	p->nlayers = 15 ;
+
+	/*direct/diffuse term*/
+	/*p->fd = 1.0 ;*/
+	/*p->fd = 0.903 ;*/
+
+	/*p->lad = LAD_EXTREMOPHILE ;*/
+	p->lad = LAD_05 ;
+
+	/*the following prob.
+	don't need changing*/
+	p->maxcrowns = 30 ;
+	p->nh_es = 20 ;
+
+	/*number integral points*/
+	p->npoints=32 ;
+
+	/*diffuse radiation*/
+	p->use_user_fd=FALSE ;
+
+	return ;
+
+}
+
+
+static void gortt_compute_probabilities( gortt_parameters *p, gortt_geometry *g, gortt_control *c )
+{
+
+	if( c->use_q08_pn_kopen == TRUE )
+		gortt_gap_probabilities_Q08( p, g ) ;
+	else
+		gortt_gap_probabilities( p, g ) ;
+
+	return ;
+
+}
+
+
+/*
+Write the gap probabilities to stdout so that a later run can pick them
+up with -P and skip recomputing them. Printed at full precision so the
+round trip through the file is exact.
+*/
+static void gortt_write_prob_file( gortt_parameters *p )
+{
+
+	int j ;
+
+	for( j=0; j<90; j++ )
+		printf( "%d %0.40f %0.40f\n", j, p->p_n0[0][j], p->epgap[0][j] );
+
+	printf( "-1 %0.40f %0.40f\n",  p->k_open[0], p->k_openep[0]  );
+
+	return ;
+
+}
+
+
+static void gortt_read_prob_file( gortt_parameters *p, char *bin_name )
+{
+
+	FILE *fp ;
+	int j ;
+	double x1, x2 ;
+
+	if( ( fp = fopen( p->prob_fn, "r") ) == NULL ){
+		fprintf( stderr, "%s: error opening probability file: %s\n", bin_name, p->prob_fn );
+		exit( EXIT_FAILURE );
+	}
+
+	while( fscanf( fp, "%d %lf %lf", &j, &x1, &x2 ) == 3 ){
+		if( j>=0 ){
+			p->p_n0[0][j]=x1;
+			p->epgap[0][j]=x2;
+		}else{
+			p->k_open[0]=x1;
+			p->k_openep[0] =x2;
+		}
+	}
+
+	fclose( fp );
+
+	return ;
+
+}
+
+
+/*
+Read the first line of the input: the number of angles that should follow,
+the number of wavebands, and then the wavelengths themselves. The line is
+copied to out_head so that it can be echoed to the output.
+*/
+static void gortt_read_header( FILE *fp, gortt_spectra *s, int *na_check, char *out_head, char *bin_name )
+{
+
+	char line[ MAX_LINE_LEN ], tmp_str1[ MAX_LINE_LEN ];
+	int nw_check ;
+
+	if( fgets( line, MAX_LINE_LEN, fp ) == NULL ){
+		fprintf( stderr, "%s: error reading data on stdin\n", bin_name );
+		exit( EXIT_FAILURE );
+	}
+	strcpy( out_head, line );
+
+	/*read number of angles*/
+	if( get_first_string_token( line, tmp_str1 ) == 0 ){
+		fprintf( stderr, "%s: error reading number of angles from line 1\n", bin_name );
+		exit( EXIT_FAILURE );
+	}
+	*na_check = atoi( tmp_str1 );
+
+	/*read number of wavelengths*/
+	if( get_first_string_token( line, tmp_str1 ) == 0 ){
+		fprintf( stderr, "%s: error reading number of wavebands from line 1\n", bin_name );
+		exit( EXIT_FAILURE );
+	}
+	nw_check = atoi( tmp_str1 );
+
+	/*alloc to hold wavelengths*/
+	if( nw_check < 1 ){
+		fprintf( stderr, "%s: number of wavebands on line 1 must be at least 1 (got %d)\n", bin_name, nw_check );
+		exit( EXIT_FAILURE );
+	}
+	s->wavelength = (double *)malloc( nw_check * sizeof( double ) );
+
+	/*read wavelengths.
+	n.b. keep counting past nw_check, so that a header line listing more
+	wavebands than it declares is still caught below, but do not store
+	them - the array only has room for nw_check of them.*/
+	s->nw = 0;
+	while( get_first_string_token( line, tmp_str1 ) ){
+		if( s->nw < nw_check )
+			s->wavelength[ s->nw ] = atof( tmp_str1 );
+		s->nw++ ;
+	}
+
+	if( nw_check != s->nw ){
+		fprintf( stderr, "%s: expected number of wavelengths (%d) does not match with number found (%d)\n", bin_name, nw_check, s->nw );
+		exit( EXIT_FAILURE );
+	}
+
+	return ;
+
+}
+
+
+static void gortt_alloc_outputs( gortt_parameters *p, gortt_spectra *s, gortt_control *c )
+{
+
+	/*memory allocations*/
+	s->rsurf = (double *)malloc( s->nw * sizeof( double ) );
+	s->rsoil = (double *)malloc( s->nw * sizeof( double ) );
+	s->rleaf = (double *)malloc( s->nw * sizeof( double ) );
+	s->tleaf = (double *)malloc( s->nw * sizeof( double ) );
+
+	/* alloc for spectra of each component at each waveband*/
+	s->scomp = (double *)malloc( 4 * s->nw * sizeof( double ) );
+
+	/*allocs for integral terms, and set up the integration*/
+	if( c->calc_integrals ){
+		s->albedo = (double *)malloc( s->nw * sizeof( double ) );
+		s->favegt = (double *)malloc( s->nw * sizeof( double ) );
+		s->fasoil = (double *)malloc( s->nw * sizeof( double ) );
+		p->abscissa = (double *)malloc( p->npoints * sizeof( double ) );
+		p->weights  = (double *)malloc( p->npoints * sizeof( double ) );
+
+		gauleg( -1., 1., p->abscissa, p->weights, p->npoints );
+	}
+
+	return ;
+
+}
+
+
+static void gortt_free_outputs( gortt_parameters *p, gortt_spectra *s, gortt_control *c )
+{
+
+	gortt_dealloc_1d( s->wavelength );
+	gortt_dealloc_1d( s->rsurf );
+	gortt_dealloc_1d( s->rsoil );
+	gortt_dealloc_1d( s->rleaf );
+	gortt_dealloc_1d( s->tleaf );
+	gortt_dealloc_1d( s->scomp );
+
+	if( c->calc_integrals ){
+		gortt_dealloc_1d( s->albedo );
+		gortt_dealloc_1d( s->favegt );
+		gortt_dealloc_1d( s->fasoil );
+		gortt_dealloc_1d( p->abscissa );
+		gortt_dealloc_1d( p->weights );
+	}
+
+	if( p->height    != NULL )gortt_dealloc_1d( p->height );
+	if( p->height_p  != NULL )gortt_dealloc_1d( p->height_p );
+	if( p->theta     != NULL )gortt_dealloc_1d( p->theta );
+	if( p->theta_p   != NULL )gortt_dealloc_1d( p->theta_p );
+
+	if( p->k_open    != NULL )gortt_dealloc_1d( p->k_open );
+	if( p->k_openep  != NULL )gortt_dealloc_1d( p->k_openep );
+	if( p->factorial != NULL )gortt_dealloc_1d( p->factorial );
+
+	if( p->p_s0      != NULL ) gortt_dealloc_2d( p->p_s0, p->nlayers );
+	if( p->p_n0      != NULL ) gortt_dealloc_2d( p->p_n0, p->nlayers );
+	if( p->epgap     != NULL ) gortt_dealloc_2d( p->epgap, p->nlayers );
+
+	if( p->pd_s    	 != NULL ) gortt_dealloc_3d( p->pd_s, p->nlayers, p->nth );
+
+	return ;
+
+}
+
+
+/*
+Take one set of view and solar angles in degrees and put them into the
+geometry structure in radians, with the sign and range conventions the
+rest of the code assumes: zenith angles positive, azimuths in [0,2pi),
+and the relative azimuth folded into [0,pi].
+
+(see walthall.c)
+*/
+static void gortt_set_geometry( gortt_geometry *g, double vza, double vaa, double sza, double saa )
+{
+
+	g->vza = DTOR( vza ) ;
+	g->vaa = DTOR( vaa ) ;
+	g->sza = DTOR( sza ) ;
+	g->saa = DTOR( saa ) ;
+
+	/* zenith angles +ve */
+	if ( g->sza < 0.0 ) {
+		g->saa += M_PI ;
+		g->sza *= -1.0 ;
+	}
+	if ( g->vza < 0.0 ) {
+		g->vaa += M_PI ;
+		g->vza *= -1.0 ;
+	}
+
+	/* azimuth angles between 0 & 360 degrees */
+
+	while ( g->saa > 2 * M_PI )
+		g->saa -= 2 * M_PI;
+
+	while ( g->vaa > 2 * M_PI )
+		g->vaa -= 2 * M_PI;
+
+	while ( g->saa < 0 )
+		g->saa += 2 * M_PI;
+
+	while ( g->vaa < 0 )
+		g->vaa += 2 * M_PI;
+
+
+	g->raa = g->saa - g->vaa ;
+	g->raa = fabs((g->raa - 2 * M_PI * (int) (0.5 + g->raa * M_1_PI * 0.5)));
+
+	return ;
+
+}
+
+
+/*
+Evaluate the model for the geometry currently in g, leaving the
+reflectances in s.
+*/
+static void gortt_run_geometry( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+{
+
+	g->vza_prime = gortt_prime_theta( p, g->vza );
+	g->sza_prime = gortt_prime_theta( p, g->sza );
+
+	/*this is needed by the kuusk function*/
+	p->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
+
+	/*From Ni et al. '99*/
+	if( ! p->use_user_fd )
+		p->fd = cos( g->sza ) / ( cos( g->sza ) + 0.09 );
+
+	gortt_set_zenith_dependant_probabilities( p, g );
+	gortt_rsurf( p, g, s );
+
+	return ;
+
+}
+
+
+/*
+One output line: the angles as they were given, then the BRF per waveband,
+then whatever the -prnspec/-prnprop/-energy options ask for.
+
+n.b. the integral routines write over the BRFs, so everything from the
+previous calculation has to be printed before gortt_energy is called.
+*/
+static void gortt_print_result( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s,
+                                gortt_control *c, char *fmt,
+                                double vza, double vaa, double sza, double saa )
+{
+
+	int i ;
+
+	/*the angles are echoes of the input, so are left at %f*/
+	printf( "%f %f %f %f ", vza, vaa, sza, saa );
+
+	for( i=0; i<s->nw; i++ ){
+		printf( fmt, *( s->rsurf + i ) );
+		if( c->print_comp_spectra==TRUE ){
+			printf( "{ " );
+			printf( fmt, *(s->scomp+i*4+0) );
+			printf( fmt, *(s->scomp+i*4+1) );
+			printf( fmt, *(s->scomp+i*4+2) );
+			printf( fmt, *(s->scomp+i*4+3) );
+			printf( "} " );
+		}
+	}
+
+	if( c->print_comp_proport==TRUE ){
+		printf( "[ " );
+		printf( fmt, g->Kc );
+		printf( fmt, g->Kg );
+		printf( fmt, g->Kt );
+		printf( fmt, g->Kz );
+		printf( "] " );
+	}
+
+	/*integral terms*/
+	if( c->calc_integrals ){
+		gortt_energy( p, g, s );
+		for( i=0; i<s->nw; i++ ){
+			printf( fmt, *( s->albedo + i ) );
+			printf( fmt, *( s->favegt + i ) );
+			printf( fmt, *( s->fasoil + i ) );
+		}
+	}
+
+	printf( "\n" );
+
+	return ;
 
 }
 

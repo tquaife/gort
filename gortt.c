@@ -24,11 +24,34 @@ int main( int argc, char **argv )
 	
 	double *soil_vector_1, *soil_vector_2, *soil_vector_3, *soil_vector_4 ;
 	double out_vza, out_vaa, out_sza, out_saa ;
-	
+
+	char fmt[ 16 ] ;
+	char *prec_env ;
+
 	/*
 	Initialise control structure
 	*/
 	
+	/*
+	Output precision for the reflectance/albedo columns. The default "%f"
+	gives 4 significant figures, which is too coarse to see a small change
+	in the numerics. Setting GORTT_PREC to a number of significant digits
+	(17 round-trips a double exactly) raises it. Intended for regression
+	testing - see tests/run.sh - hence an environment variable rather than
+	a command line option.
+	*/
+
+	strcpy( fmt, "%f " );
+	if( ( prec_env = getenv( "GORTT_PREC" ) ) != NULL ){
+		int prec = atoi( prec_env );
+		if( prec < 1 || prec > 17 ){
+			fprintf( stderr, "%s: GORTT_PREC must be between 1 and 17\n", *argv );
+			exit( EXIT_FAILURE );
+		}
+		/*n.b. built from an integer, never from the string itself*/
+		sprintf( fmt, "%%.%dg ", prec );
+	}
+
     cont.print_comp_spectra=FALSE ;
     cont.print_comp_proport=FALSE ;
     cont.calc_integrals=FALSE ;
@@ -307,21 +330,37 @@ int main( int argc, char **argv )
     n.b. the integral routines write over the BRFs so
     must print anything from previous calculations now
     */
+		/*the angles are echoes of the input, so are left at %f*/
 		printf( "%f %f %f %f ", out_vza, out_vaa, out_sza, out_saa );
 		for( i=0; i<spect.nw; i++ ){
-			printf( "%f ", *( spect.rsurf + i ) );
-      if( cont.print_comp_spectra==TRUE )
-			  printf( "{ %f %f %f %f } ",*(spect.scomp+i*4+0),*(spect.scomp+i*4+1),*(spect.scomp+i*4+2),*(spect.scomp+i*4+3));
+			printf( fmt, *( spect.rsurf + i ) );
+      if( cont.print_comp_spectra==TRUE ){
+			  printf( "{ " );
+			  printf( fmt, *(spect.scomp+i*4+0) );
+			  printf( fmt, *(spect.scomp+i*4+1) );
+			  printf( fmt, *(spect.scomp+i*4+2) );
+			  printf( fmt, *(spect.scomp+i*4+3) );
+			  printf( "} " );
+			}
 		}
-    if( cont.print_comp_proport==TRUE )
-		  printf( "[ %f %f %f %f ] ", geom.Kc, geom.Kg, geom.Kt, geom.Kz );
+    if( cont.print_comp_proport==TRUE ){
+		  printf( "[ " );
+		  printf( fmt, geom.Kc );
+		  printf( fmt, geom.Kg );
+		  printf( fmt, geom.Kt );
+		  printf( fmt, geom.Kz );
+		  printf( "] " );
+		}
 
 
 		/*integral terms*/
 		if( cont.calc_integrals ){
 		  gortt_energy( &params, &geom, &spect );
-	    for( i=0; i<spect.nw; i++ )
-			  printf( "%f %f %f ", *( spect.albedo + i ), *( spect.favegt + i ), *( spect.fasoil + i ) );
+	    for( i=0; i<spect.nw; i++ ){
+			  printf( fmt, *( spect.albedo + i ) );
+			  printf( fmt, *( spect.favegt + i ) );
+			  printf( fmt, *( spect.fasoil + i ) );
+			}
 	  }
 	
 	  printf( "\n" );

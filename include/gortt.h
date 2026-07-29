@@ -50,6 +50,11 @@ typedef struct  {
 
 
 
+/*
+One view/sun geometry, plus everything derived from it. Every field below
+is rewritten by gortt_set_geometry / gortt_run_geometry for each angle in
+the input, so nothing here survives from one output line to the next.
+*/
 typedef struct  {
 		double vza ;
 		double vaa ;
@@ -60,11 +65,26 @@ typedef struct  {
 		double vza_prime ;
 		double sza_prime ;
 
+		/*viewed areal proportions: sunlit crown, sunlit
+		background, shaded crown, shaded background*/
 		double Kc ;
 		double Kg ;
 		double Kt ;
 		double Kz ;
 
+		/*leaf projection G at the view zenith (the solar
+		zenith equivalent is p->k, which does not vary)*/
+		double k_vza ;
+
+		/*fraction of the incoming radiation that is direct*/
+		double fd ;
+
+		/*gap probabilities interpolated to this geometry's
+		zenith angles by gortt_set_zenith_dependant_probabilities*/
+		double p_neq0_heq0_sza ;
+		double p_ngt0_heq0_sza ;
+		double p_neq0_heq0_vza ;
+		double p_ngt0_heq0_vza ;
 
 } gortt_geometry ;
 
@@ -138,7 +158,6 @@ typedef struct  {
 		double lv ;
 		double lv_p ;
 		double k ;
-		double k_vza ;
 		double favd ;
 		double favd_p ;
 		double elai ;
@@ -147,9 +166,11 @@ typedef struct  {
 		double lambda ;
 		double ellipticity ;
 
-        /*diffuse fraction*/
+        /*diffuse fraction: if the user supplied one it is held here and
+        copied into g->fd for every geometry, otherwise g->fd is derived
+        from the solar zenith*/
         unsigned short use_user_fd ;
-		double fd ;
+		double user_fd ;
 
 
 		int nh_es ;
@@ -181,11 +202,6 @@ typedef struct  {
 		double ***pd_s ;
 
 		int lad ;
-
-		double p_neq0_heq0_sza ;
-		double p_ngt0_heq0_sza ;
-		double p_neq0_heq0_vza ;
-		double p_ngt0_heq0_vza ;
 
 		int read_prob_file ;
 		char prob_fn[ MAX_LINE_LEN ] ;

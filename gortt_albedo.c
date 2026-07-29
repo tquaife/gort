@@ -31,7 +31,7 @@ void gortt_energy( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 
   gortt_albedo( p, g, s );
 
-  Pn0=p->p_neq0_heq0_sza ;
+  Pn0=g->p_neq0_heq0_sza ;
 
   for( k=0;k<s->nw;k++ ){
 
@@ -115,12 +115,12 @@ void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		  g->sza_prime = gortt_prime_theta( p, g->sza );
 
   		/*this is needed by the kuusk function*/
-  		p->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
+  		g->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
 
 		  gortt_set_zenith_dependant_probabilities( p, g );
 
 		  /* Checking probability terms...
-		  fprintf( stderr, "+++ %f\n", p->p_neq0_heq0_sza );
+		  fprintf( stderr, "+++ %f\n", g->p_neq0_heq0_sza );
 		  */
 
 		  gortt_rsurf( p, g, s );

@@ -410,7 +410,7 @@ double gortt_t_prime_0( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 
 	double t_prime_0 ;
 
-	t_prime_0 = p->p_neq0_heq0_sza + p->p_ngt0_heq0_sza ;
+	t_prime_0 = g->p_neq0_heq0_sza + g->p_ngt0_heq0_sza ;
 
 	return( t_prime_0 );
 
@@ -587,12 +587,12 @@ double gortt_kuusk( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 	/*cos_xi = cos( g->sza_prime )*cos( g->vza_prime )+sin( g->sza_prime )*sin( g->vza_prime )*cos( g->raa );*/
 
 	/*
-	lsza = -log( p->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
-	lvza = -log( p->p_ngt0_heq0_vza ) / ( p->k_vza * p->favd ) ;
+	lsza = -log( g->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
+	lvza = -log( g->p_ngt0_heq0_vza ) / ( g->k_vza * p->favd ) ;
 	*/
 
-	lsza = -log( p->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
-	lvza = -log( p->p_ngt0_heq0_vza ) / ( p->k_vza * p->favd ) ;
+	lsza = -log( g->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
+	lvza = -log( g->p_ngt0_heq0_vza ) / ( g->k_vza * p->favd ) ;
 
 
 	/*sqrt trap for -ve*/
@@ -628,7 +628,7 @@ double gortt_kuusk( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 	*/
 
 
-	kuusk = p->p_ngt0_heq0_sza * p->p_ngt0_heq0_vza * H ;
+	kuusk = g->p_ngt0_heq0_sza * g->p_ngt0_heq0_vza * H ;
 
 	/*fprintf( stderr, "### %f\n", kuusk );*/
 

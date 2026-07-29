@@ -224,8 +224,8 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->nlayers = 15 ;
 
 	/*direct/diffuse term*/
-	/*p->fd = 1.0 ;*/
-	/*p->fd = 0.903 ;*/
+	/*p->user_fd = 1.0 ;*/
+	/*p->user_fd = 0.903 ;*/
 
 	/*p->lad = LAD_EXTREMOPHILE ;*/
 	p->lad = LAD_05 ;
@@ -238,8 +238,10 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	/*number integral points*/
 	p->npoints=32 ;
 
-	/*diffuse radiation*/
+	/*diffuse radiation: without -diffuse the direct fraction is derived
+	per geometry from the solar zenith, so user_fd is never read*/
 	p->use_user_fd=FALSE ;
+	p->user_fd=1.0 ;
 
 	return ;
 
@@ -493,11 +495,13 @@ static void gortt_run_geometry( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	g->sza_prime = gortt_prime_theta( p, g->sza );
 
 	/*this is needed by the kuusk function*/
-	p->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
+	g->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
 
 	/*From Ni et al. '99*/
-	if( ! p->use_user_fd )
-		p->fd = cos( g->sza ) / ( cos( g->sza ) + 0.09 );
+	if( p->use_user_fd )
+		g->fd = p->user_fd ;
+	else
+		g->fd = cos( g->sza ) / ( cos( g->sza ) + 0.09 );
 
 	gortt_set_zenith_dependant_probabilities( p, g );
 	gortt_rsurf( p, g, s );
@@ -658,17 +662,17 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		Gd = *( s->rsoil + i ) ;
 		Gf = *( s->rsoil + i ) ;
 
-		G = p->fd*Gd + (1-p->fd)*Gf ;
+		G = g->fd*Gd + (1-g->fd)*Gf ;
 
 
 
 		/*shaded ground*/
 
-		/*Zd = ( gortt_t_prime_df( p, g, s ) + p->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
-		Zd = ( gortt_t_prime_df( p, g, s ) + p->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
+		/*Zd = ( gortt_t_prime_df( p, g, s ) + g->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
+		Zd = ( gortt_t_prime_df( p, g, s ) + g->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
 		Zf = ( gortt_t_prime_ff( p, g, s ) - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
 
-		Z = p->fd*Zd + (1-p->fd)*Zf ;
+		Z = g->fd*Zd + (1-g->fd)*Zf ;
 
 
 		/*Sunlit Crown*/
@@ -705,7 +709,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		Cd = CdC + CdG + CdCG ;
 		Cf = CfC + CfG + CfCG ;
 
-		C = p->fd*Cd + (1-p->fd)*Cf ;
+		C = g->fd*Cd + (1-g->fd)*Cf ;
 
 
 
@@ -724,7 +728,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
 
 
-		T = p->fd*Td + (1-p->fd)*Tf ;
+		T = g->fd*Td + (1-g->fd)*Tf ;
 
 
 		/*
@@ -1041,8 +1045,8 @@ void gortt_set_zenith_dependant_probabilities( gortt_parameters *p, gortt_geomet
 
 	d = pos - findex ;
 
-	p->p_neq0_heq0_sza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
-	p->p_ngt0_heq0_sza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
+	g->p_neq0_heq0_sza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
+	g->p_ngt0_heq0_sza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
 
 
 	/*view zenith*/
@@ -1054,8 +1058,8 @@ void gortt_set_zenith_dependant_probabilities( gortt_parameters *p, gortt_geomet
 
 	d = pos - findex ;
 
-	p->p_neq0_heq0_vza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
-	p->p_ngt0_heq0_vza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
+	g->p_neq0_heq0_vza = d * p->p_n0[ 0 ][ cindex ] + ( 1.0 - d ) * p->p_n0[ 0 ][ findex ] ;
+	g->p_ngt0_heq0_vza = d * p->epgap[ 0 ][ cindex ] + ( 1.0 - d ) * p->epgap[ 0 ][ findex ] ;
 
 
 	return ;
@@ -1192,7 +1196,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_geometry
 
 			else if( !strncasecmp( argv[ i ], "-beta", 5 ) ){ p->use_user_beta=TRUE; p->beta=atof( gortt_next_arg( argc, argv, &i ) );}
 
-			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );}
+			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->user_fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );}
 
 			else if( !strncmp( argv[ i ], "-alb_leaf", 9 ) ){
 				s->is_user_leaf = TRUE ;

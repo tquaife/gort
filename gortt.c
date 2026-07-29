@@ -19,6 +19,7 @@ static void gortt_read_prob_file( gortt_parameters *, char * );
 static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
 static void gortt_alloc_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
 static void gortt_free_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
+static void gortt_free_params( gortt_parameters * );
 static void gortt_set_geometry( gortt_geometry *, double, double, double, double );
 static void gortt_run_geometry( gortt_parameters *, gortt_geometry *, gortt_spectra * );
 static void gortt_print_result( gortt_parameters *, gortt_geometry *, gortt_spectra *,
@@ -68,6 +69,7 @@ int main( int argc, char **argv )
 	n.b. this returns before stdin is read at all*/
 	if( params.write_prob_file == TRUE ){
 		gortt_write_prob_file( &params );
+		gortt_free_params( &params );
 		return( EXIT_SUCCESS );
 	}
 
@@ -129,6 +131,7 @@ int main( int argc, char **argv )
 	}
 
 	gortt_free_outputs( &params, &spect, &cont );
+	gortt_free_params( &params );
 
 	return( EXIT_SUCCESS );
 
@@ -419,6 +422,19 @@ static void gortt_free_outputs( gortt_parameters *p, gortt_spectra *s, gortt_con
 		gortt_dealloc_1d( p->abscissa );
 		gortt_dealloc_1d( p->weights );
 	}
+
+	return ;
+
+}
+
+
+/*
+The canopy arrays, which are allocated by gortt_init_params rather than
+by gortt_alloc_outputs. Kept separate because the -W path exits before
+stdin is read at all, so it has these but not the spectral outputs.
+*/
+static void gortt_free_params( gortt_parameters *p )
+{
 
 	if( p->height    != NULL )gortt_dealloc_1d( p->height );
 	if( p->height_p  != NULL )gortt_dealloc_1d( p->height_p );

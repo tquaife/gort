@@ -145,24 +145,40 @@ separately would need a new option pair; there is no way to do it today.
 The shapes come out right and the magnitudes are close but not exact.
 
 * Panel (b) reproduces well in both bands: a flat forward-scatter side with a
-  sharp hotspot spike at +45. We give 0.048 flat / 0.107 peak in the red
+  sharp hotspot spike at +45. We give 0.0395 flat / 0.098 peak in the red
   against a published ~0.032 / ~0.09, and 0.48 / 0.583 in the NIR against
-  ~0.365 / ~0.45. Same shape throughout, values 1.3–1.5x high.
-* Panel (a): C rises with solar zenith, peaks and falls back, as published.
-  We peak at ~55–60 degrees where the paper peaks nearer 68.
+  ~0.365 / ~0.45. Same shape throughout; the red is close, the NIR ~1.3x high.
+* Panel (a): C rises with solar zenith, peaks and falls back, as published,
+  and in the red it starts from 0.035 against a published ~0.035. We peak at
+  ~55 degrees where the paper peaks nearer 68.
 * **The published solid curve in panel (a) is C at the hotspot, not at a fixed
   view.** The paper says C "has a maximum value at the hotspot viewing
   direction", and C at a fixed nadir view *falls* slightly with solar zenith
   instead of rising. G, T and Z are drawn at nadir, where the paper notes they
   are almost constant with view direction.
-* **G disagrees with the paper's own Table II.** G comes out exactly equal to
-  the `-alb_soil` input — which is what the paper says it should be ("the
-  spectral signature of sunlit background is approximated by the background
-  albedo") — so at 670 nm we draw a flat line at 0.29. The published Fig. 6
-  draws it at about 0.12, which matches neither the 670 nm entry (0.29) nor
-  the 540 nm one (0.069). That is an inconsistency inside the paper, not
-  something the model can resolve; `--soil 0.12` reproduces the published line
-  if you want to compare the rest.
+* **The red background albedo is 0.117, not Table II's 0.29** — see below.
+
+### The red background albedo
+
+G is not modelled: `gortt.c:697` sets `Gd = Gf = rsoil`, so the direct/diffuse
+mixture `G = fd*Gd + (1-fd)*Gf` collapses to `rsoil` exactly, for any `fd`.
+Verified: G tracks `-alb_soil` to floating-point representation across 0.069,
+0.12, 0.29 and 0.5. So the flat dashed line in the published Fig. 6(a) *is*
+the background albedo that was used to draw it, read directly off the page.
+
+Measured against the panel's own axis calibration (top frame 0.4, bottom axis
+0.0), that line sits at **0.117** — not the 0.29 that Table II gives for
+670 nm. Two things support 0.117 being the value actually used:
+
+* Table II lists 0.29 for both 670 nm and 865 nm. An identical red and NIR
+  background is not what a boreal forest floor does, and it has the look of
+  the NIR row duplicated.
+* 0.117 brings panel (b) closer to the published curve at both ends: nadir
+  0.0395 against ~0.032 published, hotspot 0.0976 against ~0.09, where 0.29
+  gives 0.0484 and 0.107.
+
+So the red band here defaults to `soil=0.117`. `--soil 0.29` restores the
+tabulated value if you want to see it.
 
 Fig. 6 is 670 nm rather than 540 nm: panel (b) at nadir is ~0.032 in the paper,
-against 0.048 at 670 nm and 0.104 at 540 nm from the model.
+against 0.0395 at 670 nm and 0.104 at 540 nm from the model.

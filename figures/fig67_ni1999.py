@@ -27,8 +27,12 @@ Table II, and the resulting W:
 
     band     reflectance  transmittance   W = r+t   background albedo
     540 nm      0.2          0.06           0.26         0.069
-    670 nm      0.09         0.002          0.092        0.29
+    670 nm      0.09         0.002          0.092        0.29  (see below)
     865 nm      0.515        0.305          0.82         0.29
+
+The red background albedo used here is 0.117 rather than Table II's 0.29: G is
+identically the background albedo, and the published Fig. 6 draws it at 0.117.
+See BANDS below and README.md.
 
 One caveat, and it is the reason -alb_leaf cannot reproduce Table II exactly:
 it sets reflectance and transmittance to W/2 each (gortt.c), so it fixes the
@@ -60,8 +64,16 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gortt_run as gr
 
 # Bands, as the paper's Table II.  "leaf" is reflectance + transmittance.
+#
+# n.b. the red background albedo is 0.117, not Table II's 0.29.  G is
+# identically the background albedo (gortt.c: Gd = Gf = rsoil, so the fd
+# mixture collapses), and the dashed G line in the published Fig. 6 measures
+# 0.117 off the page, not 0.29.  Table II gives 0.29 for both 670 and 865 nm,
+# which looks like the NIR row duplicated: 0.117 also brings panel (b) closer
+# to the published curve at both the nadir and the hotspot.  --soil 0.29
+# restores the tabulated value.
 BANDS = {
-    "red": dict(figure=6, wavelength=670.0, leaf=0.092, soil=0.29,
+    "red": dict(figure=6, wavelength=670.0, leaf=0.092, soil=0.117,
                 label="RED (670 nm)", ymax_a=0.4, ymax_b=0.2),
     "nir": dict(figure=7, wavelength=865.0, leaf=0.82, soil=0.29,
                 label="NIR (865 nm)", ymax_a=1.0, ymax_b=0.6),

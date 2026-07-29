@@ -71,6 +71,16 @@ void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
   int i, j, k ;
 
 	/*
+	The quadrature walks over the viewing hemisphere, so it has to move
+	the view direction. It does that on a copy: the caller's geometry is
+	the one that was just printed, and this routine used to leave it
+	holding the last quadrature point instead. Only the ordering in
+	main() -- print the BRF, then call gortt_energy -- kept that from
+	being visible in the output.
+	*/
+	gortt_geometry gv = *g ;
+
+	/*
 	n.b. these are accumulators over wavebands, not over quadrature
 	points: every index into them below runs over s->nw. They used to be
 	allocated with p->npoints elements, which silently overflowed the
@@ -90,40 +100,40 @@ void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 
     y = ym + yr* *(p->abscissa+i);
 
-    g->vaa = y;
+    gv.vaa = y;
 
     /*corrections...*/
-    while ( g->vaa > 2 * M_PI ) g->vaa -= 2 * M_PI;
-    g->raa = g->saa - g->vaa ;
-		g->raa = fabs((g->raa - 2 * M_PI * (int) (0.5 + g->raa * M_1_PI * 0.5)));
+    while ( gv.vaa > 2 * M_PI ) gv.vaa -= 2 * M_PI;
+    gv.raa = gv.saa - gv.vaa ;
+		gv.raa = fabs((gv.raa - 2 * M_PI * (int) (0.5 + gv.raa * M_1_PI * 0.5)));
 
     for( k=0;k<s->nw;k++ ) *(sum_x+k)=0.;
     for( j=p->npoints/2.;j<p->npoints;j++ ){
 
       x=xm + xr* *(p->abscissa+j) ;
 
-      g->vza = acos( x );
+      gv.vza = acos( x );
 
       /*corrections... un-needed!
       - but exercising caution...*/
-      if ( g->vza < 0.0 ) {
-			  g->vaa += M_PI ;
-			  g->vza *= -1.0 ;
+      if ( gv.vza < 0.0 ) {
+			  gv.vaa += M_PI ;
+			  gv.vza *= -1.0 ;
 		  }
 
-      g->vza_prime = gortt_prime_theta( p, g->vza );
-		  g->sza_prime = gortt_prime_theta( p, g->sza );
+      gv.vza_prime = gortt_prime_theta( p, gv.vza );
+		  gv.sza_prime = gortt_prime_theta( p, gv.sza );
 
   		/*this is needed by the kuusk function*/
-  		g->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
+  		gv.k_vza = gortt_leaf_angle_distribution( p, gv.vza ) ;
 
-		  gortt_set_zenith_dependant_probabilities( p, g );
+		  gortt_set_zenith_dependant_probabilities( p, &gv );
 
 		  /* Checking probability terms...
-		  fprintf( stderr, "+++ %f\n", g->p_neq0_heq0_sza );
+		  fprintf( stderr, "+++ %f\n", gv.p_neq0_heq0_sza );
 		  */
 
-		  gortt_rsurf( p, g, s );
+		  gortt_rsurf( p, &gv, s );
 
       for( k=0;k<s->nw;k++ )
         *(sum_x+k)=*(sum_x+k)+*(s->rsurf+k)* *(p->weights+j)*fabs(x)*xr ;

@@ -608,7 +608,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 
 
 	/*Sunlit & viewed ground*/
-	Kg = gortt_kg( p, g ) ;
+	Kg = gortt_kg( p, g, g->raa ) ;
 
 
 	/*sunlit & viewed crown*/

@@ -4,12 +4,18 @@
 #include<gortt.h>
 
 
-double gortt_kg( gortt_parameters *p, gortt_geometry *g )
+/*
+n.b. the relative azimuth is passed in rather than taken from g: gortt_kc
+needs Kg on the principal plane (raa = 0 and 180 deg) as well as at the
+actual geometry, and it used to get them by writing to g->raa and putting
+it back afterwards.
+*/
+double gortt_kg( gortt_parameters *p, gortt_geometry *g, double raa )
 {
 
 	double Kg, overlap ;
 
-	overlap = gortt_overlap( p, g );
+	overlap = gortt_overlap( p, g, raa );
 
 	Kg = exp( -( p->lambda*pow( p->r, 2 )*M_PI*( SEC(g->sza_prime)+SEC(g->vza_prime)-overlap ) ) );
 
@@ -18,7 +24,7 @@ double gortt_kg( gortt_parameters *p, gortt_geometry *g )
 }
 
 
-double gortt_overlap( gortt_parameters *p, gortt_geometry *g )
+double gortt_overlap( gortt_parameters *p, gortt_geometry *g, double raa )
 {
 
 	double overlap, t, D, d ;
@@ -27,22 +33,22 @@ double gortt_overlap( gortt_parameters *p, gortt_geometry *g )
 
 	/* As in the linear kernels*/
 	d = pow( tan( g->sza_prime ),2 ) + pow( tan( g->vza_prime ),2 ) \
-		- 2.0 * tan( g->sza_prime ) * tan( g->vza_prime ) * cos( g->raa ) ;
+		- 2.0 * tan( g->sza_prime ) * tan( g->vza_prime ) * cos( raa ) ;
 
 	D = sqrt( MAX( 0.0, d ) );
 
 /*
-	printf( "+++ %f %f %f\n", D, d, cos( g->raa ) );
+	printf( "+++ %f %f %f\n", D, d, cos( raa ) );
 */
 
 	if( TRUE ){ /*ambrals style*/
 
-		t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(g->raa) ), 2) );
+		t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
 
 	}else{ /*Li&Strahler '92*/
 
 		/*Principal plane only??*/
-		t2 = fabs( tan( g->sza_prime) - tan(g->vza_prime)*cos(g->raa) ) ;
+		t2 = fabs( tan( g->sza_prime) - tan(g->vza_prime)*cos(raa) ) ;
 
 	}
 
@@ -55,16 +61,16 @@ double gortt_overlap( gortt_parameters *p, gortt_geometry *g )
 
 		double tmp ;
 
-		tmp = pow( tan( g->sza_prime ) * sin( g->raa ) / D, 2 ) \
-			  + pow((tan( g->sza_prime ) * cos( g->raa ) - tan( g->vza_prime ))/D, 2 ) \
+		tmp = pow( tan( g->sza_prime ) * sin( raa ) / D, 2 ) \
+			  + pow((tan( g->sza_prime ) * cos( raa ) - tan( g->vza_prime ))/D, 2 ) \
 				* pow( SEC( g->sza_prime ), 2 );
 
 		if( tmp < 0.0 ) tmp = 0.0 ;
 
 		t1 = sqrt( tmp ) ;
 
-		tmp = pow( tan( g->vza_prime ) * sin( g->raa ) / D, 2 ) \
-			  + pow((tan( g->vza_prime ) * cos( g->raa ) - tan( g->sza_prime ))/D, 2 ) \
+		tmp = pow( tan( g->vza_prime ) * sin( raa ) / D, 2 ) \
+			  + pow((tan( g->vza_prime ) * cos( raa ) - tan( g->sza_prime ))/D, 2 ) \
 				* pow( SEC( g->vza_prime ), 2 );
 
 		if( tmp < 0.0 ) tmp = 0.0 ;
@@ -123,23 +129,18 @@ double gortt_kc( gortt_parameters *p, gortt_geometry *g, double Kg )
 	double f, f0, f180 ;
 	double F, F0, F180 ;
 	double Kg0, Kg180 ;
-	double raa_swap, frac ;
+	double frac ;
 
 
-	raa_swap = g->raa ;
+	/*at the actual geometry: only F and beta are used, f is discarded*/
+	gortt_kc_fFbeta( p, g, g->raa, Kg, &f, &F, &beta );
 
+	/*and on the two halves of the principal plane*/
+	Kg0 = gortt_kg( p, g, DTOR( 0. ) ) ;
+	gortt_kc_fFbeta( p, g, DTOR( 0. ), Kg0, &f0, &F0, &junk );
 
-	gortt_kc_fFbeta( p, g, Kg, &f, &F, &beta );
-
-	g->raa = DTOR( 0. );
-	Kg0 = gortt_kg( p, g ) ;
-	gortt_kc_fFbeta( p, g, Kg0, &f0, &F0, &junk );
-
-	g->raa = DTOR( 180. );
-	Kg180 = gortt_kg( p, g ) ;
-	gortt_kc_fFbeta( p, g, Kg180, &f180, &F180, &junk );
-
-	g->raa = raa_swap ;
+	Kg180 = gortt_kg( p, g, DTOR( 180. ) ) ;
+	gortt_kc_fFbeta( p, g, DTOR( 180. ), Kg180, &f180, &F180, &junk );
 
 	frac = g->raa / M_PI ;
 	if( frac > 1.0 ) frac = 2.0 - frac ;
@@ -147,6 +148,14 @@ double gortt_kc( gortt_parameters *p, gortt_geometry *g, double Kg )
 	/*slot in user defined beta*/
 	if( p->use_user_beta == TRUE ) beta = p->beta ;
 
+	/*
+	n.b. gortt_kc_fFbeta already returns f with a factor of F in it
+	(*f = *F * (...)), so the products below carry F squared, where
+	gortt_kc_PP_only uses F to the first power for the same equation.
+	This affects every off-principal-plane BRF. Flagged, deliberately
+	not changed: it needs checking against Ni et al. / Li & Strahler
+	first, and any fix is a change to the numbers, not a tidy-up.
+	*/
 	f = (1.-frac)*f0*F0 + frac*f180*F180 ;
 
 
@@ -164,7 +173,7 @@ Only calculates f, F and beta of the kc function
 this is done so we can interpolate bewteen various
 f's to get the true value of Kc for OPP cases.
 */
-void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double Kg, double *f, double *F, double *beta )
+void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double raa, double Kg, double *f, double *F, double *beta )
 {
 
 	double phase_prime, Gamma, Gamma_v, Gamma_c, Gamma_i ;
@@ -174,8 +183,8 @@ void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double Kg, double 
 
 	/*double f, F, beta ; */
 
-	overlap = gortt_overlap( p, g );
-	phase_prime = cos( g->vza_prime )*cos( g->sza_prime )+sin( g->vza_prime )*sin( g->sza_prime )*cos( g->raa ) ;
+	overlap = gortt_overlap( p, g, raa );
+	phase_prime = cos( g->vza_prime )*cos( g->sza_prime )+sin( g->vza_prime )*sin( g->sza_prime )*cos( raa ) ;
 
 	Mi = ( 1.0  - (1.0 - exp( -p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )/( p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )  ;
 	Mv = ( 1.0  - (1.0 - exp( -p->lambda * M_PI * p->rr * SEC(g->vza_prime) ) )/( p->lambda * M_PI * p->rr * SEC(g->vza_prime) ) )  ;
@@ -194,13 +203,13 @@ void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double Kg, double 
 
 	Gamma_i = Gamma_v ;
 
-	PiMi = ( 1 - cos( theta_Mi * ( 1 - ( g->sza_prime - g->vza_prime * cos( g->raa ) )/M_PI ) ) ) / 2.0 ;
-	PvMv = Mv -( 1.0 - cos( g->vza_prime * cos( g->raa ) - g->sza_prime ) ) / 2.0 ;
+	PiMi = ( 1 - cos( theta_Mi * ( 1 - ( g->sza_prime - g->vza_prime * cos( raa ) )/M_PI ) ) ) / 2.0 ;
+	PvMv = Mv -( 1.0 - cos( g->vza_prime * cos( raa ) - g->sza_prime ) ) / 2.0 ;
 
 
 	/*set Po*/
 
-	if( ( g->raa < DTOR( 270. ) ) && ( g->raa > DTOR( 90. ) ) ) Po = PvMv ;
+	if( ( raa < DTOR( 270. ) ) && ( raa > DTOR( 90. ) ) ) Po = PvMv ;
 	else if( fabs( g->vza ) > fabs( g->sza ) ) Po = PiMi  ;
 	else Po = PvMv  ;
 
@@ -232,7 +241,7 @@ double gortt_kc_PP_only( gortt_parameters *p, gortt_geometry *g, double Kg )
 	double Pv, PvMv, Pi, PiMi, Po ;
 	double theta_Mi, theta_Mv, beta, D ;
 
-	overlap = gortt_overlap( p, g );
+	overlap = gortt_overlap( p, g, g->raa );
 	phase_prime = cos( g->vza_prime )*cos( g->sza_prime )+sin( g->vza_prime )*sin( g->sza_prime )*cos( g->raa ) ;
 
 	Mi = ( 1.0  - (1.0 - exp( -p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )/( p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )  ;

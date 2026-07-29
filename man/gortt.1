@@ -1,0 +1,558 @@
+.\" Man page for gortt, the GORT canopy reflectance model.
+.\" View with:  man ./man/gortt.1
+.TH GORTT 1 "2026-07-29" "gortt" "User Commands"
+.
+.SH NAME
+gortt \- geometric optic radiative transfer model for discontinuous plant canopies
+.
+.SH SYNOPSIS
+.B gortt
+.RI [ options ]
+<
+.I angles.dat
+>
+.I output.dat
+.br
+.B gortt
+.B \-W
+.RI [ options ]
+<
+.I /dev/null
+>
+.I probs.dat
+.br
+.B gortt
+.B \-u
+.
+.SH DESCRIPTION
+.B gortt
+is an implementation of the analytical hybrid GORT model of Ni et al. (1999).
+It predicts the bidirectional reflectance factor (BRF) of a forest canopy at
+optical wavelengths (400\-2500 nm) by treating the crowns as randomly located
+ellipsoids and computing the viewed areal proportions of four scene components
+together with their reflectance signatures:
+.
+.TP
+.B C
+sunlit crown
+.TP
+.B G
+sunlit background (soil)
+.TP
+.B T
+shaded crown
+.TP
+.B Z
+shaded background
+.
+.PP
+The surface reflectance is the sum
+.IR "Kc*C + Kg*G + Kt*T + Kz*Z" ,
+where the
+.I K
+terms are the viewed proportions.  The
+.I K
+terms depend only on geometry; the signatures depend only on wavelength and
+the scattering properties of leaves and soil.
+.
+.PP
+Leaf reflectance and transmittance are supplied by PROSPECT\-D, which is linked
+in directly and driven by the
+.B \-N
+and
+.BI \-C xxx
+options.  Soil reflectance comes, by default, from a weighted sum of the four
+Price (1990) empirical orthogonal functions; it can instead be a constant or be
+read from a file.  Both can be overridden entirely (see
+.BR "SPECTRAL OVERRIDES" ).
+.
+.PP
+.B gortt
+is a deterministic filter: it reads the view/illumination geometries from
+standard input, writes one line of results per geometry to standard output, and
+has no other side effects.  All model configuration is on the command line.
+.
+.PP
+Optionally,
+.B gortt
+will also integrate the BRF over the viewing hemisphere to give a spectral
+albedo and a shortwave energy balance (see
+.BR \-energy ).
+.
+.SH INPUT
+The first line of standard input is a header:
+.
+.PP
+.RS
+.I N M W_1 W_2 ... W_M
+.RE
+.
+.PP
+where
+.I N
+is the number of view/illumination geometries that follow,
+.I M
+is the number of wavelengths, and
+.I W_i
+are the wavelengths in nm.  Every wavelength must lie in the range 400\-2500;
+anything outside it is a fatal error.
+.I M
+must be at least 1.  Both counts are checked against what is actually read and a
+mismatch is a fatal error.
+.
+.PP
+The header line is echoed verbatim to standard output before any results.
+.
+.PP
+The remaining
+.I N
+lines are four whitespace\-separated columns of degrees:
+.
+.PP
+.RS
+.I view_zenith view_azimuth solar_zenith solar_azimuth
+.RE
+.
+.PP
+Only the relative azimuth matters, so the view azimuth is conventionally given
+as 0 and the solar azimuth as the relative azimuth.
+.
+.SH OUTPUT
+One line per input geometry, beginning with the four input angles echoed back at
+.BR %f ,
+followed by the BRF at each of the
+.I M
+wavelengths in header order.  Additional fields are appended, in this order,
+when the corresponding options are given:
+.
+.TP
+.B \-prnspec
+after each BRF value, the four component signatures for that wavelength,
+enclosed in braces:
+.RI "{ " "C G T Z" " }"
+.
+.TP
+.B \-prnprop
+after the last wavelength, the four viewed proportions, enclosed in brackets:
+.RI "[ " "Kc Kg Kt Kz" " ]"
+.
+.TP
+.B \-energy
+at the end of the line, three values per wavelength: the spectral albedo, the
+fraction of incident radiation absorbed by the vegetation, and the fraction
+absorbed by the soil.
+.
+.PP
+The reflectance and albedo columns are printed with
+.BR %f ,
+i.e. six decimal places, unless
+.B GORTT_PREC
+is set (see
+.BR ENVIRONMENT ).
+The echoed angles are always
+.BR %f .
+.
+.SH OPTIONS
+.SS Crown geometry
+There are two mutually exclusive ways to describe the canopy geometry.  The
+"old style" options are those of the original GORT papers; the "new style"
+options are the parameterisation of Quaife et al. (2008).  They describe the
+same thing, but the new style is preferred because it reduces equifinality.
+.B As soon as any new style option is given, all old style options are ignored:
+.BR \-HB ,
+.B \-BR
+and
+.B \-PCC
+cause
+.IR r ,
+.IR b ,
+.IR h1 ,
+.I h2
+and
+.I lambda
+to be recomputed at the end of parsing, with
+.I r
+fixed at 10 m.
+.
+.TP
+.BI \-h1 " arg"
+Lower boundary of the crown centres, m.  Default 3.0.
+.TP
+.BI \-h2 " arg"
+Upper boundary of the crown centres, m.  Default 8.5.
+.TP
+.BI \-b " arg"
+Vertical crown radius, m.  Default 2.6999988 (3.55263 * r).
+.TP
+.BI \-r " arg"
+Horizontal crown radius, m.  Default 0.76.
+.TP
+.BI \-lambda " arg"
+Tree stem density, m^\-2.  Default 0.405.
+.TP
+.BI \-HB " arg"
+Ratio of the crown centre height range to the vertical crown radius.
+Default 2.0.  Case sensitive.
+.TP
+.BI \-BR " arg"
+Ratio of the vertical to the horizontal crown radius.  Default 1.0.
+Case sensitive.
+.TP
+.BI \-PCC " arg"
+Projected crown cover at nadir.  Default 0.5.  Case sensitive.
+.TP
+.BI \-beta " arg"
+Force the proportion of mutual shadowing between crowns to
+.IR arg .
+If this is not given, the model of Li and Strahler (IGARSS '92) is used to
+determine mutual shadowing.
+.
+.SS Amount of leaf material
+.TP
+.BI \-favd " arg"
+Foliage volume area density within the crown, m^\-1.  Default 0.858.
+.TP
+.BI \-LAI " arg"
+Leaf area index for the scene, m^2 m^\-2.  Default 2.0.  Case sensitive.
+.B \-LAI
+overrides
+.B \-favd
+and is converted to it using
+.IR lambda ,
+.I r
+and
+.IR b ,
+so it is applied after any geometry conversion.
+.
+.SS PROSPECT-D leaf properties
+Defaults are those of the PROSPECT\-D reference driver.
+.TP
+.BI \-N " arg"
+Leaf structure parameter.  Default 1.2.
+.TP
+.BI \-Cab " arg"
+Chlorophyll content, ug cm^\-2.  Default 30.
+.TP
+.BI \-Car " arg"
+Carotenoid content, ug cm^\-2.  Default 10.
+.TP
+.BI \-Canth " arg"
+Anthocyanin content, ug cm^\-2.  Default 1.0.  Note that
+.B gortt \-u
+advertises this option as
+.BR \-Anth ,
+which the parser does not accept; see
+.BR CAVEATS .
+.TP
+.BI \-Cbrown " arg"
+Brown pigment content, arbitrary units.  Default 0.0.
+.TP
+.BI \-Cw " arg"
+Equivalent water thickness, cm.  Default 0.015.
+.TP
+.BI \-Cm " arg"
+Leaf mass per unit area, g cm^\-2.  Default 0.009.
+.
+.SS Price soil spectra
+.TP
+.BI \-rsl1 " arg"
+Weight of the first Price soil vector.  Default 0.2.
+.TP
+.BI \-rsl2 " arg"
+Weight of the second Price soil vector.  Default 0.1.
+.TP
+.BI \-rsl3 " arg"
+Weight of the third Price soil vector.  Default 0.03726.
+.TP
+.BI \-rsl4 " arg"
+Weight of the fourth Price soil vector.  Default \-0.002426.
+.
+.SS Spectral overrides
+.TP
+.BI \-alb_leaf " arg"
+Set the leaf albedo to the constant
+.IR arg ,
+bypassing PROSPECT.
+.TP
+.BI \-alb_soil " arg"
+Set the soil albedo to the constant
+.IR arg ,
+bypassing the Price EOFs.
+.TP
+.BI \-soil_spectra " file"
+Read the soil reflectance spectrum from
+.IR file ,
+bypassing the Price EOFs.  See
+.BR FILES .
+.PP
+.B \-alb_soil
+and
+.B \-soil_spectra
+are mutually exclusive; whichever appears last on the command line wins.
+.
+.SS Gap probabilities
+Computing the gap probabilities is the expensive part of a run, and they depend
+only on the canopy and crown geometry.  They can therefore be computed once and
+reused across many spectral variations.
+.
+.TP
+.B \-W
+Compute the gap probabilities, write them to standard output, and exit.
+Standard input is never read.
+.TP
+.BI \-P " file"
+Read gap probabilities from
+.IR file ,
+as written by a previous
+.B \-W
+run, instead of computing them.
+.PP
+The geometry options must be identical between the
+.B \-W
+and
+.B \-P
+runs.  This is
+.B not
+checked: giving different geometry silently produces wrong answers.  Only the
+spectral options (PROSPECT, Price and the overrides above) may vary between them.
+.
+.SS Output and mode switches
+.TP
+.B \-prnspec
+Print the component signatures for each wavelength; see
+.BR OUTPUT .
+.TP
+.B \-prnprop
+Print the viewed proportions of the scene components; see
+.BR OUTPUT .
+.TP
+.B \-energy
+Compute and print the spectral albedo and the fractions absorbed by vegetation
+and by soil; see
+.BR OUTPUT .
+This integrates the BRF over the viewing hemisphere and so is substantially
+more expensive than a plain BRF run.
+.TP
+.B \-q08_pn_kopen
+Use the Lewis functional approximation to the gap probability terms, as used in
+Quaife et al. (2008), in place of the full numerical treatment.  This is much
+faster, but it is only coded for h=0 and should be used with caution when the
+crown centres span a range of heights.
+.TP
+.BI \-diffuse " frac"
+Set the fraction of incident radiation that is diffuse to
+.IR frac ,
+i.e. fix the direct fraction at
+.RI 1\- frac .
+Without this option the direct fraction is derived per geometry from the solar
+zenith angle following Ni et al. (1999).  Not listed by
+.BR \-u .
+.TP
+.B \-lidar
+Select lidar mode.  This currently has one real effect: the gap probabilities
+are computed for all canopy layers rather than at the ground only, which is
+considerably slower.  The waveform calculation itself is not yet implemented.
+.TP
+.B \-u
+Print a brief usage message to standard error and exit successfully.
+.
+.SH ENVIRONMENT
+.TP
+.B GORTT_PREC
+Number of significant digits used to print the reflectance, component and
+albedo columns.  Must be between 1 and 17; 17 round\-trips a double exactly.
+If unset, those columns are printed as
+.BR %f ,
+which is about four significant figures for a typical reflectance, and is too
+coarse to see a small numerical change.  Intended for regression testing, which
+is why it is an environment variable rather than an option.  Out\-of\-range
+values are a fatal error.
+.
+.SH FILES
+.SS Gap probability files
+Written by
+.B \-W
+and read by
+.BR \-P .
+Plain ASCII, one record per line.  Records with a non\-negative first field are
+.RI "\(dq" "index P(n=0) epgap" "\(dq"
+for that zenith index; the single record with an index of \-1 carries
+.I k_open
+and
+.IR k_openep .
+Values are written at full precision
+.RB ( %.17g ).
+.
+.SS Soil spectrum files
+Read by
+.BR "\-soil_spectra" .
+Two whitespace\-separated columns per line, wavelength in nm and reflectance,
+in ascending order of wavelength.  The file must span the whole model range:
+the first wavelength must be <= 400 and the last >= 2500.  The grid need not be
+regular; the spectrum is resampled onto a 1 nm grid by linear interpolation and
+then interpolated to the requested wavelengths.
+.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+Any error: an unknown or incomplete option, a malformed header or angle line, a
+count on the header line that does not match what was read, a wavelength
+outside 400\-2500, a file that cannot be opened, or a soil spectrum file that
+does not cover the model range.
+.
+.SH EXAMPLES
+BRF at four wavelengths for one view/sun geometry, for a canopy with an LAI
+of 4:
+.
+.PP
+.RS
+.EX
+echo \-en "1 4 450 600 800 1000\en10 0 30 20\en" | gortt \-LAI 4.0
+.EE
+.RE
+.
+.PP
+The same, but printing the component spectra, the viewed proportions and the
+energy balance terms:
+.
+.PP
+.RS
+.EX
+echo \-en "1 2 550 860\en0 0 30 0\en" | \e
+    gortt \-LAI 3.0 \-prnspec \-prnprop \-energy
+.EE
+.RE
+.
+.PP
+Compute the gap probabilities once, then reuse them for a chlorophyll sweep.
+Note that the geometry options are repeated identically on every run and that
+only the spectral options change:
+.
+.PP
+.RS
+.EX
+gortt \-LAI 4.0 \-W < /dev/null > probs.dat
+for cab in 20 40 60 ; do
+    echo \-en "1 1 800\en10 0 30 20\en" | \e
+        gortt \-LAI 4.0 \-P probs.dat \-Cab $cab
+done
+.EE
+.RE
+.
+.PP
+A canopy described in the Quaife et al. (2008) parameterisation, at full output
+precision:
+.
+.PP
+.RS
+.EX
+GORTT_PREC=17 gortt \-HB 2.5 \-BR 1.5 \-PCC 0.6 \-LAI 4.0 < angles.dat
+.EE
+.RE
+.
+.SH CAVEATS
+.SS Option matching
+Options are matched by case\-insensitive prefix over a fixed number of
+characters, in the order they appear in the parser, so
+.B abbreviations are not safe
+and a shorter option can shadow a longer one.  In particular
+.B \-b
+and
+.B \-r
+are matched last and at two characters, so a mistyped
+.B \-be
+is silently taken as
+.B \-b
+and consumes the following value as the vertical crown radius.  Always spell
+options out in full.
+.B \-HB ,
+.BR \-BR ,
+.B \-PCC
+and
+.B \-LAI
+are case
+.IR sensitive ;
+the rest are not.
+.
+.SS \-Anth is not accepted
+.B gortt \-u
+documents the anthocyanin option as
+.BR \-Anth ,
+but the parser only matches
+.BR \-Canth ,
+so the documented spelling is rejected as an unknown option.  Use
+.BR \-Canth .
+.
+.SS Grazing angles
+Both the direct path and
+.B \-P
+return
+.B \-nan
+at a view or solar zenith of exactly 90 degrees, because the secant of 90
+degrees is infinite.  The gap probability tables are clamped to 89 degrees to
+keep them finite, but the BRF path is not.  Avoid the endpoint.
+.
+.SS Leaf angle distribution
+The leaf angle distribution is effectively hardwired to a spherical
+(G = 0.5) distribution.  Requesting anything else produces a warning and falls
+back to 0.5.
+.
+.SS Lambertian background
+The energy balance assumes a Lambertian background, and the
+.B \-energy
+path reads the background signatures back out of the scene components after the
+hemispherical integral has overwritten them.  This is only safe because neither
+background component depends on view direction.
+.
+.SS Known numerical issues
+Two known discrepancies against the published equations are deliberately left
+in place so that any fix shows up as a reviewable change in the regression
+goldens: the last trapezium panel of the k_open integral is built from a zero,
+and the principal\-plane interpolation in the sunlit crown kernel carries a
+factor of F squared where the analytic branch carries F.  See
+.I OPEN\-QUESTIONS.md
+in the source distribution.
+.
+.SH SEE ALSO
+.IR README.md ,
+.IR TODO.md ,
+.I OPEN\-QUESTIONS.md
+and
+.I tests/README.md
+in the source distribution.
+.
+.PP
+Ni, W., Li, X., Woodcock, C. E., Caetano, M. R. and Strahler, A. H. (1999).
+.I "An analytical hybrid GORT model for bidirectional reflectance over
+.I "discontinuous plant canopies."
+IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987\-999.
+.
+.PP
+Price, J. C. (1990).
+.I "On the information content of soil reflectance spectra."
+Remote Sensing of Environment, 33(2), 113\-121.
+.
+.PP
+Quaife, T., Lewis, P., De Kauwe, M., Williams, M., Law, B. E., Disney, M. and
+Bowyer, P. (2008).
+.I "Assimilating canopy reflectance data into an ecosystem model with an
+.I "Ensemble Kalman Filter."
+Remote Sensing of Environment, 112(4), 1347\-1364.
+.
+.PP
+PROSPECT authorship and documentation:
+.UR http://teledetection.ipgp.jussieu.fr/prosail/
+.UE
+.
+.SH AUTHORS
+Tristan Quaife and Wenge Ni\-Meister.
+.
+.PP
+With the exception of the contents of the
+.I PROSPECT\-D
+directory, the code was written by Tristan Quaife, based on the equations of
+Ni et al. (1999) or, in the case of the k_open probability routines, translated
+directly from Wenge Ni\-Meister's code.

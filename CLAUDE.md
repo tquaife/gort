@@ -39,11 +39,12 @@ distinguishable from a broken model. See `tests/README.md`.
 
 **`run.sh` sets `GORTT_PREC=17`.** Without it `gortt` prints `%f` — 4 significant figures — which
 is too coarse to catch a small regression: a 1e-7 perturbation of `favd` was visible in 1 of 30
-BRF cases at `%f`, and 25 of 36 at full precision. The `-W` cases already print `%0.40f` and are
-the most sensitive probe in the suite.
+BRF cases at `%f`, and 25 of 36 at full precision. The `-W` cases print `%.17g` and are the
+most sensitive probe in the suite.
 
-Two cases deliberately pin *known-bad* behaviour (`useprobs-extreme`, `badanth`) so that fixing
-those bugs shows up as a reviewable change — see `tests/README.md`.
+`badanth` deliberately pins *known-bad* behaviour so that fixing it shows up as a reviewable
+change, and `useprobs-{extreme,grazing}` hold `-P` to reproducing the direct path exactly —
+see `tests/README.md`.
 
 ## Running by hand
 
@@ -188,13 +189,17 @@ a BRDF, the energy balance has to change too (flagged in comments in both files)
 * The leaf angle distribution is effectively hardwired: `params.lad = LAD_05` and
   `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else.
 
-**Two numerical bugs are pinned as known-bad rather than fixed**, so that fixing them shows up
-as a reviewable change in the goldens: `-W` writes only 90 of the `nth`=91 theta rows, so `-P`
-returns `-nan` above 89 degrees (`useprobs-extreme`); and `gortt_calc_epgap` fills `t < nth-1`
-while `gortt_calc_kopen` integrates to `nth-1`, so the last trapezium panel is built from a
-zero. A third is flagged in a comment on `gortt_kc`: `gortt_kc_fFbeta` returns `f` with `F`
+**One numerical bug is pinned as known-bad rather than fixed**, so that fixing it shows up as a
+reviewable change in the goldens: `gortt_calc_epgap` fills `t < nth-1` while `gortt_calc_kopen`
+integrates to `nth-1`, so the last trapezium panel is built from a zero. Another is flagged in
+a comment on `gortt_kc`: `gortt_kc_fFbeta` returns `f` with `F`
 already folded in, so the principal-plane interpolation carries `F` squared where
-`gortt_kc_PP_only` uses `F`. All three need checking against the papers before being touched.
+`gortt_kc_PP_only` uses `F`. Both need checking against the papers before being touched.
+
+**Both the direct path and `-P` return `-nan` at exactly 90° zenith**, because `theta[nth-1]`
+gives `sec(90°) = inf`. `gortt_init_params` clamps `theta[90]` to 89° to keep the probability
+tables finite, but the BRF path does not. Treating the endpoint analytically is a modelling
+decision, not a tidy-up.
 
 `TODO.md` tracks the intended direction.
 

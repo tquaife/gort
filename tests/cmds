@@ -17,6 +17,10 @@ beta            spec.in     -beta 0.4
 diffuse         spec.in     -diffuse 0.3
 readme          readme.in   -LAI 4.0
 extreme         extreme.in
+# 86-89 deg: the band where the gap probabilities fall below what the old
+# fixed-point -W format could represent. Paired with useprobs-grazing below,
+# which must agree with this case exactly.
+grazing         grazing.in
 angnorm         angnorm.in
 endpoints       endpoints.in
 energy-lai      basic.in    -LAI 4.0 -energy
@@ -50,10 +54,14 @@ energy          spec.in     -P @PROBS_DEFAULT@ -energy
 widespec        widespec.in -P @PROBS_DEFAULT@ -energy
 useprobs        basic.in    -P @PROBS_DEFAULT@
 
-# -P vs the direct path disagree above 89 deg zenith: the -W file is written
-# with only 90 of the nth=91 theta rows, so index 90 is read back as zero.
-# This case pins that behaviour so the fix shows up as a deliberate delta.
+# -P must reproduce the direct path exactly. These two are the sharp end of
+# that: the probabilities span 1e0 to 1e-65 across the theta table, so any
+# loss in the -W round trip shows up here first. Compare with the "extreme"
+# and "grazing" cases, which are the same inputs run directly.
+# n.b. both paths still give -nan at exactly 90 deg -- sec(90) is infinite.
+# That is a modelling question, not a round-trip one, and is not fixed here.
 useprobs-extreme extreme.in -P @PROBS_DEFAULT@
+useprobs-grazing grazing.in -P @PROBS_DEFAULT@
 
 # ---- user-facing error and help paths -------------------------------------
 usage           -           -u

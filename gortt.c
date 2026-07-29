@@ -271,18 +271,29 @@ static void gortt_compute_probabilities( gortt_parameters *p, gortt_control *c )
 
 /*
 Write the gap probabilities to stdout so that a later run can pick them
-up with -P and skip recomputing them. Printed at full precision so the
-round trip through the file is exact.
+up with -P and skip recomputing them.
+
+Two things about the format matter, and both used to be wrong:
+
+The loop runs to nth, not to 90. The tables cover 0..90 degrees
+inclusive, so there are nth = 91 rows; stopping at 90 left the last one
+unwritten and a -P run read it back as the calloc zero.
+
+The values are written as %.17g, not %0.40f. The gap probabilities fall
+off superexponentially towards grazing -- by 88 degrees P(n=0) is around
+7e-33 -- and %0.40f is *fixed* point, so everything below 1e-40 was
+written as exactly zero. -P then took the log of it in gortt_kuusk and
+returned -nan. %.17g round-trips a double exactly whatever its exponent.
 */
 static void gortt_write_prob_file( gortt_parameters *p )
 {
 
 	int j ;
 
-	for( j=0; j<90; j++ )
-		printf( "%d %0.40f %0.40f\n", j, p->p_n0[0][j], p->epgap[0][j] );
+	for( j=0; j<p->nth; j++ )
+		printf( "%d %.17g %.17g\n", j, p->p_n0[0][j], p->epgap[0][j] );
 
-	printf( "-1 %0.40f %0.40f\n",  p->k_open[0], p->k_openep[0]  );
+	printf( "-1 %.17g %.17g\n",  p->k_open[0], p->k_openep[0]  );
 
 	return ;
 

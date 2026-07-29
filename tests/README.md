@@ -36,9 +36,10 @@ the default `%f` (4 significant figures), perturbing `favd` by 1 part in 10⁷
 showed up in only **1 of 30** BRF cases, and then only in the last digit. At
 `GORTT_PREC=17` the same perturbation was caught by **25 of 36**.
 
-The gap-probability cases (`gortt -W`) already print `%0.40f` and need no
-knob; they are the most sensitive probe in the suite and cover the whole
-expensive side of the model.
+The gap-probability cases (`gortt -W`) print `%.17g` and need no knob; they
+are the most sensitive probe in the suite and cover the whole expensive side
+of the model. That format is deliberate — see the note on `useprobs-extreme`
+below for what the previous `%0.40f` cost.
 
 ## Blessing
 
@@ -52,14 +53,20 @@ deviation in the commit message.
 These cases record bugs, not correct behaviour. They exist so that fixing the
 bug shows up as a deliberate, reviewable change.
 
-- **`useprobs-extreme`** — `-P` returns `-nan` at 89° and 89.5° zenith, where
-  the direct path returns finite values. `gortt.c` writes only 90 of the
-  `nth = 91` theta rows to the probability file, so index 90 is read back as
-  zero. Compare with the `extreme` case, which is the same input run directly.
 - **`badanth`** — `gortt -u` documents `-Anth`, but the parser only matches
   `-canth` (at 3 characters, i.e. `-ca`), so the documented spelling is
   rejected as an unknown option. `prospect-anth` exercises the spelling that
   does work.
+
+## The -P round trip
+
+`useprobs-extreme` and `useprobs-grazing` exist to hold `-P` to reproducing
+the direct path exactly. They used to pin the opposite: `-P` returned `-nan`
+above 89°, because the probability file was written with `%0.40f`, a *fixed*
+point format, and the gap probabilities reach 4e-65 at grazing incidence.
+Everything below 1e-40 was written as zero and `gortt_kuusk` took its log.
+
+If you change what `-W` writes, these are the cases that will notice.
 
 ## Input-validation cases
 

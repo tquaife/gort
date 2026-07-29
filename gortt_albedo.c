@@ -22,7 +22,7 @@ background reflectance at the moment. This
 would have to change if either Z or G are
 modified to have a BRDF.
 */
-void gortt_energy( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+void gortt_energy( const gortt_parameters *p, const gortt_geometry *g, gortt_spectra *s )
 {
 
 
@@ -63,7 +63,7 @@ the solar geometry in g (n.b. we are integrating
 over the viewing hemisphere so only the solar
 zenith angle matters).
 */
-void gortt_albedo( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+void gortt_albedo( const gortt_parameters *p, const gortt_geometry *g, gortt_spectra *s )
 {
 
   double xm, xr, ym, yr, x ,y ;

@@ -10,7 +10,7 @@ needs Kg on the principal plane (raa = 0 and 180 deg) as well as at the
 actual geometry, and it used to get them by writing to g->raa and putting
 it back afterwards.
 */
-double gortt_kg( gortt_parameters *p, gortt_geometry *g, double raa )
+double gortt_kg( const gortt_parameters *p, const gortt_geometry *g, double raa )
 {
 
 	double Kg, overlap ;
@@ -24,7 +24,7 @@ double gortt_kg( gortt_parameters *p, gortt_geometry *g, double raa )
 }
 
 
-double gortt_overlap( gortt_parameters *p, gortt_geometry *g, double raa )
+double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double raa )
 {
 
 	double overlap, t, D, d ;
@@ -101,7 +101,7 @@ double gortt_overlap( gortt_parameters *p, gortt_geometry *g, double raa )
 
 }
 
-double gortt_kc_ambrals( gortt_parameters *p, gortt_geometry *g )
+double gortt_kc_ambrals( const gortt_parameters *p, const gortt_geometry *g )
 {
 
 	double Kc, cos_xi_p ;
@@ -121,7 +121,7 @@ f calulated on the principal plane to produce
 the actual Kc value. Based on the method used
 by Wenge in her code.
 */
-double gortt_kc( gortt_parameters *p, gortt_geometry *g, double Kg )
+double gortt_kc( const gortt_parameters *p, const gortt_geometry *g, double Kg )
 {
 
 	double Kc ;
@@ -173,7 +173,7 @@ Only calculates f, F and beta of the kc function
 this is done so we can interpolate bewteen various
 f's to get the true value of Kc for OPP cases.
 */
-void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double raa, double Kg, double *f, double *F, double *beta )
+void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double raa, double Kg, double *f, double *F, double *beta )
 {
 
 	double phase_prime, Gamma, Gamma_v, Gamma_c, Gamma_i ;
@@ -231,7 +231,7 @@ void gortt_kc_fFbeta( gortt_parameters *p, gortt_geometry *g, double raa, double
 }
 
 
-double gortt_kc_PP_only( gortt_parameters *p, gortt_geometry *g, double Kg )
+double gortt_kc_PP_only( const gortt_parameters *p, const gortt_geometry *g, double Kg )
 {
 
 	double Kc ;
@@ -340,12 +340,12 @@ directional hemispherical path transmittance
 for a discontinuous plant canopy of height h
 at given geometry
 */
-double gortt_t_prime_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_prime_df( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double t_prime_df ;
 
-	t_prime_df = gortt_t_df( p, g, s ) * ( 1 - gortt_t_prime_0( p, g, s ) ) ;
+	t_prime_df = gortt_t_df( p, g, s ) * ( 1 - gortt_t_prime_0( g ) ) ;
 
 	return( t_prime_df );
 
@@ -357,7 +357,7 @@ hemispherical-hemispherical path transmittance
 for a discontinuous plant canopy of height h
 at given geometry
 */
-double gortt_t_prime_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_prime_ff( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double t_prime_ff, k_open ;
@@ -374,14 +374,14 @@ double gortt_t_prime_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *
 /*
 hemispherical hemispherical transmittance
 */
-double gortt_t_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_ff( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double t_ff ;
 
 	t_ff  = gortt_T_inf_ff( p, g, s ) ;
-	t_ff *= ( 1. - pow( gortt_R_inf_ff( p, g, s ), 2 ) ) ;
-	t_ff /= ( 1. - pow( gortt_R_inf_ff( p, g, s )*gortt_T_inf_ff( p, g, s ), 2 ) );
+	t_ff *= ( 1. - pow( gortt_R_inf_ff( s ), 2 ) ) ;
+	t_ff /= ( 1. - pow( gortt_R_inf_ff( s )*gortt_T_inf_ff( p, g, s ), 2 ) );
 
 	return( t_ff );
 
@@ -393,13 +393,13 @@ double gortt_t_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 /*
 directional hemispherical transmittance
 */
-double gortt_t_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_df( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double t_df ;
 
 	t_df  = gortt_T_inf_df( p, g, s ) - gortt_p_ff( p, g, s ) \
-				* ( gortt_t_0( p, g, s ) * gortt_R_inf_df( p, g, s ) + gortt_T_inf_df( p, g, s ) * gortt_R_inf_ff( p, g, s ) ) ;
+				* ( gortt_t_0( p, g ) * gortt_R_inf_df( g, s ) + gortt_T_inf_df( p, g, s ) * gortt_R_inf_ff( s ) ) ;
 
 
 	return( t_df );
@@ -414,7 +414,7 @@ direct-unscattered transmittance
 for a discontinuous plant canopy of
 height h at given geometry
 */
-double gortt_t_prime_0( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_prime_0( const gortt_geometry *g )
 {
 
 	double t_prime_0 ;
@@ -430,7 +430,7 @@ double gortt_t_prime_0( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 directional-hemispherical transmittance
 (semi-infinite homogeneous layer)
 */
-double gortt_T_inf_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_T_inf_df( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double T_inf_df ;
@@ -440,7 +440,7 @@ double gortt_T_inf_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s 
 	/*T_inf_df *= ( 1. + 2. * cos( g->sza ) ) / ( 1. - pow( ( 2.*s->leaf_gamma*cos( g->sza ) ), 2 ) )  ;*/
 	/*05/06/06*/
 	T_inf_df *= ( 1. + 2. * cos( g->sza_prime ) ) / ( 1. - pow( ( 2.*s->leaf_gamma*cos( g->sza_prime ) ), 2 ) )  ;
-	T_inf_df *= ( gortt_T_inf_ff( p, g, s ) - gortt_t_0( p, g, s ) ) ;
+	T_inf_df *= ( gortt_T_inf_ff( p, g, s ) - gortt_t_0( p, g ) ) ;
 
 	return( T_inf_df );
 
@@ -450,7 +450,7 @@ double gortt_T_inf_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s 
 hemispherical-hemispherical transmittance
 (semi-infinite homogeneous layer)
 */
-double gortt_T_inf_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_T_inf_ff( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double k;
@@ -467,15 +467,15 @@ double gortt_T_inf_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s 
 /*
 hemispherical-hemispherical reflectance
 */
-double gortt_p_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_p_ff( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double p_ff ;
 
 
-	p_ff  = gortt_R_inf_ff( p, g, s ) ;
+	p_ff  = gortt_R_inf_ff( s ) ;
 	p_ff *= ( 1. - pow( gortt_T_inf_ff( p, g, s ), 2 ) ) ;
-	p_ff /= ( 1. - pow( gortt_T_inf_ff( p, g, s )*gortt_R_inf_ff( p, g, s ), 2 ) )  ;
+	p_ff /= ( 1. - pow( gortt_T_inf_ff( p, g, s )*gortt_R_inf_ff( s ), 2 ) )  ;
 
 	return( p_ff );
 
@@ -486,7 +486,7 @@ double gortt_p_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 /*
 direct unscattered transmittance
 */
-double gortt_t_0( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_t_0( const gortt_parameters *p, const gortt_geometry *g )
 {
 
 	double k ;
@@ -502,7 +502,7 @@ double gortt_t_0( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 directional-hemispherical reflectance
 (semi-infinite homogeneous layer)
 */
-double gortt_R_inf_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_R_inf_df( const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double R_inf_df ;
@@ -522,7 +522,7 @@ double gortt_R_inf_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s 
 hemispherical-hemispherical reflectance
 (semi-infinite homogeneous layer)
 */
-double gortt_R_inf_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_R_inf_ff( const gortt_spectra *s )
 {
 
 	double R_inf_ff ;
@@ -536,7 +536,7 @@ double gortt_R_inf_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s 
 
 
 
-double gortt_phase_function_assymetry( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_phase_function_assymetry( const gortt_spectra *s )
 {
 
 	double gfunc ;
@@ -552,7 +552,7 @@ double gortt_phase_function_assymetry( gortt_parameters *p, gortt_geometry *g, g
 Direction hemispherical path reflectance
 for a discontinuous canopy
 */
-double gortt_p_prime_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_p_prime_df( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double p_p_df ;
@@ -567,14 +567,14 @@ double gortt_p_prime_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *
 Direction hemispherical reflectance
 for a discontinuous canopy
 */
-double gortt_p_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_p_df( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double p_df ;
 
-	p_df = gortt_R_inf_df( p, g, s ) - gortt_t_ff( p, g, s ) * \
-		 	(  gortt_t_0( p, g, s )      * gortt_R_inf_df( p, g, s ) + \
-				 gortt_T_inf_df( p, g, s ) * gortt_R_inf_ff( p, g, s ) ) ;
+	p_df = gortt_R_inf_df( g, s ) - gortt_t_ff( p, g, s ) * \
+		 	(  gortt_t_0( p, g )      * gortt_R_inf_df( g, s ) + \
+				 gortt_T_inf_df( p, g, s ) * gortt_R_inf_ff( s ) ) ;
 
 	return( p_df );
 
@@ -585,7 +585,7 @@ double gortt_p_df( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 /*
 Kuusk's canopy bi-directional gap probability
 */
-double gortt_kuusk( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_kuusk( const gortt_parameters *p, const gortt_geometry *g )
 {
 
 	double kuusk, lsza, lvza, lsv, cos_xi, H ;
@@ -650,7 +650,7 @@ double gortt_kuusk( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 hemispherical hemispherical path reflectance
 for a discontinuous canopy
 */
-double gortt_p_prime_ff( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+double gortt_p_prime_ff( const gortt_parameters *p, const gortt_geometry *g, const gortt_spectra *s )
 {
 
 	double p_p_ff ;

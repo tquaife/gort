@@ -13,7 +13,7 @@ of the model, so they are static here rather than declared in gortt.h.
 
 static void gortt_set_output_format( char *, int, char * );
 static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control * );
-static void gortt_compute_probabilities( gortt_parameters *, gortt_geometry *, gortt_control * );
+static void gortt_compute_probabilities( gortt_parameters *, gortt_control * );
 static void gortt_write_prob_file( gortt_parameters * );
 static void gortt_read_prob_file( gortt_parameters *, char * );
 static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
@@ -43,7 +43,7 @@ int main( int argc, char **argv )
 	gortt_set_output_format( fmt, sizeof( fmt ), *argv );
 	gortt_set_defaults( &params, &geom, &spect, &cont );
 
-	gortt_cl_parser( argc, argv, &params, &geom, &spect, &cont ) ;
+	gortt_cl_parser( argc, argv, &params, &spect, &cont ) ;
 
 
 	/*read soil spectra if requested*/
@@ -62,7 +62,7 @@ int main( int argc, char **argv )
 
 	/*1) calculate own probabilities if not reading from file*/
 	if( params.read_prob_file == FALSE )
-		gortt_compute_probabilities( &params, &geom, &cont );
+		gortt_compute_probabilities( &params, &cont );
 
 	/*2) write probability file for later use.
 	n.b. this returns before stdin is read at all*/
@@ -249,13 +249,13 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 }
 
 
-static void gortt_compute_probabilities( gortt_parameters *p, gortt_geometry *g, gortt_control *c )
+static void gortt_compute_probabilities( gortt_parameters *p, gortt_control *c )
 {
 
 	if( c->use_q08_pn_kopen == TRUE )
-		gortt_gap_probabilities_Q08( p, g ) ;
+		gortt_gap_probabilities_Q08( p ) ;
 	else
-		gortt_gap_probabilities( p, g ) ;
+		gortt_gap_probabilities( p ) ;
 
 	return ;
 
@@ -581,7 +581,7 @@ G = signature of sunlit soil
 Z = signature of shaded soil
 
 */
-void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
+void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 {
 
 	double Kc, Kg, Kt, Kz ;
@@ -679,13 +679,13 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		/*Sunlit Crown*/
 
 		/*CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
-			  * gortt_kuusk( p, g, s ) * s->leaf_sscat_albedo \
-				* ( 1.0 - gortt_phase_function_assymetry( p, g, s ) ) ) \
+			  * gortt_kuusk( p, g ) * s->leaf_sscat_albedo \
+				* ( 1.0 - gortt_phase_function_assymetry( s ) ) ) \
 				/ ( 2.0 * cos( g->sza ) * cos( g->vza ) ) ;*/
 
 		CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
-			  * gortt_kuusk( p, g, s ) * s->leaf_sscat_albedo \
-				* ( 1.0 - gortt_phase_function_assymetry( p, g, s ) ) ) \
+			  * gortt_kuusk( p, g ) * s->leaf_sscat_albedo \
+				* ( 1.0 - gortt_phase_function_assymetry( s ) ) ) \
 				/ ( 2.0 * cos( g->sza_prime ) * cos( g->vza_prime ) ) ;
 
 
@@ -698,7 +698,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		CfG = ( ( p->k_openep[ 0 ]+p->k_open[ 0 ] )*G + \
 					( 1-(p->k_openep[ 0 ]+p->k_open[ 0 ] ) )*Z ) * p->k_openep[ 0 ] ;
 
-		CdCG = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( p, g, s ) ) \
+		CdCG = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( g ) ) \
 				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 				 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
 
@@ -720,7 +720,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 		n.b. - this are the same as CdCG and CfCG
 		*/
 
-		Td = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( p, g, s ) ) \
+		Td = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( g ) ) \
 			 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
 			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
 
@@ -760,7 +760,7 @@ void gortt_rsurf( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 }
 
 
-double gortt_prime_theta( gortt_parameters *p, double za )
+double gortt_prime_theta( const gortt_parameters *p, double za )
 {
 
 	return( atan( ( p->b/p->r ) * tan( za ) ) );
@@ -769,7 +769,7 @@ double gortt_prime_theta( gortt_parameters *p, double za )
 
 
 
-double gortt_leaf_angle_distribution( gortt_parameters *p, double za )
+double gortt_leaf_angle_distribution( const gortt_parameters *p, double za )
 {
 
 	double ag, bg, cg, dg ;
@@ -827,6 +827,13 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	* figure out tau.
 	*/
 
+	/*
+	n.b. this is evaluated once, at whatever sza g happens to hold, which
+	is the default of zero: gortt_cl_parser does not set the geometry, the
+	per-angle loop does, and that runs later. Harmless while the leaf angle
+	distribution is hardwired to 0.5, but p->k would have to move into the
+	per-geometry path along with g->k_vza before any real LAD is added.
+	*/
 	p->k = gortt_leaf_angle_distribution( p, g->sza ) ;
 	/*p->elai = p->favd * ( ( 4.0/3.0 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ; */
 	p->elai = p->favd * ( ( 1.333333 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ;
@@ -1029,7 +1036,7 @@ linearly interoplate the gap probabilities to get the
 probs. at the required zenith angle.
 Requires that p->p_n0 and p->epgap have been populated.
 */
-void gortt_set_zenith_dependant_probabilities( gortt_parameters *p, gortt_geometry *g )
+void gortt_set_zenith_dependant_probabilities( const gortt_parameters *p, gortt_geometry *g )
 {
 
 	int cindex ;
@@ -1165,7 +1172,7 @@ NULL, and atof/strcpy then segfault.
 }
 
 
-void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_geometry *g, gortt_spectra *s, gortt_control *c )
+void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra *s, gortt_control *c )
 {
 
 

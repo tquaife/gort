@@ -4,7 +4,7 @@
 #include<gortt.h>
 #include<float.h>
 
-void gortt_gap_probabilities( gortt_parameters *p, gortt_geometry *g )
+void gortt_gap_probabilities( gortt_parameters *p )
 {
 
 	int i ;
@@ -563,6 +563,11 @@ double gortt_get_pcc( gortt_parameters *p, double h )
 
 	/*
 	* return the probability of finding a crown center at the height 'h'
+	*
+	* n.b. h is deliberately unused: crown centres are uniformly
+	* distributed between h1 and h2, so the density does not depend on
+	* height. The argument is kept because the caller is integrating
+	* over h and any non-uniform distribution would need it.
 	*/
 	return (1.0 / (p->h2_p - p->h1_p));
 }
@@ -889,7 +894,7 @@ This is Lewis's functional approximation to the probability terms
 as used in Quaife et al. (2008)
 It is ONLY coded up for h=0 - use with caution.
 **/
-void gortt_gap_probabilities_Q08( gortt_parameters *p, gortt_geometry *g )
+void gortt_gap_probabilities_Q08( gortt_parameters *p )
 {
 
 

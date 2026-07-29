@@ -254,43 +254,51 @@ typedef struct  {
 
 
 
-/*TQ's implimentation of the GORT paper*/
-void   gortt_rsurf( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-void   gortt_gap_probabilities( gortt_parameters *, gortt_geometry * );
-void   gortt_gap_probabilities_Q08( gortt_parameters *, gortt_geometry * );
-void   gortt_set_zenith_dependant_probabilities( gortt_parameters *, gortt_geometry * );
-double gortt_prime_theta( gortt_parameters *, double  );
-double gortt_kg( gortt_parameters *, gortt_geometry *, double );
-double gortt_kc( gortt_parameters *, gortt_geometry *, double );
-void   gortt_kc_fFbeta( gortt_parameters *, gortt_geometry *, double, double, double *, double *, double * );
-double gortt_kc_PP_only( gortt_parameters *, gortt_geometry *, double );
-double gortt_kc_ambrals( gortt_parameters *, gortt_geometry * 	);
-double gortt_overlap( gortt_parameters *, gortt_geometry *, double );
-double gortt_t_prime_df( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-double gortt_t_prime_ff( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-double gortt_t_prime_0( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_0( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_T_inf_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_T_inf_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_R_inf_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_R_inf_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_prime_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_prime_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_phase_function_assymetry( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_kuusk( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_leaf_angle_distribution( gortt_parameters *, double );
+/*
+TQ's implimentation of the GORT paper.
 
-void  gortt_lidar( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+Everything below takes gortt_parameters as const: once gortt_init_params
+and the gap-probability routines have run, the canopy description does
+not change for the rest of the run. gortt_geometry is const wherever the
+function only evaluates at the geometry it is given, i.e. everywhere
+except gortt_rsurf, which fills in the four viewed proportions.
+*/
+void   gortt_rsurf( const gortt_parameters *, gortt_geometry *, gortt_spectra * );
+void   gortt_gap_probabilities( gortt_parameters * );
+void   gortt_gap_probabilities_Q08( gortt_parameters * );
+void   gortt_set_zenith_dependant_probabilities( const gortt_parameters *, gortt_geometry * );
+double gortt_prime_theta( const gortt_parameters *, double  );
+double gortt_kg( const gortt_parameters *, const gortt_geometry *, double );
+double gortt_kc( const gortt_parameters *, const gortt_geometry *, double );
+void   gortt_kc_fFbeta( const gortt_parameters *, const gortt_geometry *, double, double, double *, double *, double * );
+double gortt_kc_PP_only( const gortt_parameters *, const gortt_geometry *, double );
+double gortt_kc_ambrals( const gortt_parameters *, const gortt_geometry * 	);
+double gortt_overlap( const gortt_parameters *, const gortt_geometry *, double );
+double gortt_t_prime_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra * );
+double gortt_t_prime_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra * );
+double gortt_t_prime_0( const gortt_geometry * );
+double gortt_t_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_t_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_t_0( const gortt_parameters *, const gortt_geometry * );
+double gortt_T_inf_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_T_inf_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_R_inf_df( const gortt_geometry *, const gortt_spectra * );
+double gortt_R_inf_ff( const gortt_spectra * );
+double gortt_p_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_p_prime_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_p_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_p_prime_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
+double gortt_phase_function_assymetry( const gortt_spectra * );
+double gortt_kuusk( const gortt_parameters *, const gortt_geometry * );
+double gortt_leaf_angle_distribution( const gortt_parameters *, double );
+
+void  gortt_lidar( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
 
 
 /*TQ's integral routines*/
 
-void   gortt_energy( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-void   gortt_albedo( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+void   gortt_energy( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
+void   gortt_albedo( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
 void   gauleg( double, double, double *, double *, int );
 
 /*Wenge's functions for within crown probs*/
@@ -335,7 +343,7 @@ void	gortt_read_soil_lut( gortt_spectra * );
 
 /*parsing and usage*/
 
-void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control * );
+void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_spectra *, gortt_control * );
 void   gortt_usage( char * );
 char	 get_first_string_token( char *, char * );
 

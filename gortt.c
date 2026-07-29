@@ -217,8 +217,9 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->h2 = 8.5 ;
 	p->favd = 0.858 ;
 
-	p->dz  = 0.20 ;
-	p->ds  = 0.20 ;
+	/*n.b. dz and ds are not set here: gortt_init_params derives both
+	from nlayers. They would need a default again if the commented-out
+	"fix dz, derive nlayers" alternative there were ever reinstated.*/
 	p->dth = DTOR( 1 ) ;
 
 	p->nlayers = 15 ;

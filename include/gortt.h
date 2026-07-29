@@ -140,80 +140,115 @@ typedef struct  {
 		} gortt_spectra ;
 
 
+/*
+Canopy and crown description, and everything precomputed from it. The
+fields are grouped by lifetime, and the whole struct is read-only once
+gortt_init_params and the gap-probability routines have run -- which is
+why the BRF, albedo and lidar code can take it as const.
+
+Names follow Ni et al. (1999): r and b are the crown radii, lambda the
+crown number density, favd the foliage area volume density, and so on.
+Anything suffixed _p lives in the ellipsoid->sphere transformed space
+(see gortt_prime_theta); mixing primed and unprimed quantities in one
+expression is almost always a bug.
+*/
 typedef struct  {
 
-		double r ;
-		double rr ;
-		double rrr ;
-		double b ;
-		double h ;
-		double h1 ;
-		double h2 ;
-		double z1 ;
-		double z2 ;
-		double h1_p ;
-		double h2_p ;
-		double z1_p ;
-		double z2_p ;
-		double lv ;
-		double lv_p ;
-		double k ;
-		double favd ;
-		double favd_p ;
-		double elai ;
-		double tau ;
-		double tau_p ;
-		double lambda ;
-		double ellipticity ;
+		/*
+		---- 1. user inputs -------------------------------------------
+		Written by gortt_set_defaults and then gortt_cl_parser.
+		Read-only from gortt_init_params onwards.
+		*/
 
-        /*diffuse fraction: if the user supplied one it is held here and
-        copied into g->fd for every geometry, otherwise g->fd is derived
-        from the solar zenith*/
-        unsigned short use_user_fd ;
+		/*crown and canopy geometry*/
+		double r ;			/*horizontal crown radius*/
+		double b ;			/*vertical crown radius*/
+		double h1 ;			/*lower bound of crown centres*/
+		double h2 ;			/*upper bound of crown centres*/
+		double lambda ;		/*crown number density*/
+		double favd ;		/*foliage area volume density*/
+		int lad ;			/*leaf angle distribution, LAD_*/
+
+		/*numerical resolution*/
+		double dth ;		/*zenith step of the probability tables*/
+		int nlayers ;		/*number of height layers*/
+		int maxcrowns ;		/*truncation of the Poisson crown count*/
+		int nh_es ;
+		int npoints ;		/*Gauss-Legendre points for the albedo*/
+
+		/*diffuse fraction: if the user supplied one it is held here and
+		copied into g->fd for every geometry, otherwise g->fd is derived
+		from the solar zenith*/
+		unsigned short use_user_fd ;
 		double user_fd ;
 
+		/*user override of the hotspot/overlap parameter*/
+		int use_user_beta ;
+		double beta ;
 
-		int nh_es ;
-		int nh1 ;
-		int nh2 ;
+		/*gap probability file i/o (-W and -P)*/
+		int read_prob_file ;
+		int write_prob_file ;
+		char prob_fn[ MAX_LINE_LEN ] ;
 
-		int nlayers ;
-		int maxcrowns ;
 
+		/*
+		---- 2. derived constants -------------------------------------
+		Written only by gortt_init_params, from group 1 above.
+		Read-only afterwards.
+		*/
+
+		double ellipticity ;	/*b/r: the vertical scaling*/
+		double rr ;				/*r^2*/
+		double rrr ;			/*r^3*/
+		double h ;				/*total canopy depth*/
+		double k ;				/*leaf projection G at the solar zenith*/
+		double elai ;			/*effective LAI*/
+		double tau ;
+		double tau_p ;
+		double z1 ;				/*lowest height with any foliage*/
+		double z2 ;				/*highest height with any foliage*/
+		double lv ;
+		double favd_p ;
+		double lv_p ;
+		double z1_p ;
+		double z2_p ;
+		double h1_p ;
+		double h2_p ;
+
+		/*discretisation, all fixed by nlayers and dth*/
 		double dz ;
 		double dz_p ;
 		double ds ;
-		double dth ;
-		int nth ;
+		int nh1 ;
+		int nh2 ;
+		int nth ;				/*number of zenith angles, 0..90 deg*/
 
 		double *height ;
 		double *height_p ;
 		double *theta ;
 		double *theta_p ;
-		double *k_open ;
-		double *k_openep ;
-
 		double *factorial ;
+
+		/*Gauss-Legendre abscissa and weights, allocated only when an
+		integral is actually asked for*/
+		double *abscissa ;
+		double *weights ;
+
+
+		/*
+		---- 3. gap probabilities -------------------------------------
+		Written once, either by gortt_gap_probabilities(_Q08) or by
+		reading a -P file. The expensive part of a run, and the reason
+		it is worth caching. Read-only afterwards.
+		*/
 
 		double **p_s0 ;
 		double **p_n0 ;
 		double **epgap ;
-
+		double *k_open ;
+		double *k_openep ;
 		double ***pd_s ;
-
-		int lad ;
-
-		int read_prob_file ;
-		char prob_fn[ MAX_LINE_LEN ] ;
-		int write_prob_file ;
-
-		int use_user_beta ;
-		double beta ;
-
-		/*for integrating*/
-		int npoints ;
-		double *abscissa ;
-		double *weights ;
 
 		} gortt_parameters ;
 

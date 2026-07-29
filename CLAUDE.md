@@ -204,7 +204,11 @@ gives `sec(90°) = inf`. `gortt_init_params` clamps `theta[90]` to 89° to keep 
 tables finite, but the BRF path does not. Treating the endpoint analytically is a modelling
 decision, not a tidy-up.
 
-`TODO.md` tracks the intended direction.
+`TODO.md` tracks the intended direction and what is already done. `OPEN-QUESTIONS.md` collects
+the things found during the tidy-up that were deliberately left alone — the `F` versus `F²`
+question above, the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
+evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in. Read it
+before starting the lidar work.
 
 ## Reference
 

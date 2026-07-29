@@ -590,12 +590,14 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 
 	double Kc, Kg, Kt, Kz ;
 	double C, G, T, Z;
-	double Cd, Gd, Td, Zd;
-	double Cf, Gf, Tf, Zf;
+	double Cd, Gd, Zd;
+	double Cf, Gf, Zf;
 	double CdC, CdG, CdCG ;
 	double CfC, CfG, CfCG ;
 
 	double Kprime_g, Kprime_z ;
+
+	gortt_rt rt ;
 
 	int i ;
 
@@ -645,15 +647,12 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 
 	for( i=0; i<s->nw; i++ ){
 
-		s->n = i ;
-
 		/*
-		set up some spectral values for
-		the efficiency (gamma used a lot).
+		everything the radiative transfer half of the model
+		contributes, for this waveband and this geometry
 		*/
 
-		s->leaf_sscat_albedo = *( s->rleaf + i ) + *( s->tleaf + i ) ;
-		s->leaf_gamma = sqrt( 1 - s->leaf_sscat_albedo ) ;
+		gortt_rt_init( p, g, s, i, &rt );
 
 
 		/*sunlit ground
@@ -673,42 +672,42 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 
 		/*shaded ground*/
 
-		/*Zd = ( gortt_t_prime_df( p, g, s ) + g->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
-		Zd = ( gortt_t_prime_df( p, g, s ) + g->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
-		Zf = ( gortt_t_prime_ff( p, g, s ) - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
+		/*Zd = ( rt.t_prime_df + g->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
+		Zd = ( rt.t_prime_df + g->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
+		Zf = ( rt.t_prime_ff - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
 
 		Z = g->fd*Zd + (1-g->fd)*Zf ;
 
 
 		/*Sunlit Crown*/
 
-		/*CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
-			  * gortt_kuusk( p, g ) * s->leaf_sscat_albedo \
-				* ( 1.0 - gortt_phase_function_assymetry( s ) ) ) \
+		/*CdC = rt.p_prime_df + ( ( 1.0-rt.w ) \
+			  * rt.kuusk * rt.w \
+				* ( 1.0 - rt.g_asym ) ) \
 				/ ( 2.0 * cos( g->sza ) * cos( g->vza ) ) ;*/
 
-		CdC = gortt_p_prime_df( p, g, s ) + ( ( 1.0-s->leaf_sscat_albedo ) \
-			  * gortt_kuusk( p, g ) * s->leaf_sscat_albedo \
-				* ( 1.0 - gortt_phase_function_assymetry( s ) ) ) \
+		CdC = rt.p_prime_df + ( ( 1.0-rt.w ) \
+			  * rt.kuusk * rt.w \
+				* ( 1.0 - rt.g_asym ) ) \
 				/ ( 2.0 * cos( g->sza_prime ) * cos( g->vza_prime ) ) ;
 
 
 
 
-		CfC = gortt_p_prime_ff( p, g, s ) ;
+		CfC = rt.p_prime_ff ;
 
 		CdG = ( Z * Kprime_z + G * Kprime_g ) * p->k_openep[ 0 ] ;
 
 		CfG = ( ( p->k_openep[ 0 ]+p->k_open[ 0 ] )*G + \
 					( 1-(p->k_openep[ 0 ]+p->k_open[ 0 ] ) )*Z ) * p->k_openep[ 0 ] ;
 
-		CdCG = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( g ) ) \
-				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
-				 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
+		CdCG = ( rt.t_prime_df + rt.t_prime_0 ) \
+				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * rt.p_prime_ff ) ) \
+				 * ( rt.t_prime_ff - p->k_open[ 0 ] );
 
-		CfCG = gortt_t_prime_ff( p, g, s ) \
-				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
-				 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
+		CfCG = rt.t_prime_ff \
+				 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * rt.p_prime_ff ) ) \
+				 * ( rt.t_prime_ff - p->k_open[ 0 ] );
 
 
 		Cd = CdC + CdG + CdCG ;
@@ -718,22 +717,16 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 
 
 
-		/*Shaded crown*/
-
 		/*
-		n.b. - this are the same as CdCG and CfCG
+		Shaded crown.
+
+		Td and Tf used to be written out again in full here; they were
+		term for term identical to CdCG and CfCG, which the comment
+		alongside them already noted. The shaded crown signature is
+		exactly the crown-ground interaction without the crown itself.
 		*/
 
-		Td = ( gortt_t_prime_df( p, g, s ) + gortt_t_prime_0( g ) ) \
-			 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
-			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
-
-		Tf = gortt_t_prime_ff( p, g, s ) \
-			 * ( *( s->rsoil + i ) / ( 1.0 - *( s->rsoil + i ) * gortt_p_prime_ff( p, g, s ) ) ) \
-			 * ( gortt_t_prime_ff( p, g, s ) - p->k_open[ 0 ] );
-
-
-		T = g->fd*Td + (1-g->fd)*Tf ;
+		T = g->fd*CdCG + (1-g->fd)*CfCG ;
 
 
 		/*

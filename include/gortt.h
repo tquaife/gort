@@ -104,12 +104,6 @@ typedef struct  {
 
 		/*number of wavebands*/
 		int nw ;
-		/*counter!*/
-		int n ;
-
-		/*functions of the above*/
-		double leaf_sscat_albedo ;
-		double leaf_gamma ;
 
 		/*leaf & soil properties*/
 
@@ -260,6 +254,48 @@ typedef struct  {
 		} gortt_parameters ;
 
 
+/*
+The radiative transfer half of the model: every term Ni et al. (1999)
+derive between the leaf optics and the four scene signatures, for one
+geometry and one waveband. Filled by gortt_rt_init.
+
+Reading the names: _df is direct-to-diffuse, _ff diffuse-to-diffuse and
+_0 direct unscattered; t/T is a transmittance, p/R a reflectance; _inf
+is the semi-infinite homogeneous layer; and _prime is the discontinuous
+canopy as opposed to the equivalent homogeneous one.
+*/
+typedef struct  {
+
+		double w ;			/*leaf single scattering albedo*/
+		double gamma ;		/*sqrt( 1 - w )*/
+		double g_asym ;		/*phase function asymmetry*/
+
+		/*semi-infinite homogeneous layer*/
+		double R_inf_df ;
+		double R_inf_ff ;
+		double T_inf_df ;
+		double T_inf_ff ;
+
+		/*finite homogeneous layer*/
+		double t_0 ;
+		double t_df ;
+		double t_ff ;
+		double p_df ;
+		double p_ff ;
+
+		/*discontinuous canopy*/
+		double t_prime_0 ;
+		double t_prime_df ;
+		double t_prime_ff ;
+		double p_prime_df ;
+		double p_prime_ff ;
+
+		/*Kuusk's bi-directional gap probability*/
+		double kuusk ;
+
+		} gortt_rt ;
+
+
 
 /*
 TQ's implimentation of the GORT paper.
@@ -281,21 +317,7 @@ void   gortt_kc_fFbeta( const gortt_parameters *, const gortt_geometry *, double
 double gortt_kc_PP_only( const gortt_parameters *, const gortt_geometry *, double );
 double gortt_kc_ambrals( const gortt_parameters *, const gortt_geometry * 	);
 double gortt_overlap( const gortt_parameters *, const gortt_geometry *, double );
-double gortt_t_prime_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra * );
-double gortt_t_prime_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra * );
-double gortt_t_prime_0( const gortt_geometry * );
-double gortt_t_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_t_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_t_0( const gortt_parameters *, const gortt_geometry * );
-double gortt_T_inf_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_T_inf_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_R_inf_df( const gortt_geometry *, const gortt_spectra * );
-double gortt_R_inf_ff( const gortt_spectra * );
-double gortt_p_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_p_prime_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_p_df( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_p_prime_ff( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *  );
-double gortt_phase_function_assymetry( const gortt_spectra * );
+void   gortt_rt_init( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *, int, gortt_rt * );
 double gortt_kuusk( const gortt_parameters *, const gortt_geometry * );
 double gortt_leaf_angle_distribution( const gortt_parameters *, double );
 

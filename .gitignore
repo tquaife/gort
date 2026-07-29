@@ -5,6 +5,13 @@ gort
 *~
 *.claude
 
+papers/
+
 #regression test output (tests/golden is tracked, tests/actual is not)
 tests/actual/
+
+#generated figures (the scripts that make them are tracked)
+figures/*.png
+figures/*.pdf
+figures/*.svg
 

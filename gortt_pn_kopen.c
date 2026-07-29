@@ -851,8 +851,13 @@ void gortt_calc_epgap( gortt_parameters *p )
 	double m_s;
 
 
+	/*
+	* n.b. t < nth, not nth-1. gortt_calc_kopen integrates this table
+	* over t = 1..nth-1 inclusive, so leaving the last angle unfilled
+	* built the final trapezium panel of k_openep out of a zero.
+	*/
 	for (h = 0; h < p->nh_probs; h++) {
-		for (t = 0; t < p->nth-1; t++) {
+		for (t = 0; t < p->nth; t++) {
 			p->epgap[h][t] = 0.0;
 			sum_Ps = 0.0;
 			m_s = 0.0;

@@ -224,6 +224,10 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 
 	p->nlayers = 15 ;
 
+	/*the BRF only needs the gap probabilities at the ground; -lidar
+	raises this to nlayers*/
+	p->nh_probs = 1 ;
+
 	/*direct/diffuse term*/
 	/*p->user_fd = 1.0 ;*/
 	/*p->user_fd = 0.903 ;*/
@@ -1231,7 +1235,11 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
 			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;
-			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;
+			/*a waveform is a function of height, so this needs the gap
+			probabilities at every layer, not just at the ground.
+			n.b. nlayers is fixed by gortt_set_defaults and no option
+			changes it, so it is already correct here.*/
+			else if( !strncmp( argv[ i ], "-lidar", 6 ) ){ c->lidar_mode=TRUE; p->nh_probs=p->nlayers; }
 
 			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, gortt_next_arg( argc, argv, &i ) );}
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;

@@ -241,7 +241,14 @@ typedef struct  {
 		Written once, either by gortt_gap_probabilities(_Q08) or by
 		reading a -P file. The expensive part of a run, and the reason
 		it is worth caching. Read-only afterwards.
+
+		Only rows h < nh_probs of the height-indexed tables are filled;
+		the rest are left at their calloc zero. The BRF only ever needs
+		h = 0, so nh_probs defaults to 1, but a lidar waveform is a
+		function of height and -lidar raises it to nlayers.
 		*/
+
+		int nh_probs ;
 
 		double **p_s0 ;
 		double **p_n0 ;

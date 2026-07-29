@@ -46,9 +46,15 @@ void gortt_gap_probabilities( gortt_parameters *p )
 
 	/*
 	* Get probability distributions for s for each possible h and theta.
+	*
+	* n.b. this is the expensive loop, and it is bounded by nh_probs
+	* rather than nlayers: nothing downstream reads pd_s above h=0
+	* unless a height profile has been asked for. P(s=0) above is still
+	* filled for every height, because gortt_get_pd_s at h=0 integrates
+	* over the p_s0 values at all the heights above it.
 	*/
 	for (t = 0; t < p->nth; t++) {
-		for (h = 0; h < p->nlayers; h++) {
+		for (h = 0; h < p->nh_probs; h++) {
 
 			/*
 			* figure out maximum path length at this height and this angle.
@@ -281,7 +287,7 @@ void gortt_calc_kopen( gortt_parameters *p )
 	int h, t;
 
 
-	for (h = 0; h < p->nlayers; h++) {
+	for (h = 0; h < p->nh_probs; h++) {
 
 		p->k_open[h] = 0.0 ;
 		p->k_openep[h] = 0.0;
@@ -845,7 +851,7 @@ void gortt_calc_epgap( gortt_parameters *p )
 	double m_s;
 
 
-	for (h = 0; h < 1; h++) {
+	for (h = 0; h < p->nh_probs; h++) {
 		for (t = 0; t < p->nth-1; t++) {
 			p->epgap[h][t] = 0.0;
 			sum_Ps = 0.0;

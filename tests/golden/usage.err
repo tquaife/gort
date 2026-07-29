@@ -35,7 +35,7 @@ preferred because it reduces equifinality.
 
 ============ Amount of leaf material:
 ------------ EITHER:
--favd arg	set the foliage volume area density (1/m2) within crown to arg
+-favd arg	set the foliage area volume density (1/m) within crown to arg
 
 ------------ OR:
 -LAI  arg	set the leaf area index (m2/m2) for the scene to arg

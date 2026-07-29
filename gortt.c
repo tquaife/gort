@@ -1280,6 +1280,12 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			else if( !strncasecmp( argv[ i ], "-N", 2 ) )   s->p_N     = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-cab", 4 ) ) s->p_Cab     = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-car", 4 ) ) s->p_Car     = atof( gortt_next_arg( argc, argv, &i ) );
+			/*PROSPECT-D calls this one Anth, without the C ("content") prefix
+			the other pigments carry, and so does gortt_usage. -Canth is kept
+			as an alias because it was the only spelling the parser accepted
+			for a long time. n.b. -Canth is matched on "-ca" alone, so it has
+			to stay below -cab and -car.*/
+			else if( !strncasecmp( argv[ i ], "-anth", 5 ) )   s->p_Anth      = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-canth", 3 ) )  s->p_Anth      = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-cbrown", 3 ) )  s->p_Cbrown      = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-cw", 3 ) )  s->p_Cw      = atof( gortt_next_arg( argc, argv, &i ) );
@@ -1387,7 +1393,7 @@ void gortt_usage( char *bin_name )
   fprintf( stderr, "\n============ Amount of leaf material:\n" );
 //  fprintf( stderr, "Two ways of specifying the amount of leaf material. Do not mix. \n" );
   fprintf( stderr, "------------ EITHER:\n" );
-	fprintf( stderr, "-favd arg\tset the foliage volume area density (1/m2) within crown to arg\n"  );
+	fprintf( stderr, "-favd arg\tset the foliage area volume density (1/m) within crown to arg\n"  );
   fprintf( stderr, "\n------------ OR:\n" );
 	fprintf( stderr, "-LAI  arg\tset the leaf area index (m2/m2) for the scene to arg\n"  );
 

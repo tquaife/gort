@@ -37,11 +37,13 @@ probs-hbrpcc    -           -HB 2.5 -BR 1.5 -PCC 0.6 -W
 albleaf         spec.in     -P @PROBS_DEFAULT@ -alb_leaf 0.4
 albsoil         spec.in     -P @PROBS_DEFAULT@ -alb_soil 0.25
 prospect        spec.in     -P @PROBS_DEFAULT@ -N 2.1 -Cab 55 -Car 18 -Cbrown 0.4 -Cw 0.02 -Cm 0.012
-# gortt_usage advertises "-Anth", but gortt_cl_parser only matches "-canth"
-# (at 3 chars, i.e. "-ca").  So the documented spelling is rejected and the
-# anthocyanin content can only be set as -ca<something>.  Both pinned here.
-prospect-anth   spec.in     -P @PROBS_DEFAULT@ -canth 12.0
-badanth         -           -Anth 3.0
+# -Anth is the spelling gortt_usage advertises and the one PROSPECT-D itself
+# uses; -Canth is the older alias.  They must be the same option, so these two
+# outputs must be byte-identical: compare prospect-anth.out with
+# prospect-anth-alias.out.  (-Canth is matched on "-ca" alone, so it is also
+# the case that keeps -cab and -car above it in the if-chain honest.)
+prospect-anth   spec.in     -P @PROBS_DEFAULT@ -Anth 12.0
+prospect-anth-alias spec.in -P @PROBS_DEFAULT@ -canth 12.0
 price           spec.in     -P @PROBS_DEFAULT@ -rsl1 0.3 -rsl2 0.05 -rsl3 0.01 -rsl4 -0.005
 # -soil_spectra. soil.spec is on an irregular grid and overhangs both ends
 # of 400-2500nm, which gortt_read_soil_lut documents as allowed; soilwl.in

@@ -58,7 +58,8 @@ the scattering properties of leaves and soil.
 .PP
 Leaf reflectance and transmittance are supplied by PROSPECT\-D, which is linked
 in directly and driven by the
-.B \-N
+.BR \-N ,
+.B \-Anth
 and
 .BI \-C xxx
 options.  Soil reflectance comes, by default, from a weighted sum of the four
@@ -210,7 +211,7 @@ determine mutual shadowing.
 .SS Amount of leaf material
 .TP
 .BI \-favd " arg"
-Foliage volume area density within the crown, m^\-1.  Default 0.858.
+Foliage area volume density within the crown, m^\-1.  Default 0.858.
 .TP
 .BI \-LAI " arg"
 Leaf area index for the scene, m^2 m^\-2.  Default 2.0.  Case sensitive.
@@ -236,13 +237,12 @@ Chlorophyll content, ug cm^\-2.  Default 30.
 .BI \-Car " arg"
 Carotenoid content, ug cm^\-2.  Default 10.
 .TP
-.BI \-Canth " arg"
-Anthocyanin content, ug cm^\-2.  Default 1.0.  Note that
-.B gortt \-u
-advertises this option as
-.BR \-Anth ,
-which the parser does not accept; see
-.BR CAVEATS .
+.BI \-Anth " arg"
+Anthocyanin content, ug cm^\-2.  Default 1.0.  Also accepted as
+.BR \-Canth ,
+which was for a long time the only spelling the parser recognised.
+PROSPECT\-D itself calls this parameter Anth, without the C ("content")
+prefix carried by the other pigments, which is why it is the odd one out.
 .TP
 .BI \-Cbrown " arg"
 Brown pigment content, arbitrary units.  Default 0.0.
@@ -476,15 +476,6 @@ and
 are case
 .IR sensitive ;
 the rest are not.
-.
-.SS \-Anth is not accepted
-.B gortt \-u
-documents the anthocyanin option as
-.BR \-Anth ,
-but the parser only matches
-.BR \-Canth ,
-so the documented spelling is rejected as an unknown option.  Use
-.BR \-Canth .
 .
 .SS Grazing angles
 Both the direct path and

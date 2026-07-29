@@ -15,8 +15,9 @@ paper:
     h1 = 3.0 m,  h2 = 8.5 m,  FAVD = 0.858 /m
 
 which are (near enough) gortt's own built-in defaults -- the defaults in
-gortt_set_defaults are the SOBS site.  They are passed explicitly here anyway,
-so that the figure does not silently change if the defaults ever do.
+gortt_set_defaults are the SOBS site.  They are passed explicitly anyway, so
+that the figure does not silently change if the defaults ever do; they live in
+gortt_run.py, shared with the other figure scripts.
 
 Sign convention on the x axis: the paper puts the hotspot at *positive* viewing
 zenith, so positive vza is the backscatter direction (relative azimuth 0) and
@@ -37,7 +38,6 @@ OPEN-QUESTIONS.md, and this figure is a fairly direct test of it.
 import argparse
 import csv
 import os
-import subprocess
 import sys
 
 import matplotlib
@@ -46,17 +46,8 @@ matplotlib.use("Agg")  # no display needed
 import matplotlib.pyplot as plt
 import numpy as np
 
-# ---------------------------------------------------------------------------
-# Table I of Ni et al. (1999): input tree parameters for the SOBS site.
-# ---------------------------------------------------------------------------
-SOBS = [
-    "-r", "0.76",       # horizontal crown radius (m)
-    "-b", "2.7",        # vertical crown radius (m)
-    "-lambda", "0.41",  # crown count density (1/m2)
-    "-h1", "3.0",       # lower boundary of crown centres (m)
-    "-h2", "8.5",       # upper boundary of crown centres (m)
-    "-favd", "0.858",   # foliage area volume density (1/m)
-]
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gortt_run as gr
 
 # Solar zenith angles of the two panels, top to bottom.
 SZA_PANELS = (30.0, 60.0)
@@ -78,65 +69,6 @@ COMPONENTS = [
 # dash patterns above are carried in both styles, so the four curves are never
 # distinguished by colour alone.
 COLOURS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"]
-
-
-def build_angles(vza, sza):
-    """
-    Principal-plane angles for one solar zenith, as (vza, vaa, sza, saa) rows.
-
-    gortt takes a non-negative viewing zenith plus azimuths, so a negative
-    plotting angle becomes |vza| with the sun moved to the opposite azimuth.
-    """
-    rows = []
-    for v in vza:
-        if v < 0.0:
-            rows.append((abs(v), 0.0, sza, 180.0))  # forward scatter
-        else:
-            rows.append((v, 0.0, sza, 0.0))         # backscatter, hotspot side
-    return rows
-
-
-def run_gortt(binary, rows, extra_args=()):
-    """
-    Run gortt once over every angle and return the four proportions per row.
-
-    Returns an (nrows, 4) array of Kc, Kg, Kt, Kz.
-    """
-    header = "%d 1 %g\n" % (len(rows), WAVELENGTH)
-    body = "".join("%g %g %g %g\n" % r for r in rows)
-
-    argv = [binary, "-prnprop"] + SOBS + list(extra_args)
-
-    # gortt prints %f -- six decimals -- unless GORTT_PREC asks for more.  At
-    # the default the four proportions only sum to one to about 1e-6, which is
-    # visible if you difference them.
-    env = dict(os.environ, GORTT_PREC="17")
-
-    try:
-        proc = subprocess.run(
-            argv, input=header + body, capture_output=True, text=True, env=env
-        )
-    except OSError as err:
-        sys.exit("fig5: cannot run %s: %s" % (binary, err))
-
-    if proc.returncode != 0:
-        sys.stderr.write(proc.stderr)
-        sys.exit("fig5: %s exited %d" % (binary, proc.returncode))
-
-    out = []
-    for line in proc.stdout.splitlines()[1:]:  # first line echoes the header
-        if "[" not in line:
-            continue
-        inside = line.split("[", 1)[1].split("]", 1)[0]
-        vals = [float(x) for x in inside.split()]
-        if len(vals) != 4:
-            sys.exit("fig5: expected 4 proportions, got %d: %s" % (len(vals), line))
-        out.append(vals)
-
-    if len(out) != len(rows):
-        sys.exit("fig5: asked for %d angles, parsed %d" % (len(rows), len(out)))
-
-    return np.array(out)
 
 
 def plot(vza, panels, style, title):
@@ -197,7 +129,7 @@ def main():
         help="output image (default: %(default)s); extension picks the format",
     )
     ap.add_argument(
-        "--gortt", default=os.path.join(here, os.pardir, "gortt"),
+        "--gortt", default=gr.default_binary(),
         help="path to the gortt binary (default: ../gortt)",
     )
     ap.add_argument(
@@ -230,8 +162,7 @@ def main():
     )
     args = ap.parse_args()
 
-    if not os.path.exists(args.gortt):
-        sys.exit("fig5: %s not found -- run make first" % args.gortt)
+    gr.check_binary(args.gortt)
 
     vza = np.arange(-args.limit, args.limit + args.step / 2.0, args.step)
     extra = ["-q08_pn_kopen"] if args.q08 else []
@@ -240,7 +171,8 @@ def main():
     for sza in SZA_PANELS:
         sys.stderr.write("fig5: running gortt for szn=%g (%d angles)...\n"
                          % (sza, len(vza)))
-        panels.append((sza, run_gortt(args.gortt, build_angles(vza, sza), extra)))
+        panels.append((sza, gr.run(args.gortt, gr.principal_plane(vza, sza),
+                                   WAVELENGTH, extra, want="prop")))
 
     fig = plot(vza, panels, args.style, args.title)
     fig.savefig(args.output, dpi=150)

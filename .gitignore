@@ -15,3 +15,6 @@ figures/*.png
 figures/*.pdf
 figures/*.svg
 
+
+#python bytecode from the figure scripts
+__pycache__/

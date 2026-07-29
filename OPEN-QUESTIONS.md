@@ -11,7 +11,7 @@ harness prints the largest absolute and relative deviation per case.
 
 ---
 
-## 1. `gortt_kc` carries F squared — affects every off-principal-plane BRF
+## 1. `gortt_kc` carries F squared — affects every BRF, principal plane included
 
 **Where:** `gortt_brdf.c`, `gortt_kc` and `gortt_kc_fFbeta`.
 
@@ -46,9 +46,34 @@ time, because it means the `f` expression is evaluated three times and used twic
 **To check:** Li & Strahler IGARSS '92 and RSE '94 for the `f`/`F`/`beta` decomposition, and
 Ni et al. (1999) for how `Kc` is assembled from them.
 
-**Blast radius:** every geometry off the principal plane, i.e. `frac` strictly between 0 and 1.
-`default`, `beta`, `hbrpcc` and `oldgeom` in the test suite all contain such angles, so the
-delta will be immediately visible. There is a comment in `gortt_kc` recording all of this.
+**Blast radius:** every geometry, *including* the principal plane — which is wider than the
+heading above suggests. At `raa = 0` the interpolation collapses to `frac = 0` and
+`f = f0*F0`, and at `raa = 180` to `f = f180*F180`; both still carry the extra `F`. The
+interpolation weight is what varies off the principal plane, not whether the extra factor is
+there. `default`, `beta`, `hbrpcc` and `oldgeom` in the test suite all contain such angles, so
+the delta will be immediately visible. There is a comment in `gortt_kc` recording all of this.
+
+**Evidence (added when reproducing Fig. 5 of Ni et al., see `figures/`):** that figure is the
+areal proportions in the principal plane for the SOBS site, and SOBS is our own default
+canopy, so it is close to a direct test. `Kt`, `Kz` and `Kg` reproduce the published curves,
+and `Kc` matches where the published figure can be read off precisely — 0.817 against ~0.81 at
+the hotspot, 0.167 against ~0.15 at nadir. But `Kc` is too low everywhere else in both
+directions, and dropping the extra `F` in a scratch build moves it toward the published curve
+at every point off the hotspot:
+
+| vza (szn=30) | as shipped | extra `F` dropped | Fig. 5 |
+|-------------:|-----------:|------------------:|-------:|
+| +30 (hotspot) | 0.817 | 0.817 | ~0.81 |
+| +44 | 0.588 | 0.732 | ~0.79 |
+| +60 | 0.712 | 0.856 | ~0.80 |
+| -40 | 0.059 | 0.143 | ~0.13 |
+| -60 | 0.043 | 0.191 | ~0.15 |
+
+Closer at every one of them, though it does not fully close the gap at +44, so this does not
+by itself prove the single-`F` form is the right one — it is a reason to do the paper check
+above rather than a substitute for it. Note also that `gortt_kc_PP_only` is never called from
+anywhere, so the principal plane does not currently take the single-`F` branch that exists for
+it.
 
 ---
 

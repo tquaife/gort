@@ -1,0 +1,27 @@
+# Stops the indentation drift getting any worse. The existing sources are
+# predominantly hard tabs, with pockets of 2-, 4- and 6-space indentation
+# that have accumulated over the years. No attempt has been made to
+# re-indent them: that would rewrite git blame across the whole model for
+# no functional gain, and the code needs to stay recognisable against the
+# equations it implements.
+
+root = true
+
+[*]
+trim_trailing_whitespace = true
+insert_final_newline = true
+charset = utf-8
+
+[*.{c,h}]
+indent_style = tab
+
+[*.f90]
+indent_style = space
+indent_size = 4
+
+# recipe lines must begin with a tab
+[[Mm]akefile]
+indent_style = tab
+
+[*.{sh,awk}]
+indent_style = tab

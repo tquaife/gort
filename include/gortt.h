@@ -18,23 +18,28 @@
 #define LAD_05 100
 
 #ifndef FALSE
-#define FALSE 0 
+#define FALSE 0
 #endif
 
 #ifndef TRUE
-#define TRUE 1 
+#define TRUE 1
 #endif
 
-#define MAX_LINE_LEN 1000 
+#define MAX_LINE_LEN 1000
 
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
 #define PROSPECT_LOWER_WL 400.0
 #define PROSPECT_SPECTRAL_RESLN 1.0
 
+/*the grid -soil_spectra is resampled onto: 400-2500nm at 1nm*/
+#define SOIL_LUT_NBANDS 2101
+#define SOIL_LUT_LOWER_WL 400.0
+#define SOIL_LUT_SPECTRAL_RESLN 1.0
+
 
 /* new 09/10/12:
-A structure to hold control variables, 
+A structure to hold control variables,
 e.g. to decide what ouput to print etc
 */
 
@@ -50,22 +55,42 @@ typedef struct  {
 
 
 
+/*
+One view/sun geometry, plus everything derived from it. Every field below
+is rewritten by gortt_set_geometry / gortt_run_geometry for each angle in
+the input, so nothing here survives from one output line to the next.
+*/
 typedef struct  {
 		double vza ;
 		double vaa ;
 		double sza ;
 		double saa ;
-		
+
 		double raa ;
 		double vza_prime ;
 		double sza_prime ;
-		
+
+		/*viewed areal proportions: sunlit crown, sunlit
+		background, shaded crown, shaded background*/
 		double Kc ;
 		double Kg ;
 		double Kt ;
 		double Kz ;
-		
-		
+
+		/*leaf projection G at the view zenith (the solar
+		zenith equivalent is p->k, which does not vary)*/
+		double k_vza ;
+
+		/*fraction of the incoming radiation that is direct*/
+		double fd ;
+
+		/*gap probabilities interpolated to this geometry's
+		zenith angles by gortt_set_zenith_dependant_probabilities*/
+		double p_neq0_heq0_sza ;
+		double p_ngt0_heq0_sza ;
+		double p_neq0_heq0_vza ;
+		double p_ngt0_heq0_vza ;
+
 } gortt_geometry ;
 
 
@@ -76,180 +101,248 @@ typedef struct  {
 		double *tleaf ;
 		double *rsurf ;
 		double *scomp ;
-		
+
 		/*intgral terms*/
 		double *albedo ;
 		double *favegt ;
 		double *fasoil ;
-		
+
+		/*
+		the shaded-background signature Z divided by the soil
+		reflectance, i.e. the fraction of the incident radiation that
+		reaches the background. gortt_rsurf builds Z as this times
+		rsoil, so recovering it by division is exact for any soil but
+		0/0 for a black one, which is why it is carried separately.
+		gortt_energy needs it; nothing else does.
+		*/
+		double *ztrans ;
+
 		/*number of wavebands*/
-		int nw ; 
-		/*counter!*/
-		int n ; 
-		
-		/*functions of the above*/
-		double leaf_sscat_albedo ;
-		double leaf_gamma ;
-		
+		int nw ;
+
 		/*leaf & soil properties*/
-				
+
 		double p_N ;
-		double p_Cab; 
-		double p_Car; 
-		double p_Anth; 
+		double p_Cab;
+		double p_Car;
+		double p_Anth;
 		double p_Cbrown;
 		double p_Cw;
 		double p_Cm;
-		
+
 		double rsl1;
 		double rsl2;
 		double rsl3;
 		double rsl4;
-		
+
 		/*user specified rho leaf & soil*/
-		
+
 		int is_user_leaf ;
 		int is_user_soil ;
 		double user_r_leaf ;
 		double user_r_soil ;
-		
+
 		int is_file_soil ;
 		char soil_file[ MAX_LINE_LEN ] ;
-		double soil_spectra[2101] ;
-		
+		double soil_spectra[ SOIL_LUT_NBANDS ] ;
+
 		} gortt_spectra ;
 
 
+/*
+Canopy and crown description, and everything precomputed from it. The
+fields are grouped by lifetime, and the whole struct is read-only once
+gortt_init_params and the gap-probability routines have run -- which is
+why the BRF, albedo and lidar code can take it as const.
+
+Names follow Ni et al. (1999): r and b are the crown radii, lambda the
+crown number density, favd the foliage area volume density, and so on.
+Anything suffixed _p lives in the ellipsoid->sphere transformed space
+(see gortt_prime_theta); mixing primed and unprimed quantities in one
+expression is almost always a bug.
+*/
 typedef struct  {
-		
-		double r ;
-		double rr ;
-		double rrr ;
-		double b ;
-		double h ;
-		double h1 ;
-		double h2 ;
-		double z1 ;
-		double z2 ;
-		double h1_p ;
-		double h2_p ;
-		double z1_p ;
-		double z2_p ;
-		double lv ;
-		double lv_p ;
-		double k ;
-		double k_vza ;
-		double favd ;
-		double favd_p ;
-		double elai ;
+
+		/*
+		---- 1. user inputs -------------------------------------------
+		Written by gortt_set_defaults and then gortt_cl_parser.
+		Read-only from gortt_init_params onwards.
+		*/
+
+		/*crown and canopy geometry*/
+		double r ;			/*horizontal crown radius*/
+		double b ;			/*vertical crown radius*/
+		double h1 ;			/*lower bound of crown centres*/
+		double h2 ;			/*upper bound of crown centres*/
+		double lambda ;		/*crown number density*/
+		double favd ;		/*foliage area volume density*/
+		int lad ;			/*leaf angle distribution, LAD_*/
+
+		/*numerical resolution*/
+		double dth ;		/*zenith step of the probability tables*/
+		int nlayers ;		/*number of height layers*/
+		int maxcrowns ;		/*truncation of the Poisson crown count*/
+		int nh_es ;
+		int npoints ;		/*Gauss-Legendre points for the albedo*/
+
+		/*diffuse fraction: if the user supplied one it is held here and
+		copied into g->fd for every geometry, otherwise g->fd is derived
+		from the solar zenith*/
+		unsigned short use_user_fd ;
+		double user_fd ;
+
+		/*user override of the hotspot/overlap parameter*/
+		int use_user_beta ;
+		double beta ;
+
+		/*gap probability file i/o (-W and -P)*/
+		int read_prob_file ;
+		int write_prob_file ;
+		char prob_fn[ MAX_LINE_LEN ] ;
+
+
+		/*
+		---- 2. derived constants -------------------------------------
+		Written only by gortt_init_params, from group 1 above.
+		Read-only afterwards.
+		*/
+
+		double ellipticity ;	/*b/r: the vertical scaling*/
+		double rr ;				/*r^2*/
+		double rrr ;			/*r^3*/
+		double h ;				/*total canopy depth*/
+		double k ;				/*leaf projection G at the solar zenith*/
+		double elai ;			/*effective LAI*/
 		double tau ;
 		double tau_p ;
-		double lambda ;
-		double ellipticity ;
+		double z1 ;				/*lowest height with any foliage*/
+		double z2 ;				/*highest height with any foliage*/
+		double lv ;
+		double favd_p ;
+		double lv_p ;
+		double z1_p ;
+		double z2_p ;
+		double h1_p ;
+		double h2_p ;
 
-        /*diffuse fraction*/
-        unsigned short use_user_fd ; 
-		double fd ;
-
-		
-		int nh_es ;
-		int nh1 ;
-		int nh2 ;
-		
-		int nlayers ;
-		int maxcrowns ;
-		
+		/*discretisation, all fixed by nlayers and dth*/
 		double dz ;
 		double dz_p ;
 		double ds ;
-		double dth ;
-		int nth ;
-		
+		int nh1 ;
+		int nh2 ;
+		int nth ;				/*number of zenith angles, 0..90 deg*/
+
 		double *height ;
 		double *height_p ;
 		double *theta ;
 		double *theta_p ;
-		double *vb ;
-		double *k_open ;
-		double *k_openep ;
-		double *dk_open ;
-		double *lk_up ;
-		double *lk_down ;
-		double *es ;
-	
 		double *factorial ;
-	
-		double **fb ;
-		double **t_open ;
-		double **dt_open ;
-		double **s_p ;
-		double **v_g ;
+
+		/*Gauss-Legendre abscissa and weights, allocated only when an
+		integral is actually asked for*/
+		double *abscissa ;
+		double *weights ;
+
+
+		/*
+		---- 3. gap probabilities -------------------------------------
+		Written once, either by gortt_gap_probabilities(_Q08) or by
+		reading a -P file. The expensive part of a run, and the reason
+		it is worth caching. Read-only afterwards.
+
+		Only rows h < nh_probs of the height-indexed tables are filled;
+		the rest are left at their calloc zero. The BRF only ever needs
+		h = 0, so nh_probs defaults to 1, but a lidar waveform is a
+		function of height and -lidar raises it to nlayers.
+		*/
+
+		int nh_probs ;
+
 		double **p_s0 ;
 		double **p_n0 ;
 		double **epgap ;
-		
+		double *k_open ;
+		double *k_openep ;
 		double ***pd_s ;
-				
-		int lad ;
-		
-		double p_neq0_heq0_sza ;
-		double p_ngt0_heq0_sza ;
-		double p_neq0_heq0_vza ;
-		double p_ngt0_heq0_vza ;
-		
-		int read_prob_file ;
-		char prob_fn[ MAX_LINE_LEN ] ;
-		int write_prob_file ;
-		
-		int use_user_beta ;
-		double beta ;
-		
-		/*for integrating*/
-		int npoints ;
-		double *abscissa ;
-		double *weights ;
-		
+
 		} gortt_parameters ;
 
 
+/*
+The radiative transfer half of the model: every term Ni et al. (1999)
+derive between the leaf optics and the four scene signatures, for one
+geometry and one waveband. Filled by gortt_rt_init.
 
-/*TQ's implimentation of the GORT paper*/
-void   gortt_rsurf( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-void   gortt_gap_probabilities( gortt_parameters *, gortt_geometry * );
-void   gortt_set_zenith_dependant_probabilities( gortt_parameters *, gortt_geometry * );
-double gortt_prime_theta( gortt_parameters *, double  );
-double gortt_kg( gortt_parameters *, gortt_geometry * );
-double gortt_kc( gortt_parameters *, gortt_geometry *, double );
-void   gortt_kc_fFbeta( gortt_parameters *, gortt_geometry *, double, double *, double *, double * );
-double gortt_kc_PP_only( gortt_parameters *, gortt_geometry *, double );
-double gortt_kc_wenge( gortt_parameters *, gortt_geometry *, double );
-double gortt_kc_ambrals( gortt_parameters *, gortt_geometry * 	);
-double gortt_overlap( gortt_parameters *, gortt_geometry * );
-double gortt_t_prime_df( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-double gortt_t_prime_ff( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-double gortt_t_prime_0( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_t_0( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_T_inf_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_T_inf_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_R_inf_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_R_inf_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_prime_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_df( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_p_prime_ff( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_phase_function_assymetry( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_kuusk( gortt_parameters *, gortt_geometry *, gortt_spectra *  );
-double gortt_leaf_angle_distribution( gortt_parameters *, double );
+Reading the names: _df is direct-to-diffuse, _ff diffuse-to-diffuse and
+_0 direct unscattered; t/T is a transmittance, p/R a reflectance; _inf
+is the semi-infinite homogeneous layer; and _prime is the discontinuous
+canopy as opposed to the equivalent homogeneous one.
+*/
+typedef struct  {
 
-void  gortt_lidar( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+		double w ;			/*leaf single scattering albedo*/
+		double gamma ;		/*sqrt( 1 - w )*/
+		double g_asym ;		/*phase function asymmetry*/
+
+		/*semi-infinite homogeneous layer*/
+		double R_inf_df ;
+		double R_inf_ff ;
+		double T_inf_df ;
+		double T_inf_ff ;
+
+		/*finite homogeneous layer*/
+		double t_0 ;
+		double t_df ;
+		double t_ff ;
+		double p_df ;
+		double p_ff ;
+
+		/*discontinuous canopy*/
+		double t_prime_0 ;
+		double t_prime_df ;
+		double t_prime_ff ;
+		double p_prime_df ;
+		double p_prime_ff ;
+
+		/*Kuusk's bi-directional gap probability*/
+		double kuusk ;
+
+		} gortt_rt ;
+
+
+
+/*
+TQ's implimentation of the GORT paper.
+
+Everything below takes gortt_parameters as const: once gortt_init_params
+and the gap-probability routines have run, the canopy description does
+not change for the rest of the run. gortt_geometry is const wherever the
+function only evaluates at the geometry it is given, i.e. everywhere
+except gortt_rsurf, which fills in the four viewed proportions.
+*/
+void   gortt_rsurf( const gortt_parameters *, gortt_geometry *, gortt_spectra * );
+void   gortt_gap_probabilities( gortt_parameters * );
+void   gortt_gap_probabilities_Q08( gortt_parameters * );
+void   gortt_set_zenith_dependant_probabilities( const gortt_parameters *, gortt_geometry * );
+double gortt_prime_theta( const gortt_parameters *, double  );
+double gortt_kg( const gortt_parameters *, const gortt_geometry *, double );
+double gortt_kc( const gortt_parameters *, const gortt_geometry *, double );
+void   gortt_kc_fFbeta( const gortt_parameters *, const gortt_geometry *, double, double, double *, double *, double * );
+double gortt_kc_PP_only( const gortt_parameters *, const gortt_geometry *, double );
+double gortt_kc_ambrals( const gortt_parameters *, const gortt_geometry * 	);
+double gortt_overlap( const gortt_parameters *, const gortt_geometry *, double );
+void   gortt_rt_init( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *, int, gortt_rt * );
+double gortt_kuusk( const gortt_parameters *, const gortt_geometry * );
+double gortt_leaf_angle_distribution( const gortt_parameters *, double );
+
+void  gortt_lidar( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
 
 
 /*TQ's integral routines*/
 
-void   gortt_energy( gortt_parameters *, gortt_geometry *, gortt_spectra * );
-void   gortt_albedo( gortt_parameters *, gortt_geometry *, gortt_spectra * );
+void   gortt_energy( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
+void   gortt_albedo( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
 void   gauleg( double, double, double *, double *, int );
 
 /*Wenge's functions for within crown probs*/
@@ -269,9 +362,6 @@ double gortt_get_s( gortt_parameters *, int, double, int );
 double gortt_get_pcc( gortt_parameters *, double  );
 double gortt_vol( gortt_parameters *, int, int, int, double ) ;
 
-void   gortt_calc_vb( gortt_parameters * );
-void   gortt_calc_fb( gortt_parameters * );
-void   gortt_calc_t_open( gortt_parameters * );
 void   gortt_calc_epgap( gortt_parameters * );
 double gortt_calc_pgap( gortt_parameters *, double, double );
 void   gortt_calc_kopen( gortt_parameters * );
@@ -293,12 +383,11 @@ void   prospect_DB_( double *, double *, double *, double *, double *, double *,
 
 /*read soil spectra*/
 void	gortt_read_soil_lut( gortt_spectra * );
-double	gortt_get_rsoil_lut( gortt_spectra *, double * );
 
 
 /*parsing and usage*/
 
-void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control * );
+void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_spectra *, gortt_control * );
 void   gortt_usage( char * );
 char	 get_first_string_token( char *, char * );
 

@@ -4,10 +4,9 @@
 #include <gortt.h>
 
 
-void gortt_energy( p, g, s )
 /*
 Calculate the SW energy balance in the canopy
-The variables Fd1, Fd2, Fu1, Fd2 are the flux 
+The variables Fd1, Fd2, Fu1, Fd2 are the flux
 terms normalised to the incoming (i.e. Fd1=1.),
 where:
 
@@ -18,35 +17,47 @@ u=up-welling
 
 Fu1 is the albedo.
 
-Note that this routine assumes a Lambertian 
-background reflectance at the moment. This 
+Note that this routine assumes a Lambertian
+background reflectance at the moment. This
 would have to change if either Z or G are
 modified to have a BRDF.
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_energy( const gortt_parameters *p, const gortt_geometry *g, gortt_spectra *s )
 {
 
 
-  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, rsoil ; 
+  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, ztrans ;
 	int k;
 
   gortt_albedo( p, g, s );
 
-  Pn0=p->p_neq0_heq0_sza ;
-  
-  for( k=0;k<s->nw;k++ ){
-  
-    Fu1 = *(s->albedo+k) ;
+  Pn0=g->p_neq0_heq0_sza ;
 
-    rsoil= *(s->rsoil+k) ;
+  /*
+  n.b. G and Z below are read back out of s->scomp after gortt_albedo has
+  overwritten it with the last quadrature point. That is safe, but only
+  because neither depends on the view direction: G is the Lambertian
+  background, and every term Z is built from is a function of the solar
+  zenith alone. If either is ever given a BRDF this has to change, along
+  with the rest of the Lambertian assumption noted above.
+  */
+
+  for( k=0;k<s->nw;k++ ){
+
+    Fu1 = *(s->albedo+k) ;
 
     G = *( s->scomp + k*4+1 ) ;
     Z = *( s->scomp + k*4+3 ) ;
 
+    /*
+    Z/rsoil, taken from gortt_rsurf rather than by dividing: the two are
+    equal for any soil, but a black soil (-alb_soil 0) makes the division
+    0/0 and used to turn both outputs below into -nan.
+    */
+    ztrans = *(s->ztrans+k) ;
+
     Fu2 = G*Pn0+Z*(1.-Pn0);
-    Fd2 = Pn0+Z*(1.-Pn0)/rsoil;
+    Fd2 = Pn0+ztrans*(1.-Pn0);
 
     *(s->favegt+k)=Fd1-Fu1-Fd2+Fu2;
     *(s->fasoil+k)=Fd2-Fu2 ;
@@ -54,12 +65,11 @@ gortt_spectra *s ;
     /*
     fprintf( stderr, "++ %f %f %f %f %f %f %f \n", Fd1, Fd2, Fu1, Fu2, G, Z, Pn0 );
     */
-  
+
   }
 
 }
 
-void gortt_albedo( p, g, s )
 /*
 Hemispherical integral of GORT reflectances.
 Calculated for each spectral channel in s and
@@ -67,17 +77,31 @@ the solar geometry in g (n.b. we are integrating
 over the viewing hemisphere so only the solar
 zenith angle matters).
 */
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_albedo( const gortt_parameters *p, const gortt_geometry *g, gortt_spectra *s )
 {
 
   double xm, xr, ym, yr, x ,y ;
   double *sum_y, *sum_x ;
   int i, j, k ;
 
-	sum_y = (double *)malloc( p->npoints * sizeof( double ) );
-	sum_x = (double *)malloc( p->npoints * sizeof( double ) );
+	/*
+	The quadrature walks over the viewing hemisphere, so it has to move
+	the view direction. It does that on a copy: the caller's geometry is
+	the one that was just printed, and this routine used to leave it
+	holding the last quadrature point instead. Only the ordering in
+	main() -- print the BRF, then call gortt_energy -- kept that from
+	being visible in the output.
+	*/
+	gortt_geometry gv = *g ;
+
+	/*
+	n.b. these are accumulators over wavebands, not over quadrature
+	points: every index into them below runs over s->nw. They used to be
+	allocated with p->npoints elements, which silently overflowed the
+	heap for any run with more than 32 wavebands.
+	*/
+	sum_y = (double *)malloc( s->nw * sizeof( double ) );
+	sum_x = (double *)malloc( s->nw * sizeof( double ) );
 
   xm=0.5*(1.-1.);
   xr=0.5*(1.+1.);
@@ -87,59 +111,61 @@ gortt_spectra *s ;
 
   for( k=0;k<s->nw;k++ ) *(sum_y+k) = 0.;
   for( i=0;i<p->npoints;i++ ){
-    
+
     y = ym + yr* *(p->abscissa+i);
-    
-    g->vaa = y;
-    
+
+    gv.vaa = y;
+
     /*corrections...*/
-    while ( g->vaa > 2 * M_PI ) g->vaa -= 2 * M_PI;
-    g->raa = g->saa - g->vaa ;
-		g->raa = fabs((g->raa - 2 * M_PI * (int) (0.5 + g->raa * M_1_PI * 0.5)));
-    
+    while ( gv.vaa > 2 * M_PI ) gv.vaa -= 2 * M_PI;
+    gv.raa = gv.saa - gv.vaa ;
+		gv.raa = fabs((gv.raa - 2 * M_PI * (int) (0.5 + gv.raa * M_1_PI * 0.5)));
+
     for( k=0;k<s->nw;k++ ) *(sum_x+k)=0.;
-    for( j=p->npoints/2.;j<p->npoints;j++ ){ 
-    
+    for( j=p->npoints/2.;j<p->npoints;j++ ){
+
       x=xm + xr* *(p->abscissa+j) ;
 
-      g->vza = acos( x );
-      
+      gv.vza = acos( x );
+
       /*corrections... un-needed!
       - but exercising caution...*/
-      if ( g->vza < 0.0 ) {
-			  g->vaa += M_PI ;
-			  g->vza *= -1.0 ;
+      if ( gv.vza < 0.0 ) {
+			  gv.vaa += M_PI ;
+			  gv.vza *= -1.0 ;
 		  }
-		
-      g->vza_prime = gortt_prime_theta( p, g->vza );
-		  g->sza_prime = gortt_prime_theta( p, g->sza );
+
+      gv.vza_prime = gortt_prime_theta( p, gv.vza );
+		  gv.sza_prime = gortt_prime_theta( p, gv.sza );
 
   		/*this is needed by the kuusk function*/
-  		p->k_vza = gortt_leaf_angle_distribution( p, g->vza ) ;
+  		gv.k_vza = gortt_leaf_angle_distribution( p, gv.vza ) ;
 
-		  gortt_set_zenith_dependant_probabilities( p, g );
-		 
+		  gortt_set_zenith_dependant_probabilities( p, &gv );
+
 		  /* Checking probability terms...
-		  fprintf( stderr, "+++ %f\n", p->p_neq0_heq0_sza );
+		  fprintf( stderr, "+++ %f\n", gv.p_neq0_heq0_sza );
 		  */
-		 
-		  gortt_rsurf( p, g, s );
+
+		  gortt_rsurf( p, &gv, s );
 
       for( k=0;k<s->nw;k++ )
         *(sum_x+k)=*(sum_x+k)+*(s->rsurf+k)* *(p->weights+j)*fabs(x)*xr ;
-    
+
     }
     for( k=0;k<s->nw;k++ )
       *(sum_y+k) = *(sum_y+k) + *(sum_x+k)* *(p->weights+i)*yr ;
-  }     
-  
+  }
+
   for( k=0;k<s->nw;k++ ) *(s->albedo+k) = *(sum_y+k) / M_PI ;
+
+	gortt_dealloc_1d( sum_y );
+	gortt_dealloc_1d( sum_x );
 
 }
 
 
 #define EPS 3.0e-11
-void gauleg(x1,x2,x,w,n)
 /**
 Gauss-Legendre ascissa and weights using the numerical
 recepies algorithm. This code taken from:
@@ -154,8 +180,7 @@ n  = number of points
 NB - this version is modifed to use zero indexed arrays
 
 **/
-double x1,x2,*x,*w;
-int n;
+void gauleg( double x1, double x2, double *x, double *w, int n )
 {
 	int m,j,i;
 	double z1,z,xm,xl,pp,p3,p2,p1;

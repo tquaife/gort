@@ -4,10 +4,7 @@
 #include<gortt.h>
 
 
-void gortt_lidar( p, g, s )
-gortt_parameters *p ;
-gortt_geometry *g ;
-gortt_spectra *s ;
+void gortt_lidar( const gortt_parameters *p, const gortt_geometry *g, gortt_spectra *s )
 {
 
 

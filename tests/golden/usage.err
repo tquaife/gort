@@ -1,0 +1,77 @@
+usage: ../gortt [options] < angles.dat
+
+The first line of the input data reads:
+N M W_1 W_2 [...] W_M
+where N is the number of view--illumination geometries
+M is the number of wavelengths and
+W_i (i=1,M) are the wavelengths at which to predict the canopy reflectance
+The rest of the input data is four columns of ascii:
+view_zenith view_azimuth solar_zenith solar azimuth
+
+The command line options are:
+
+============ Crown geometry options:
+-beta arg	force the proportion of mutual shadowing to arg
+         	[n.b. if beta is not set gortt uses the model by Li and Strahler (IGARSS'92) to determine mutual shadowing]
+
+------------ EITHER (old style):
+-h1 arg    	set the lower boundary of the crown centres (m) to arg
+-h2 arg    	set the upper boundary of the crown centres (m) to arg
+-b arg     	set the vertical crown radius (m) to arg
+-r arg     	set the horizontal crown radius (m) to arg
+-lambda arg	set the tree stem density (1/m2) to arg
+
+------------ OR (new style):
+-HB  arg	set the ratio of the centroid height range to the vertical crown radius to arg
+-BR  arg	set the ratio of the vertical to horizontal crown radius to arg
+-PCC arg	set the projected crown cover (at nadir) to arg
+
+The above old style options refer to the original GORT paper and the 
+new style options are as they are expressed in the Quaife et al. (2008) 
+DALEC paper. As soon as a new style option is specified all old style 
+options are ignored. Note that they are same thing - the code simply uses
+the new style options to calculate the old ones but the new ones are 
+preferred because it reduces equifinality. 
+
+============ Amount of leaf material:
+------------ EITHER:
+-favd arg	set the foliage volume area density (1/m2) within crown to arg
+
+------------ OR:
+-LAI  arg	set the leaf area index (m2/m2) for the scene to arg
+
+============ Prospect leaf options:
+-N arg  	set the leaf structure variable to arg
+-Cab arg	set the leaf chlorophyl content (µg.cm-2) to arg
+-Cw arg 	set the equivelant leaf water thickness (cm) to arg
+-Car arg 	set the carotenoid content (µg.cm-2) to arg
+-Anth arg 	set the anthocyanin content (µg.cm-2) to arg
+-Cbrown arg 	set the /brown pigment content (arbitrary units) to arg
+-Cm arg 	set the leaf mass per unit area (g.cm-2) to arg
+
+============ Price soil spectra options:
+-rsl1 arg 	set the weight of the first soil vector to arg
+-rsl2 arg 	set the weight of the second soil vector to arg
+-rsl3 arg 	set the weight of the third soil vector to arg
+-rsl4 arg 	set the weight of the fourth soil vector to arg
+
+============ User override for spectral properties:
+-alb_leaf     arg 	set leaf albedo to arg (turns prospect off)**
+-alb_soil     arg 	set soil albedo to arg (turns price off)**
+-soil_spectra arg 	read soil spectra from file arg (turns price off)
+                  	[** n.b. use only one of the above soil options]
+
+============ Read/write gap probabilities:
+-W       	go as far as calculating the gap probabilities and write these to the stdout and exit
+-P file  	read gap probabilities from file that have been written using the -W option
+         	n.b. the above two options are included to allow fast BRF calculation based on
+         	pre-computed gap probabilities. The model must be run using the same crown and canopy
+         	geometry options for the read and write. Spectral options (i.e. Prospect and Price options)
+         	may be varied whist running using a give probability file.
+
+============ Input/output options:
+-prnspec	print the scene component spectra for each wavelength inside {}
+-prnprop	print the viewed proportions of scene components inside []
+-energy 	print the spectral albedo, absoption by veg and absorption by soil for each wavelength after other outputs.
+-u      	print this message and exit
+

@@ -1,0 +1,101 @@
+# Regression case registry for tests/run.sh
+#
+#   <name>  <input-file-in-cases/-or-">-"-for-no-stdin>  [args...]
+#
+# @PROBS_DEFAULT@ expands to a gap-probability file (gortt -W) generated from
+# the default canopy geometry.  Cases using it MUST NOT pass any canopy
+# geometry or -favd/-LAI option, or the probabilities will not correspond.
+# Blank lines and #-comments are ignored.
+
+# ---- direct path: full gap-probability computation each time ---------------
+default         basic.in
+lai             basic.in    -LAI 4.0
+favd            spec.in     -favd 0.5
+hbrpcc          spec.in     -HB 2.5 -BR 1.5 -PCC 0.6
+oldgeom         spec.in     -r 1.0 -b 3.0 -h1 2.0 -h2 9.0 -lambda 0.3
+beta            spec.in     -beta 0.4
+diffuse         spec.in     -diffuse 0.3
+readme          readme.in   -LAI 4.0
+extreme         extreme.in
+# 86-89 deg: the band where the gap probabilities fall below what the old
+# fixed-point -W format could represent. Paired with useprobs-grazing below,
+# which must agree with this case exactly.
+grazing         grazing.in
+angnorm         angnorm.in
+endpoints       endpoints.in
+energy-lai      basic.in    -LAI 4.0 -energy
+q08             spec.in     -q08_pn_kopen
+q08-energy      spec.in     -q08_pn_kopen -energy
+lidar           spec.in     -lidar
+
+# ---- gap probabilities themselves (printed at %0.40f -- the precise gate) --
+probs           -           -W
+probs-lai       -           -LAI 4.0 -W
+probs-hbrpcc    -           -HB 2.5 -BR 1.5 -PCC 0.6 -W
+
+# ---- spectral-only sweeps, driven off a shared probability file -----------
+albleaf         spec.in     -P @PROBS_DEFAULT@ -alb_leaf 0.4
+albsoil         spec.in     -P @PROBS_DEFAULT@ -alb_soil 0.25
+prospect        spec.in     -P @PROBS_DEFAULT@ -N 2.1 -Cab 55 -Car 18 -Cbrown 0.4 -Cw 0.02 -Cm 0.012
+# gortt_usage advertises "-Anth", but gortt_cl_parser only matches "-canth"
+# (at 3 chars, i.e. "-ca").  So the documented spelling is rejected and the
+# anthocyanin content can only be set as -ca<something>.  Both pinned here.
+prospect-anth   spec.in     -P @PROBS_DEFAULT@ -canth 12.0
+badanth         -           -Anth 3.0
+price           spec.in     -P @PROBS_DEFAULT@ -rsl1 0.3 -rsl2 0.05 -rsl3 0.01 -rsl4 -0.005
+# -soil_spectra. soil.spec is on an irregular grid and overhangs both ends
+# of 400-2500nm, which gortt_read_soil_lut documents as allowed; soilwl.in
+# picks two grid knots, one off-grid wavelength and both endpoints.
+# soilflat is constant 0.25, so it must reproduce -alb_soil 0.25 exactly:
+# compare soilflat.out with soilconst.out.
+soilspec        soilwl.in   -P @PROBS_DEFAULT@ -soil_spectra cases/soil.spec -prnspec
+soilflat        soilwl.in   -P @PROBS_DEFAULT@ -soil_spectra cases/soilflat.spec -prnspec
+soilconst       soilwl.in   -P @PROBS_DEFAULT@ -alb_soil 0.25 -prnspec
+prnspec         spec.in     -P @PROBS_DEFAULT@ -prnspec
+prnprop         spec.in     -P @PROBS_DEFAULT@ -prnprop
+prnboth         spec.in     -P @PROBS_DEFAULT@ -prnspec -prnprop
+energy          spec.in     -P @PROBS_DEFAULT@ -energy
+# a black soil makes Z/rsoil 0/0 in the energy balance. The favegt and
+# fasoil columns used to be -nan; they must now be finite, and must agree
+# with the -alb_soil 1e-12 limit to within rounding.
+blacksoil       spec.in     -P @PROBS_DEFAULT@ -alb_soil 0 -energy
+blacksoil-limit spec.in     -P @PROBS_DEFAULT@ -alb_soil 1e-12 -energy
+# 42 wavebands, i.e. more than npoints (32). gortt_albedo used to size its
+# accumulators by npoints while indexing them by waveband, so this
+# overflowed the heap. Ends on 2500nm, the interpolation endpoint that
+# used to read one past the end of the Price and PROSPECT tables.
+widespec        widespec.in -P @PROBS_DEFAULT@ -energy
+useprobs        basic.in    -P @PROBS_DEFAULT@
+
+# -P must reproduce the direct path exactly. These two are the sharp end of
+# that: the probabilities span 1e0 to 1e-65 across the theta table, so any
+# loss in the -W round trip shows up here first. Compare with the "extreme"
+# and "grazing" cases, which are the same inputs run directly.
+# n.b. both paths still give -nan at exactly 90 deg -- sec(90) is infinite.
+# That is a modelling question, not a round-trip one, and is not fixed here.
+useprobs-extreme extreme.in -P @PROBS_DEFAULT@
+useprobs-grazing grazing.in -P @PROBS_DEFAULT@
+
+# ---- user-facing error and help paths -------------------------------------
+usage           -           -u
+badopt          -           -zzz
+badarg          -           notanargument
+# NOT covered yet: an option that takes a value, given as the last word on the
+# command line (e.g. "gortt -Cab"), reads argv[argc] == NULL and segfaults.
+# The shell's crash message and "(core dumped)" depend on ulimit, so pinning
+# it would make the suite environment-dependent.  Add a case here once the
+# missing-argument check goes in.
+badcount        badcount.in
+badwl           badwl.in
+badangle        badangle.in
+badnowl         badnowl.in
+# header declares 2 wavebands but lists 6: used to write all 6 into a
+# 2-element array before the count check downstream noticed
+badwlcount      badwlcount.in
+# value-taking option as the last word: used to read argv[argc] == NULL
+badmissingval   -           -Cab
+badmissingval2  -           -LAI 4.0 -P
+# soil file must open, start at or below 400nm and end at or above 2500nm
+badsoilmissing  soilwl.in   -soil_spectra cases/nosuchfile.spec
+badsoilstart    soilwl.in   -soil_spectra cases/soilstart.spec
+badsoilend      soilwl.in   -soil_spectra cases/soilend.spec

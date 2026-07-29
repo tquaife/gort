@@ -930,11 +930,19 @@ void gortt_gap_probabilities_Q08( gortt_parameters *p )
 	p->k_open[0] = 0.0 ;
 	p->k_openep[0] = 0.0;
 
-	tmp1_last = p->p_n0[0][0] * sin(2.0*p->theta[0]);
-	tmp2_last = p->epgap[0][0] * sin(2.0*p->theta[0]);
+	/*
+	n.b. the trapezium is seeded AFTER the t=0 probabilities are
+	computed. It used to be seeded before, so tmp1_last and tmp2_last
+	were read out of the still-uninitialised arrays. That happened to
+	be harmless -- theta[0] is exactly zero, so both were multiplied by
+	sin(0) -- but it was harmless by accident, not by construction.
+	*/
 
 	p->p_n0[0][0]  = exp( -c / ( cos( p->theta_p[0] ) ) );
 	p->epgap[0][0] = exp( -a / ( cos( p->theta_p[0] ) ) ) - p->p_n0[0][0] ;
+
+	tmp1_last = p->p_n0[0][0] * sin(2.0*p->theta[0]);
+	tmp2_last = p->epgap[0][0] * sin(2.0*p->theta[0]);
 
 
 	for (t = 1; t < p->nth; t++) {

@@ -15,16 +15,19 @@ linked in directly (`makefile` uses `vpath` to find `PROSPECT-D/*.f90`). Headers
 `include/` and are pulled in with `-I./include`, so sources use `#include<gortt.h>`, not
 a relative path.
 
-Expected build noise (pre-existing, not introduced by your change):
-* many `-Wc-binding-type` warnings from the `bind(C)` interface in `PROSPECT-D/prospect_DB.f90`
-* `gortt.c:118` implicit declaration of `gortt_gap_probabilities_Q08` — the function is defined
-  in `gortt_pn_kopen.c` but missing from `include/gortt.h`
-* `gortt.c:116` dangling-else warning
+The C side builds clean under `-Wall`; a new warning is something you introduced. Expected
+build noise (all from the vendored Fortran, pre-existing): `-Wc-binding-type` from the
+`bind(C)` interface in `PROSPECT-D/prospect_DB.f90`, and `-Wtabs` from both PROSPECT sources.
+
+`CFLAGS` is `-Wall -g`, i.e. `-O0`. That is deliberate: at `-O0` there is no FP contraction or
+reassociation, so hoisting a repeated call to a pure function is guaranteed bit-identical and
+the golden files can be used to prove a refactor changed nothing. Turning optimisation on
+should be its own commit (with `-ffp-contract=off`).
 
 ## Testing
 
 ```bash
-make test       # 36 golden-file cases, ~30 s; or: cd tests && ./run.sh
+make test       # 41 golden-file cases, ~3 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -78,24 +81,37 @@ Single binary, one pass over stdin. `main()` in `gortt.c` is the whole driver.
 **Data flow:** `gortt_cl_parser` → `gortt_init_params` → gap probabilities (computed, written,
 or read from file) → parse stdin header → `gortt_price_soil` + `gortt_prospect_interface`
 (spectra are computed once, they do not depend on angle) → per-angle loop
-{ `gortt_set_zenith_dependant_probabilities` → `gortt_rsurf` → optionally `gortt_energy` }.
+{ `gortt_set_geometry` → `gortt_run_geometry` → `gortt_print_result` → optionally
+`gortt_energy` }. `main()` is a ~110-line driver over eleven `static` helpers, all declared at
+the top of `gortt.c`.
 
 **Four state structs are threaded through nearly every function**, conventionally named
-`p`, `g`, `s`, `c` (defined in `include/gortt.h`):
-* `gortt_parameters` — crown/canopy geometry, all the precomputed probability arrays, and
-  their allocations. This is the big one.
-* `gortt_geometry` — one view/sun geometry plus the four viewed proportions `Kc/Kg/Kt/Kz`.
-* `gortt_spectra` — wavelength grid, leaf/soil optics, PROSPECT and Price inputs, outputs
-  (`rsurf`, `scomp`, `albedo`, `favegt`, `fasoil`).
-* `gortt_control` — output/mode switches only.
+`p`, `g`, `s`, `c` (defined in `include/gortt.h`). They are separated by *lifetime*, and that
+separation is the load-bearing invariant of the codebase — keep it when adding anything:
+* `gortt_parameters` (`p`) — the canopy, fixed for the whole run. Three bannered groups:
+  user inputs (written by `gortt_cl_parser`), derived constants (written by
+  `gortt_init_params`), and the gap probability tables. **Const everywhere downstream**; if
+  you find yourself wanting to write to `p` from the BRF, albedo or lidar path, the field
+  belongs in `g` instead.
+* `gortt_geometry` (`g`) — one view/sun geometry and everything derived from it: the primed
+  zeniths, `k_vza`, the direct fraction `fd`, the interpolated gap probabilities, and the four
+  viewed proportions `Kc/Kg/Kt/Kz`. Rewritten per input angle; nothing survives between them.
+* `gortt_spectra` (`s`) — wavelength grid, leaf/soil optics, PROSPECT and Price inputs,
+  outputs (`rsurf`, `scomp`, `albedo`, `favegt`, `fasoil`).
+* `gortt_control` (`c`) — output/mode switches only.
+
+A fifth, `gortt_rt`, is a local rather than a threaded parameter: `gortt_rt_init` fills it with
+every radiative-transfer term for one (geometry, waveband) pair, in the order Ni et al. derive
+them. `gortt_rsurf`'s waveband loop then reads `rt.t_prime_ff` and friends as plain values.
+Add new RT terms there, not as another function that recomputes its own dependencies.
 
 **The scene model** (see the comment block on `gortt_rsurf`): reflectance is
 `Kc*C + Kg*G + Kt*T + Kz*Z`, where `Kc/Kg/Kt/Kz` are the viewed areal proportions of sunlit
 crown, sunlit background, shaded crown and shaded background, and `C/G/T/Z` are their
 signatures. The `K` terms are wavelength-independent and computed once per geometry; the
 signatures are computed inside a loop over wavebands. Each signature is a direct/diffuse
-mixture weighted by `p->fd` (fraction of direct radiation), so most scattering functions come
-in `_df` (direct) and `_ff` (diffuse) pairs.
+mixture weighted by `g->fd` (fraction of direct radiation), so most RT terms come in `_df`
+(direct) and `_ff` (diffuse) pairs.
 
 **Prime ("_p", "_prime") variables are the ellipsoid→sphere transform.** GORT models crowns as
 ellipsoids of horizontal radius `r` and vertical radius `b`; the analytic derivation is done for
@@ -106,9 +122,9 @@ quantities in one expression is almost always a bug.
 **File responsibilities:**
 * `gortt.c` — `main()`, CLI parsing and usage, `gortt_rsurf` (top-level scene composition),
   init/alloc/dealloc helpers, the PROSPECT and Price interfaces, soil-file reader.
-* `gortt_brdf.c` — geometric-optical kernels (`gortt_kg`, `gortt_kc*`, `gortt_overlap`) and the
-  radiative-transfer terms (`gortt_t_*`, `gortt_p_*`, `gortt_T_inf_*`, `gortt_R_inf_*`,
-  `gortt_kuusk`, phase-function asymmetry).
+* `gortt_brdf.c` — geometric-optical kernels (`gortt_kg`, `gortt_kc*`, `gortt_overlap`),
+  `gortt_kuusk`, and `gortt_rt_init`, which is the whole radiative-transfer chain in one
+  function.
 * `gortt_pn_kopen.c` — the within/between-crown gap probability machinery: P(n=0), P(s), Vgamma,
   `k_open`/`k_openep`, and the geometry integrals behind them. Largely translated from
   Wenge Ni-Meister's original code; the `static` helpers at the bottom (`gortt_trisec`,
@@ -119,15 +135,23 @@ quantities in one expression is almost always a bug.
   `gortt_rsurf` at each quadrature point) and `gortt_energy` (SW energy balance → albedo,
   fraction absorbed by vegetation, fraction absorbed by soil). `gauleg` lives here too.
 * `gortt_lidar.c` — stub. `gortt_lidar` is called unconditionally from the per-angle loop and
-  currently returns immediately; `-lidar` sets `cont.lidar_mode` but nothing reads it yet.
+  currently returns immediately. `-lidar` sets `cont.lidar_mode`, which nothing reads yet, and
+  `p->nh_probs = p->nlayers`, which does have an effect: see below.
 * `include/soil_rho.h` — **defines** (not just declares) the four Price soil EOF vectors, so it
   must only ever be included by `gortt.c`.
 
 ## Conventions and gotchas
 
-**K&R-style function definitions are used throughout** (`void gortt_rsurf( p, g, s )` followed by
-untyped-in-parens parameter declarations). Match the surrounding style when editing existing
-files; prototypes in `include/gortt.h` carry the types.
+**Layout is idiosyncratic and deliberately unnormalised** — tabs, spaces before `;`, spaces
+inside parens (`gortt_rsurf( p, g, s )`). Match the surrounding file rather than reformatting;
+`.editorconfig` covers only tabs, trailing whitespace and the final newline. Function
+definitions are ANSI (they were K&R until they were converted wholesale).
+
+**Only rows `h < p->nh_probs` of the height-indexed probability tables are filled.** It
+defaults to 1, because the BRF only needs the gap probabilities at the ground, and computing
+all fifteen layers cost about 95% of the runtime. `-lidar` raises it to `nlayers` and the full
+table comes back — a waveform is a function of height. If you add something that indexes
+`p_n0[h][t]`, `epgap[h][t]` or `pd_s[h][t][s]` above `h=0`, it must raise `nh_probs` too.
 
 **The CLI parser is prefix-matched and order-dependent.** `gortt_cl_parser` walks argv with
 `strncasecmp`/`strncmp` on fixed lengths, so a shorter option would shadow a longer one — this
@@ -143,9 +167,10 @@ overrides `-favd` and is converted using `lambda`, `r`, `b` — so it is applied
 geometry conversion.
 
 **Output ordering in `main()` matters.** `gortt_energy` → `gortt_albedo` re-runs `gortt_rsurf`
-over the viewing hemisphere, mutating `g->vza`, `g->vaa` and overwriting `s->rsurf`/`s->scomp`.
-The BRF and component values must therefore be printed *before* the `-energy` block, as they
-currently are.
+over the viewing hemisphere, overwriting `s->rsurf` and `s->scomp`. The BRF and component
+values must therefore be printed *before* the `-energy` block, as they currently are.
+(`gortt_albedo` integrates over a *copy* of `g`, so the caller's geometry is safe; it is only
+the spectra that are clobbered.)
 
 **`gortt_energy` assumes a Lambertian background.** If `G` or `Z` in `gortt_rsurf` are ever given
 a BRDF, the energy balance has to change too (flagged in comments in both files).
@@ -155,14 +180,23 @@ a BRDF, the energy balance has to change too (flagged in comments in both files)
   but then dumps the interpolated table to stdout and `exit(EXIT_FAILURE)`s — leftover debug
   code. The declared `gortt_get_rsoil_lut` is never defined, and `s->soil_spectra` is never
   consulted by `gortt_price_soil`, so this option does not work.
-* `-diffuse <frac>` sets `p->fd = 1 - frac` and is undocumented in `-u`. Without it, `fd` is
-  derived per-angle from the solar zenith following Ni et al. (1999). TODO.md flags the current
-  default as "a bit dangerous".
+* `-diffuse <frac>` sets `p->user_fd = 1 - frac` and is undocumented in `-u`. Without it,
+  `g->fd` is derived per-angle from the solar zenith following Ni et al. (1999). TODO.md flags
+  the current default as "a bit dangerous".
+* `-Anth` is advertised by `gortt -u` but the parser only matches `-canth`, so the documented
+  spelling is rejected. Pinned by the `badanth` test case.
 * The leaf angle distribution is effectively hardwired: `params.lad = LAD_05` and
   `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else.
 
-`TODO.md` tracks the intended direction — notably breaking `main()` up and moving calculation
-code out of `gortt.c`.
+**Two numerical bugs are pinned as known-bad rather than fixed**, so that fixing them shows up
+as a reviewable change in the goldens: `-W` writes only 90 of the `nth`=91 theta rows, so `-P`
+returns `-nan` above 89 degrees (`useprobs-extreme`); and `gortt_calc_epgap` fills `t < nth-1`
+while `gortt_calc_kopen` integrates to `nth-1`, so the last trapezium panel is built from a
+zero. A third is flagged in a comment on `gortt_kc`: `gortt_kc_fFbeta` returns `f` with `F`
+already folded in, so the principal-plane interpolation carries `F` squared where
+`gortt_kc_PP_only` uses `F`. All three need checking against the papers before being touched.
+
+`TODO.md` tracks the intended direction.
 
 ## Reference
 

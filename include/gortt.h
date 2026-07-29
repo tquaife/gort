@@ -107,6 +107,16 @@ typedef struct  {
 		double *favegt ;
 		double *fasoil ;
 
+		/*
+		the shaded-background signature Z divided by the soil
+		reflectance, i.e. the fraction of the incident radiation that
+		reaches the background. gortt_rsurf builds Z as this times
+		rsoil, so recovering it by division is exact for any soil but
+		0/0 for a black one, which is why it is carried separately.
+		gortt_energy needs it; nothing else does.
+		*/
+		double *ztrans ;
+
 		/*number of wavebands*/
 		int nw ;
 

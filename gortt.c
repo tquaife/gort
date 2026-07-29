@@ -400,6 +400,9 @@ static void gortt_alloc_outputs( gortt_parameters *p, gortt_spectra *s, gortt_co
 	/* alloc for spectra of each component at each waveband*/
 	s->scomp = (double *)malloc( 4 * s->nw * sizeof( double ) );
 
+	/*written by gortt_rsurf whether or not an integral was asked for*/
+	s->ztrans = (double *)malloc( s->nw * sizeof( double ) );
+
 	/*allocs for integral terms, and set up the integration*/
 	if( c->calc_integrals ){
 		s->albedo = (double *)malloc( s->nw * sizeof( double ) );
@@ -425,6 +428,7 @@ static void gortt_free_outputs( gortt_parameters *p, gortt_spectra *s, gortt_con
 	gortt_dealloc_1d( s->rleaf );
 	gortt_dealloc_1d( s->tleaf );
 	gortt_dealloc_1d( s->scomp );
+	gortt_dealloc_1d( s->ztrans );
 
 	if( c->calc_integrals ){
 		gortt_dealloc_1d( s->albedo );
@@ -704,6 +708,14 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 		Zf = ( rt.t_prime_ff - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
 
 		Z = g->fd*Zd + (1-g->fd)*Zf ;
+
+		/*
+		the same mixture without the soil reflectance in it. Z is
+		linear in rsoil, so this is Z/rsoil -- but it stays finite for
+		a black soil, where that division is 0/0. gortt_energy uses it.
+		*/
+		*( s->ztrans + i ) = g->fd * ( rt.t_prime_df + g->p_ngt0_heq0_sza )
+		                   + (1-g->fd) * ( rt.t_prime_ff - p->k_openep[ 0 ] ) ;
 
 
 		/*Sunlit Crown*/

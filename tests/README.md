@@ -82,6 +82,13 @@ path and the constant path agree.
 n.b. the soil file reader takes two numeric columns and has no comment syntax, so the `.spec`
 fixtures carry no header.
 
+## The black-soil limit
+
+`blacksoil` (`-alb_soil 0`) and `blacksoil-limit` (`-alb_soil 1e-12`) bracket the one place the
+energy balance divides by the soil reflectance. Their outputs agree to about 3e-12 relative,
+which is what makes the black-soil case a limit rather than a special case. `blacksoil` used to
+print `-nan` for the absorbed fractions.
+
 ## Input-validation cases
 
 `badmissingval`, `badmissingval2`, `badnowl` and `badwlcount` cover crashes

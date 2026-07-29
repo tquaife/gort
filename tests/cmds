@@ -55,6 +55,11 @@ prnspec         spec.in     -P @PROBS_DEFAULT@ -prnspec
 prnprop         spec.in     -P @PROBS_DEFAULT@ -prnprop
 prnboth         spec.in     -P @PROBS_DEFAULT@ -prnspec -prnprop
 energy          spec.in     -P @PROBS_DEFAULT@ -energy
+# a black soil makes Z/rsoil 0/0 in the energy balance. The favegt and
+# fasoil columns used to be -nan; they must now be finite, and must agree
+# with the -alb_soil 1e-12 limit to within rounding.
+blacksoil       spec.in     -P @PROBS_DEFAULT@ -alb_soil 0 -energy
+blacksoil-limit spec.in     -P @PROBS_DEFAULT@ -alb_soil 1e-12 -energy
 # 42 wavebands, i.e. more than npoints (32). gortt_albedo used to size its
 # accumulators by npoints while indexing them by waveband, so this
 # overflowed the heap. Ends on 2500nm, the interpolation endpoint that

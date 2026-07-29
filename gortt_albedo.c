@@ -26,24 +26,38 @@ void gortt_energy( const gortt_parameters *p, const gortt_geometry *g, gortt_spe
 {
 
 
-  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, rsoil ;
+  double Fd1=1., Fd2, Fu1, Fu2, G, Z, Pn0, ztrans ;
 	int k;
 
   gortt_albedo( p, g, s );
 
   Pn0=g->p_neq0_heq0_sza ;
 
+  /*
+  n.b. G and Z below are read back out of s->scomp after gortt_albedo has
+  overwritten it with the last quadrature point. That is safe, but only
+  because neither depends on the view direction: G is the Lambertian
+  background, and every term Z is built from is a function of the solar
+  zenith alone. If either is ever given a BRDF this has to change, along
+  with the rest of the Lambertian assumption noted above.
+  */
+
   for( k=0;k<s->nw;k++ ){
 
     Fu1 = *(s->albedo+k) ;
 
-    rsoil= *(s->rsoil+k) ;
-
     G = *( s->scomp + k*4+1 ) ;
     Z = *( s->scomp + k*4+3 ) ;
 
+    /*
+    Z/rsoil, taken from gortt_rsurf rather than by dividing: the two are
+    equal for any soil, but a black soil (-alb_soil 0) makes the division
+    0/0 and used to turn both outputs below into -nan.
+    */
+    ztrans = *(s->ztrans+k) ;
+
     Fu2 = G*Pn0+Z*(1.-Pn0);
-    Fd2 = Pn0+Z*(1.-Pn0)/rsoil;
+    Fd2 = Pn0+ztrans*(1.-Pn0);
 
     *(s->favegt+k)=Fd1-Fu1-Fd2+Fu2;
     *(s->fasoil+k)=Fd2-Fu2 ;

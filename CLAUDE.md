@@ -174,7 +174,9 @@ values must therefore be printed *before* the `-energy` block, as they currently
 the spectra that are clobbered.)
 
 **`gortt_energy` assumes a Lambertian background.** If `G` or `Z` in `gortt_rsurf` are ever given
-a BRDF, the energy balance has to change too (flagged in comments in both files).
+a BRDF, the energy balance has to change too (flagged in comments in both files) — and so does
+its reading `G`/`Z` back out of `s->scomp` *after* `gortt_albedo` has overwritten it, which is
+safe today only because neither depends on the view direction.
 
 There are **three sources of soil reflectance**, selected in `gortt_price_soil` and mutually
 exclusive in the parser: `-alb_soil` (a constant), `-soil_spectra <file>` (resampled onto a 1 nm

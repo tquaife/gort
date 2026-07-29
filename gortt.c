@@ -1496,6 +1496,25 @@ void gortt_price_soil( gortt_spectra *s, double *sv1, double *sv2, double *sv3, 
 
 			*(s->rsoil + i) = s->user_r_soil ;
 
+		}else if( s->is_file_soil ){
+
+			/*
+			-soil_spectra: gortt_read_soil_lut has already resampled
+			the file onto a 1nm grid, so this is the same linear
+			interpolation as the PROSPECT one, on that grid instead
+			of the Price 5nm one.
+			*/
+
+			upper = 1 + ( *( s->wavelength +i ) - SOIL_LUT_LOWER_WL ) / SOIL_LUT_SPECTRAL_RESLN ;
+			lower = ( *( s->wavelength +i ) - SOIL_LUT_LOWER_WL ) / SOIL_LUT_SPECTRAL_RESLN ;
+
+			if( upper > SOIL_LUT_NBANDS - 1 ) upper = SOIL_LUT_NBANDS - 1 ;
+
+			fraction = ( *( s->wavelength +i ) - SOIL_LUT_LOWER_WL ) / SOIL_LUT_SPECTRAL_RESLN - lower ;
+
+			*(s->rsoil + i) = s->soil_spectra[ lower ] * ( 1 - fraction )
+			                + s->soil_spectra[ upper ] * fraction ;
+
 		}else{
 
 			upper = 1. + (*( s->wavelength +i )-400) / 5.0 ;
@@ -1626,7 +1645,7 @@ void gortt_read_soil_lut( gortt_spectra *s )
 
 				index=i-400;
 
-				if( (index>=0) && (index<=2100) )
+				if( (index>=0) && (index < SOIL_LUT_NBANDS) )
 					s->soil_spectra[ index ] = last_rs+(i-last_wl)/(this_wl-last_wl)*(this_rs-last_rs) ;
 			}
 
@@ -1642,9 +1661,6 @@ void gortt_read_soil_lut( gortt_spectra *s )
 		exit( EXIT_FAILURE );
 	}
 
-
-	for( i=0;i<=2100;i++ ) printf( "%d %lf\n", i+400, s->soil_spectra[ i ] ) ;
-	exit( EXIT_FAILURE );
 
 
 

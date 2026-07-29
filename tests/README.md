@@ -68,6 +68,20 @@ Everything below 1e-40 was written as zero and `gortt_kuusk` took its log.
 
 If you change what `-W` writes, these are the cases that will notice.
 
+## Soil spectra
+
+`soilspec` reads `cases/soil.spec`, which is deliberately on an irregular grid and overhangs
+both ends of gortt's 400–2500 nm range — both of which `gortt_read_soil_lut` documents as
+allowed. `soilwl.in` asks for two grid knots, one wavelength that falls between them, and both
+endpoints.
+
+`soilflat` and `soilconst` are the same run expressed two ways: a constant 0.25 file, and
+`-alb_soil 0.25`. **Their goldens must stay byte-identical** — that is the check that the file
+path and the constant path agree.
+
+n.b. the soil file reader takes two numeric columns and has no comment syntax, so the `.spec`
+fixtures carry no header.
+
 ## Input-validation cases
 
 `badmissingval`, `badmissingval2`, `badnowl` and `badwlcount` cover crashes

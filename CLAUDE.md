@@ -176,11 +176,12 @@ the spectra that are clobbered.)
 **`gortt_energy` assumes a Lambertian background.** If `G` or `Z` in `gortt_rsurf` are ever given
 a BRDF, the energy balance has to change too (flagged in comments in both files).
 
+There are **three sources of soil reflectance**, selected in `gortt_price_soil` and mutually
+exclusive in the parser: `-alb_soil` (a constant), `-soil_spectra <file>` (resampled onto a 1 nm
+grid by `gortt_read_soil_lut`, then interpolated), and otherwise the Price EOFs with the `-rsl*`
+weights.
+
 **Known broken/incomplete paths:**
-* `-soil_spectra <file>`: `gortt_read_soil_lut` (end of `gortt.c`) resamples the file correctly
-  but then dumps the interpolated table to stdout and `exit(EXIT_FAILURE)`s — leftover debug
-  code. The declared `gortt_get_rsoil_lut` is never defined, and `s->soil_spectra` is never
-  consulted by `gortt_price_soil`, so this option does not work.
 * `-diffuse <frac>` sets `p->user_fd = 1 - frac` and is undocumented in `-u`. Without it,
   `g->fd` is derived per-angle from the solar zenith following Ni et al. (1999). TODO.md flags
   the current default as "a bit dangerous".

@@ -43,6 +43,14 @@ prospect        spec.in     -P @PROBS_DEFAULT@ -N 2.1 -Cab 55 -Car 18 -Cbrown 0.
 prospect-anth   spec.in     -P @PROBS_DEFAULT@ -canth 12.0
 badanth         -           -Anth 3.0
 price           spec.in     -P @PROBS_DEFAULT@ -rsl1 0.3 -rsl2 0.05 -rsl3 0.01 -rsl4 -0.005
+# -soil_spectra. soil.spec is on an irregular grid and overhangs both ends
+# of 400-2500nm, which gortt_read_soil_lut documents as allowed; soilwl.in
+# picks two grid knots, one off-grid wavelength and both endpoints.
+# soilflat is constant 0.25, so it must reproduce -alb_soil 0.25 exactly:
+# compare soilflat.out with soilconst.out.
+soilspec        soilwl.in   -P @PROBS_DEFAULT@ -soil_spectra cases/soil.spec -prnspec
+soilflat        soilwl.in   -P @PROBS_DEFAULT@ -soil_spectra cases/soilflat.spec -prnspec
+soilconst       soilwl.in   -P @PROBS_DEFAULT@ -alb_soil 0.25 -prnspec
 prnspec         spec.in     -P @PROBS_DEFAULT@ -prnspec
 prnprop         spec.in     -P @PROBS_DEFAULT@ -prnprop
 prnboth         spec.in     -P @PROBS_DEFAULT@ -prnspec -prnprop
@@ -82,3 +90,7 @@ badwlcount      badwlcount.in
 # value-taking option as the last word: used to read argv[argc] == NULL
 badmissingval   -           -Cab
 badmissingval2  -           -LAI 4.0 -P
+# soil file must open, start at or below 400nm and end at or above 2500nm
+badsoilmissing  soilwl.in   -soil_spectra cases/nosuchfile.spec
+badsoilstart    soilwl.in   -soil_spectra cases/soilstart.spec
+badsoilend      soilwl.in   -soil_spectra cases/soilend.spec

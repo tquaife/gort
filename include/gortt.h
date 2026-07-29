@@ -32,6 +32,11 @@
 #define PROSPECT_LOWER_WL 400.0
 #define PROSPECT_SPECTRAL_RESLN 1.0
 
+/*the grid -soil_spectra is resampled onto: 400-2500nm at 1nm*/
+#define SOIL_LUT_NBANDS 2101
+#define SOIL_LUT_LOWER_WL 400.0
+#define SOIL_LUT_SPECTRAL_RESLN 1.0
+
 
 /* new 09/10/12:
 A structure to hold control variables,
@@ -129,7 +134,7 @@ typedef struct  {
 
 		int is_file_soil ;
 		char soil_file[ MAX_LINE_LEN ] ;
-		double soil_spectra[2101] ;
+		double soil_spectra[ SOIL_LUT_NBANDS ] ;
 
 		} gortt_spectra ;
 

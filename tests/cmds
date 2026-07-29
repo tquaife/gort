@@ -34,7 +34,14 @@ probs-lai       -           -LAI 4.0 -W
 probs-hbrpcc    -           -HB 2.5 -BR 1.5 -PCC 0.6 -W
 
 # ---- spectral-only sweeps, driven off a shared probability file -----------
-albleaf         spec.in     -P @PROBS_DEFAULT@ -alb_leaf 0.4
+# -refl_leaf/-trans_leaf replaced -alb_leaf, which set r = t = arg/2 and so
+# could only ever describe a symmetric leaf.  albleaf.out was captured from
+# "-alb_leaf 0.4"; the equivalent r = t = 0.2 must reproduce it byte for byte,
+# which is what keeps this case named after the option it outlived.
+albleaf         spec.in     -P @PROBS_DEFAULT@ -refl_leaf 0.2 -trans_leaf 0.2
+# r != t, i.e. the thing -alb_leaf could not say.  gortt_rt_init builds the
+# scattering asymmetry from (rleaf - tleaf), so this must NOT match albleaf.
+leaf-asym       spec.in     -P @PROBS_DEFAULT@ -refl_leaf 0.3 -trans_leaf 0.1
 albsoil         spec.in     -P @PROBS_DEFAULT@ -alb_soil 0.25
 prospect        spec.in     -P @PROBS_DEFAULT@ -N 2.1 -Cab 55 -Car 18 -Cbrown 0.4 -Cw 0.02 -Cm 0.012
 # -Anth is the spelling gortt_usage advertises and the one PROSPECT-D itself
@@ -97,6 +104,12 @@ badwlcount      badwlcount.in
 # value-taking option as the last word: used to read argv[argc] == NULL
 badmissingval   -           -Cab
 badmissingval2  -           -LAI 4.0 -P
+# half a leaf: the missing one would silently change the single-scattering
+# albedo, so it is refused rather than defaulted
+badleafrefl     -           -refl_leaf 0.2
+badleaftrans    -           -trans_leaf 0.05
+# -alb_leaf is gone; pinned so its removal is visible
+badalbleaf      -           -alb_leaf 0.4
 # soil file must open, start at or below 400nm and end at or above 2500nm
 badsoilmissing  soilwl.in   -soil_spectra cases/nosuchfile.spec
 badsoilstart    soilwl.in   -soil_spectra cases/soilstart.spec

@@ -56,7 +56,9 @@ preferred because it reduces equifinality.
 -rsl4 arg 	set the weight of the fourth soil vector to arg
 
 ============ User override for spectral properties:
--alb_leaf     arg 	set leaf albedo to arg (turns prospect off)**
+-refl_leaf    arg 	set leaf reflectance to arg (turns prospect off)*
+-trans_leaf   arg 	set leaf transmittance to arg (turns prospect off)*
+                  	[* n.b. these two must be given together]
 -alb_soil     arg 	set soil albedo to arg (turns price off)**
 -soil_spectra arg 	read soil spectra from file arg (turns price off)
                   	[** n.b. use only one of the above soil options]

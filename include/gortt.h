@@ -139,7 +139,11 @@ typedef struct  {
 
 		int is_user_leaf ;
 		int is_user_soil ;
-		double user_r_leaf ;
+		/*leaf reflectance and transmittance are held separately: the
+		scattering asymmetry in gortt_rt_init is built from their
+		difference, so a single albedo cannot express a real leaf.*/
+		double user_refl_leaf ;
+		double user_trans_leaf ;
 		double user_r_soil ;
 
 		int is_file_soil ;

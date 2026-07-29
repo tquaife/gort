@@ -190,6 +190,8 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	s->rsl4=-0.002426 ;
 
 	s->is_user_leaf=FALSE ;
+	s->user_refl_leaf=0.0 ;
+	s->user_trans_leaf=0.0 ;
 	s->is_user_soil=FALSE ;
 	s->is_file_soil=FALSE ;
 
@@ -1213,6 +1215,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 
 	int i, use_true_p=FALSE, use_lai=FALSE;
+	int got_refl_leaf=FALSE, got_trans_leaf=FALSE;
 	float hb=2.0, br=1.0, pcc=0.5, lai=2.0;
 
 	p->read_prob_file=FALSE ;
@@ -1242,9 +1245,19 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 			else if( !strncasecmp( argv[ i ], "-diffuse", 5 ) ){ p->use_user_fd=TRUE; p->user_fd=1.0-atof( gortt_next_arg( argc, argv, &i ) );}
 
-			else if( !strncmp( argv[ i ], "-alb_leaf", 9 ) ){
+			/*n.b. both of these must stay above the "-r" test at the
+			bottom, which would otherwise swallow -refl_leaf.*/
+			else if( !strncmp( argv[ i ], "-refl_leaf", 10 ) ){
 				s->is_user_leaf = TRUE ;
-				s->user_r_leaf = atof( gortt_next_arg( argc, argv, &i ) ) ;
+				got_refl_leaf = TRUE ;
+				s->user_refl_leaf = atof( gortt_next_arg( argc, argv, &i ) ) ;
+
+			}
+
+			else if( !strncmp( argv[ i ], "-trans_leaf", 11 ) ){
+				s->is_user_leaf = TRUE ;
+				got_trans_leaf = TRUE ;
+				s->user_trans_leaf = atof( gortt_next_arg( argc, argv, &i ) ) ;
 
 			}
 
@@ -1324,6 +1337,17 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 		}
 
+	}
+
+	/*
+	Refuse a half-specified leaf. Defaulting the missing one to zero would
+	silently change the single-scattering albedo -- which is what the whole
+	scattering calculation is built on -- and the mistake is easy to make
+	when converting a script from the old single-albedo option.
+	*/
+	if( got_refl_leaf != got_trans_leaf ){
+		fprintf( stderr, "%s: -refl_leaf and -trans_leaf must be given together\n", argv[ 0 ] );
+		exit( EXIT_FAILURE );
 	}
 
 	if( use_true_p ){
@@ -1416,7 +1440,9 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-rsl4 arg \tset the weight of the fourth soil vector to arg\n"  );
 
 	fprintf( stderr, "\n============ User override for spectral properties:\n" );
-	fprintf( stderr, "-alb_leaf     arg \tset leaf albedo to arg (turns prospect off)**\n"  );
+	fprintf( stderr, "-refl_leaf    arg \tset leaf reflectance to arg (turns prospect off)*\n"  );
+	fprintf( stderr, "-trans_leaf   arg \tset leaf transmittance to arg (turns prospect off)*\n"  );
+	fprintf( stderr, "                  \t[* n.b. these two must be given together]\n"  );
 	fprintf( stderr, "-alb_soil     arg \tset soil albedo to arg (turns price off)**\n"  );
   fprintf( stderr, "-soil_spectra arg \tread soil spectra from file arg (turns price off)\n"  );
 	fprintf( stderr, "                  \t[** n.b. use only one of the above soil options]\n"  );
@@ -1587,8 +1613,8 @@ void gortt_prospect_interface( gortt_spectra *s )
 		}
 
 		if( s->is_user_leaf ){
-			*(s->rleaf + i) = s->user_r_leaf / 2.0 ;
-			*(s->tleaf + i) = s->user_r_leaf / 2.0 ;
+			*(s->rleaf + i) = s->user_refl_leaf ;
+			*(s->tleaf + i) = s->user_trans_leaf ;
 
 		}else{
 			/*get the leaf optics for the desired wavelength*/

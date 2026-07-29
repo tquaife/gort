@@ -19,31 +19,30 @@ The figures are drawn for the fixed optical properties of the paper's Table II,
 not for a PROSPECT leaf or a Price soil, so both are switched off from the
 command line:
 
-    -alb_leaf W    leaf single-scattering albedo, W = reflectance +
-                   transmittance, which turns PROSPECT off
+    -refl_leaf R   leaf reflectance   } together these turn PROSPECT off
+    -trans_leaf T  leaf transmittance }
     -alb_soil A    background albedo, which turns the Price EOFs off
 
-Table II, and the resulting W:
+Table II:
 
-    band     reflectance  transmittance   W = r+t   background albedo
-    540 nm      0.2          0.06           0.26         0.069
-    670 nm      0.09         0.002          0.092        0.29  (see below)
-    865 nm      0.515        0.305          0.82         0.29
+    band     reflectance  transmittance   background albedo
+    540 nm      0.2          0.06              0.069
+    670 nm      0.09         0.002             0.29   (see below)
+    865 nm      0.515        0.305             0.29
+
+Reflectance and transmittance are given separately because the radiative
+transfer needs both: the single-scattering albedo is their sum, but the
+scattering asymmetry is built from their difference,
+
+    g_asym = -(4/9)*( rleaf - tleaf )/w
+
+so Table II's asymmetric leaves (g_asym = -0.43 at 670 nm, -0.11 at 865 nm)
+can now be given exactly.  The older -alb_leaf could not: it set r = t = W/2
+and so always gave g_asym = 0.
 
 The red background albedo used here is 0.117 rather than Table II's 0.29: G is
 identically the background albedo, and the published Fig. 6 draws it at 0.117.
 See BANDS below and README.md.
-
-One caveat, and it is the reason -alb_leaf cannot reproduce Table II exactly:
-it sets reflectance and transmittance to W/2 each (gortt.c), so it fixes the
-single-scattering albedo correctly but forces r == t.  gortt_brdf.c builds the
-scattering asymmetry from the *difference*,
-
-    g_asym = -(4/9)*( rleaf - tleaf )/w
-
-so -alb_leaf always gives g_asym = 0, where Table II's leaves are asymmetric
-(g_asym = -0.43 at 670 nm, -0.11 at 865 nm).  Measured effect on C: under 3%
-at nadir in both bands, but about 24% at the hotspot at 670 nm.  See README.md.
 
   usage:  ./fig67_ni1999.py                 # both figures
           ./fig67_ni1999.py --band red      # just Fig. 6
@@ -63,7 +62,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gortt_run as gr
 
-# Bands, as the paper's Table II.  "leaf" is reflectance + transmittance.
+# Bands, as the paper's Table II: leaf reflectance and transmittance separately.
 #
 # n.b. the red background albedo is 0.117, not Table II's 0.29.  G is
 # identically the background albedo (gortt.c: Gd = Gf = rsoil, so the fd
@@ -73,9 +72,9 @@ import gortt_run as gr
 # to the published curve at both the nadir and the hotspot.  --soil 0.29
 # restores the tabulated value.
 BANDS = {
-    "red": dict(figure=6, wavelength=670.0, leaf=0.092, soil=0.117,
+    "red": dict(figure=6, wavelength=670.0, refl=0.09, trans=0.002, soil=0.117,
                 label="RED (670 nm)", ymax_a=0.4, ymax_b=0.2),
-    "nir": dict(figure=7, wavelength=865.0, leaf=0.82, soil=0.29,
+    "nir": dict(figure=7, wavelength=865.0, refl=0.515, trans=0.305, soil=0.29,
                 label="NIR (865 nm)", ymax_a=1.0, ymax_b=0.6),
 }
 
@@ -94,7 +93,8 @@ SZA_PANEL_B = 45.0   # panel (b) is drawn at a solar zenith of 45 degrees
 
 
 def band_args(band, extra):
-    return ["-alb_leaf", str(band["leaf"]),
+    return ["-refl_leaf", str(band["refl"]),
+            "-trans_leaf", str(band["trans"]),
             "-alb_soil", str(band["soil"])] + list(extra)
 
 
@@ -204,8 +204,10 @@ def main():
                     help="path to the gortt binary (default: ../gortt)")
     ap.add_argument("--style", choices=("paper", "colour"), default="paper",
                     help="paper: black lines as published; colour: same dashes")
-    ap.add_argument("--leaf", type=float,
-                    help="override the leaf single-scattering albedo (r+t)")
+    ap.add_argument("--refl", type=float,
+                    help="override the leaf reflectance")
+    ap.add_argument("--trans", type=float,
+                    help="override the leaf transmittance")
     ap.add_argument("--soil", type=float,
                     help="override the background albedo")
     ap.add_argument("--step", type=float, default=1.0,
@@ -232,8 +234,10 @@ def main():
 
     for name in names:
         band = dict(BANDS[name])
-        if args.leaf is not None:
-            band["leaf"] = args.leaf
+        if args.refl is not None:
+            band["refl"] = args.refl
+        if args.trans is not None:
+            band["trans"] = args.trans
         if args.soil is not None:
             band["soil"] = args.soil
 

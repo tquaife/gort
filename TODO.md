@@ -20,7 +20,7 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
   real changes.
 * add functions to read in leaf spectra — **not done.** The soil equivalent now works
   (`-soil_spectra`, see below) and `gortt_read_soil_lut` is the obvious template; leaf optics
-  are still PROSPECT-D or a single constant via `-alb_leaf`.
+  are still PROSPECT-D or a pair of constants via `-refl_leaf`/`-trans_leaf`.
 * lidar routines — **not done, but unblocked.** `gortt_lidar` is still a stub. The groundwork
   is in: `p->nh_probs` makes the full height-resolved probability tables available (`-lidar`
   sets it to `nlayers`), `gortt_parameters` is `const` throughout the BRF/albedo path so the

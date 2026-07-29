@@ -100,7 +100,7 @@ solar zenith of 45 degrees against viewing zenith in the principal plane.
 ```sh
 figures/fig67_ni1999.py                    # -> fig6_ni1999.png, fig7_ni1999.png
 figures/fig67_ni1999.py --band red         # just Fig. 6
-figures/fig67_ni1999.py --soil 0.12        # override the background albedo
+figures/fig67_ni1999.py --soil 0.29         # restore Table II's red background
 ```
 
 About five seconds; the vertical bars need a full principal-plane sweep at each
@@ -109,48 +109,56 @@ solar zenith they are drawn at.
 ### Bypassing PROSPECT and the Price soil
 
 The figures use the fixed optical properties of the paper's Table II, so both
-sub-models are switched off from the command line — `-alb_leaf` for the leaf
-(which turns PROSPECT off) and `-alb_soil` for the background (which turns the
-Price EOFs off):
+sub-models are switched off from the command line — `-refl_leaf`/`-trans_leaf`
+for the leaf (which turn PROSPECT off) and `-alb_soil` for the background
+(which turns the Price EOFs off):
 
-| band | leaf reflectance | leaf transmittance | `-alb_leaf` (r+t) | `-alb_soil` |
-|------|-----------------:|-------------------:|------------------:|------------:|
-| 540 nm | 0.2   | 0.06  | 0.26  | 0.069 |
-| 670 nm | 0.09  | 0.002 | 0.092 | 0.29 |
-| 865 nm | 0.515 | 0.305 | 0.82  | 0.29 |
+| band | `-refl_leaf` | `-trans_leaf` | `-alb_soil` |
+|------|-------------:|--------------:|------------:|
+| 540 nm | 0.2   | 0.06  | 0.069 |
+| 670 nm | 0.09  | 0.002 | 0.117 (see below; Table II says 0.29) |
+| 865 nm | 0.515 | 0.305 | 0.29 |
 
-**`-alb_leaf` cannot express Table II exactly.** It sets reflectance and
-transmittance to half the value each (`gortt.c`), so the single-scattering
-albedo is right but `r == t` is forced. `gortt_brdf.c:425` builds the
-scattering asymmetry from the difference:
+Reflectance and transmittance go in separately because the radiative transfer
+needs both: the single-scattering albedo is their sum, but `gortt_brdf.c:425`
+builds the scattering asymmetry from their difference,
 
 ```c
 rt->g_asym = -(4.0/9.0)*( *(s->rleaf+iw) - *(s->tleaf+iw) )/( rt->w ) ;
 ```
 
-so `-alb_leaf` always gives `g_asym = 0`, where Table II's leaves have
-`g_asym = -0.43` at 670 nm and `-0.11` at 865 nm. Measured in a scratch build
-that takes r and t separately, the cost in C is:
+Table II's leaves are strongly asymmetric — `g_asym = -0.43` at 670 nm and
+`-0.11` at 865 nm — so this matters. The older `-alb_leaf` set `r = t = arg/2`
+and therefore always gave `g_asym = 0`; it was removed when the pair went in,
+because a single albedo cannot describe a real leaf.
+
+Using the true r and t raises C at the hotspot appreciably and barely moves it
+at nadir:
 
 | | nadir | hotspot |
 |---|---:|---:|
-| 670 nm | 0.0484 vs 0.0498 (3%) | 0.107 vs 0.133 (24%) |
-| 865 nm | 0.4791 vs 0.4797 (0.1%) | 0.584 vs 0.596 (2%) |
-
-Small at nadir, but a quarter of the value at the red hotspot. Giving r and t
-separately would need a new option pair; there is no way to do it today.
+| 670 nm | 0.0395 → 0.0409 | 0.098 → 0.124 |
+| 865 nm | 0.4791 → 0.4797 | 0.584 → 0.596 |
 
 ### How good is the reproduction
 
 The shapes come out right and the magnitudes are close but not exact.
 
-* Panel (b) reproduces well in both bands: a flat forward-scatter side with a
-  sharp hotspot spike at +45. We give 0.0395 flat / 0.098 peak in the red
-  against a published ~0.032 / ~0.09, and 0.48 / 0.583 in the NIR against
-  ~0.365 / ~0.45. Same shape throughout; the red is close, the NIR ~1.3x high.
-* Panel (a): C rises with solar zenith, peaks and falls back, as published,
-  and in the red it starts from 0.035 against a published ~0.035. We peak at
-  ~55 degrees where the paper peaks nearer 68.
+* Panel (a) reproduces well in the red: C starts at 0.037 against a published
+  ~0.035 and peaks at 0.149 against a published ~0.14. Our peak sits at ~55
+  degrees where the paper's is nearer 68.
+* Panel (b) has the right shape in both bands — a flat forward-scatter side
+  with a sharp hotspot spike at +45 — but overestimates the spike. We give
+  0.041 flat / 0.124 peak in the red against a published ~0.032 / ~0.09, and
+  0.48 / 0.596 in the NIR against ~0.365 / ~0.45.
+* The two panels are mutually consistent, and so is the paper: interpolating
+  the published panel (a) to a solar zenith of 45 gives ~0.09, which is what
+  its panel (b) shows at the hotspot. Ours reads ~0.12 both ways.
+* Giving Table II's true asymmetric leaf (rather than the symmetric one the
+  old `-alb_leaf` forced) pulled panel (a) toward the published curve — the
+  red peak went 0.117 → 0.149 against ~0.14 — and pushed panel (b)'s hotspot
+  away, 0.098 → 0.124 against ~0.09. It is the right input either way; the
+  residual disagreement is the model's, not the option's.
 * **The published solid curve in panel (a) is C at the hotspot, not at a fixed
   view.** The paper says C "has a maximum value at the hotspot viewing
   direction", and C at a fixed nadir view *falls* slightly with solar zenith
@@ -173,12 +181,12 @@ Measured against the panel's own axis calibration (top frame 0.4, bottom axis
 * Table II lists 0.29 for both 670 nm and 865 nm. An identical red and NIR
   background is not what a boreal forest floor does, and it has the look of
   the NIR row duplicated.
-* 0.117 brings panel (b) closer to the published curve at both ends: nadir
-  0.0395 against ~0.032 published, hotspot 0.0976 against ~0.09, where 0.29
-  gives 0.0484 and 0.107.
+* 0.117 brings panel (b) closer to the published curve at both ends than 0.29
+  does, and panel (a) closer still: with it, C starts at 0.037 against a
+  published ~0.035.
 
 So the red band here defaults to `soil=0.117`. `--soil 0.29` restores the
 tabulated value if you want to see it.
 
 Fig. 6 is 670 nm rather than 540 nm: panel (b) at nadir is ~0.032 in the paper,
-against 0.0395 at 670 nm and 0.104 at 540 nm from the model.
+against 0.041 at 670 nm and ~0.10 at 540 nm from the model.

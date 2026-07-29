@@ -269,10 +269,35 @@ Weight of the fourth Price soil vector.  Default \-0.002426.
 .
 .SS Spectral overrides
 .TP
-.BI \-alb_leaf " arg"
-Set the leaf albedo to the constant
+.BI \-refl_leaf " arg"
+Set the leaf reflectance to the constant
 .IR arg ,
-bypassing PROSPECT.
+bypassing PROSPECT.  Must be given together with
+.BR \-trans_leaf .
+.TP
+.BI \-trans_leaf " arg"
+Set the leaf transmittance to the constant
+.IR arg ,
+bypassing PROSPECT.  Must be given together with
+.BR \-refl_leaf .
+.PP
+The two are a pair because the radiative transfer needs both separately: the
+single-scattering albedo is their sum, but the scattering asymmetry is built
+from their difference,
+.RB ( r \- t )
+(see
+.B gortt_rt_init
+in
+.IR gortt_brdf.c ).
+Giving one without the other is a fatal error rather than defaulting the
+missing one to zero, which would quietly change the single-scattering albedo.
+These replace the older
+.BR \-alb_leaf ,
+which set reflectance and transmittance to half its value each and so could
+only ever describe a symmetric leaf, pinning the asymmetry to zero:
+.B \-alb_leaf 0.4
+is now
+.BR "\-refl_leaf 0.2 \-trans_leaf 0.2" .
 .TP
 .BI \-alb_soil " arg"
 Set the soil albedo to the constant

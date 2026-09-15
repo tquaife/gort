@@ -190,3 +190,23 @@ tabulated value if you want to see it.
 
 Fig. 6 is 670 nm rather than 540 nm: panel (b) at nadir is ~0.032 in the paper,
 against 0.041 at 670 nm and ~0.10 at 540 nm from the model.
+
+## Kernel investigation: goms_kernels.py, goms_mc.py, kc_investigation.py, kc_fsquared_sensitivity.py
+
+These are the tools behind `KC-INVESTIGATION.md` at the top of the repo. They are not figure
+reproductions:
+
+* `goms_kernels.py` is a numpy port of gortt's geometric-optical kernels, with every contested
+  choice (F², Po, the P-term forms, the overlap height and azimuthal form, β) behind a switch.
+  `--selftest` checks that the defaults reproduce `gortt -prnprop` to about 1e-13.
+* `goms_mc.py` is a Monte Carlo of the GOMS scene: solid spheroids at random positions and
+  heights. It gives Kc/Kt/Kg/Kz and the L&S mutual-shadowing terms for one geometry.
+* `kc_investigation.py` runs the MC over about 1,300 geometries (about 4 minutes on 4 cores,
+  cached) and writes the tables and plots into `figures/kc_investigation/`, which is gitignored.
+* `kc_fsquared_sensitivity.py --old <binary>` compares two gortt binaries across a sweep of
+  canopies and sun angles. It was written for the F² change.
+
+Note that the Fig. 5 discussion above predates that work. The Monte Carlo puts nadir Kc for SOBS
+at about 0.32, not the ~0.15 of the published figure, so Fig. 5 is not a good target for Kc
+(KC-INVESTIGATION.md, section 7).
+

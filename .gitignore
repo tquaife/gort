@@ -15,6 +15,9 @@ figures/*.png
 figures/*.pdf
 figures/*.svg
 
+#output of figures/kc_investigation.py (regenerated; the MC cache is ~1 MB)
+figures/kc_investigation/
+
 
 #python bytecode from the figure scripts
 __pycache__/

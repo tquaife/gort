@@ -13,6 +13,12 @@ harness prints the largest absolute and relative deviation per case.
 
 ## 1. `gortt_kc` carries F squared — affects every BRF, principal plane included
 
+> **Status (branch `kc-investigation`):** fixed in 129ed80. L&S (1992) eq. 25 interpolates f,
+> and eq. 17 already contains F. Removing F² exposed an unbounded forward-scatter Kc, which is
+> caused by `Po` in `gortt_kc_fFbeta`, and a wrong height in the overlap. Both are investigated
+> against a Monte Carlo reference in **KC-INVESTIGATION.md**, which proposes the fixes. The text
+> below is the original question.
+
 **Where:** `gortt_brdf.c`, `gortt_kc` and `gortt_kc_fFbeta`.
 
 `gortt_kc_fFbeta` returns `f` with `F` already folded in:
@@ -158,6 +164,11 @@ only needs the ground, and computing all fifteen layers was about 95% of the run
 ---
 
 ## 7. Alternative published formulations are behind `if(TRUE)` / `if(FALSE)`
+
+> **Status:** every one of these has now been scored against a Monte Carlo reference in
+> KC-INVESTIGATION.md (sections 3 and 4). None beats the branch currently taken, and
+> `gortt_kc_PP_only` and Wenge's overlap are broken outright. The proposal there is to delete them
+> rather than promote them to enums.
 
 **Where:** `gortt_overlap` (Ambrals vs Li & Strahler '92; and Wenge's off-principal-plane
 variant vs Li & Strahler '92) and `gortt_kc_PP_only` (IGARSS '92 vs RSE '94, and TGARSS '92).

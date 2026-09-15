@@ -240,20 +240,26 @@ extremes for real height distributions is not:
   off the principal plane).
 * **L&S apply β to the P terms** (eq. 24, P = βP1 + (1 − β)P2). gortt applies it to f. These are
   not the same thing, because F, M and the Γs differ between the extremes.
-* **The RSE '94 variant**, deleted with `gortt_kc_PP_only` and marked "totally wrong as far as I
-  can make out", differed from the IGARSS form only by the signs of both exponents, and gives a
-  negative denominator as transcribed. It was never scored. Its source has not been identified.
-  `papers/Li_and_Strahler_1994_RSE.pdf` is Liang & Strahler (1994), RSE 50:18–30, a BRDF
-  retrieval paper with nothing on mutual shadowing. A candidate is Abuelgasim & Strahler (1994),
-  RSE 47:261–275, which applies the Li–Strahler model to Oregon conifers.
+* **The "RSE '94" variant**, deleted with `gortt_kc_PP_only` and marked "totally wrong as far as I
+  can make out", is **Abuelgasim & Strahler (1994), RSE 47:261–275, eq. 8**
+  (`papers/Abuelgasim_and_Strahler_1994_RSE.pdf`, p. 265), transcribed exactly. As printed, eq. 8
+  is IGARSS eq. 7 with both exponents' signs flipped: `1 − e^(−λΓi + (h2−h1)/D)` over
+  `1 − e^(λΓi)`. It is a misprint. The paper's own text says β "will decrease from 1 to 0 with
+  increasing canopy depth" and "increases … to 1 with increasing coverage". IGARSS eq. 7 does
+  that, while eq. 8 as printed gives β = −0.61 at zero depth (λΓi = 0.5) and 12.5 at
+  (h2 − h1)/D = 5. The same passage calls λΓi the "coverage and sun position", which is a second
+  source for Γi being the illumination-direction area rather than gortt's Γv. Nothing further
+  is needed on this variant.
 
 **What Li & Strahler (1992, IGARSS) settles** (`papers/Li_and_Strahler_1992_IGARSS.pdf`,
 pp. 766–768):
-* **gortt's β is its eq. 7, except for Γi.** The paper defines Γi(h) as "the average shadowing
+* **gortt's β is its eq. 7, except for Γi** (reprinted, with sign misprints, as Abuelgasim &
+  Strahler 1994 eq. 8; see above). The paper defines Γi(h) as "the average shadowing
   areas at level h, of all the crowns which may cast shadows on that level". It uses the
   subscript i for illumination throughout (θi, Mi, Pi, and Γ(h,z) = Γi + Γv − O). gortt sets
   `Gamma_i = Gamma_v`, and that alone is what makes its β depend on vza. It reads like a
-  transcription slip, though it could have been deliberate.
+  transcription slip, though it could have been deliberate. Abuelgasim & Strahler (1994), who
+  describe λΓi as the "coverage and sun position", point the same way.
 * **Scored against the MC** (`figures/goms_kernels.py`, `beta="illum"`), Γi = πr² sec(i′) takes
   overall Kc RMSE from 0.080 to 0.064. It halves the forward-scatter error (0.130 → 0.060 in the
   principal plane) and makes backscatter worse (0.065 → 0.095). SOBS 0.084 → 0.065, dense

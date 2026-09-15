@@ -317,7 +317,7 @@ about that code, not about the GO scene, and should not be used to choose betwee
 
 ---
 
-## 8. Addendum: what Li & Strahler (1992, IGARSS) confirms
+## 8. Addendum: what Li & Strahler (1992, IGARSS) and Abuelgasim & Strahler (1994) confirm
 
 `papers/Li_and_Strahler_1992_IGARSS.pdf`, "Mutual shadowing and directional reflectance of a
 rough surface", pp. 766–768, arrived after the sections above were written.
@@ -336,6 +336,12 @@ rough surface", pp. 766–768, arrived after the sections above were written.
   (0.130 → 0.060) and backscatter gets worse (0.065 → 0.095). Eq. 6, from which eq. 7 follows, is
   defined at nadir viewing, so the published β is view-independent by construction and cannot
   give the asymmetry of section 6. OPEN-QUESTIONS #9 stays open.
+- **Abuelgasim & Strahler (1994), RSE 47:261–275, eq. 8** (`papers/Abuelgasim_and_Strahler_1994_RSE.pdf`)
+  reprints the same β. It is the "RSE '94" variant that was deleted with `gortt_kc_PP_only`, and
+  as printed it has both exponent signs flipped. The paper's text (β falls from 1 to 0 with
+  canopy depth and rises to 1 with coverage) describes IGARSS eq. 7, not the printed form, which
+  is negative at zero depth. It also calls λΓi the "coverage and sun position", which supports
+  Γi being the illumination area. The paper does not say how β enters Kc.
 - **The cosine-in-azimuth suggestion (conclusion 3) is not supported by our MC.** Using
   (1 − cos raa)/2 as the interpolation weight gives off-plane RMSE 0.061 against 0.057 for linear,
   with more clamps. Interpolating Kc rather than f removes the clamps but costs more: 0.079

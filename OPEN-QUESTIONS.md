@@ -19,7 +19,9 @@ remaining error in the geometric-optical proportions.
 > **Status: resolved** on branch `kc-investigation`.
 > - F² removed in 129ed80: L&S (1992) eq. 25 interpolates f, and eq. 17 already contains F.
 > - That exposed an unbounded forward-scatter Kc, which came from `Po` in `gortt_kc_fFbeta`.
->   Fixed in 0204222.
+>   Fixed in 0204222 with Po = min(PvMv, PiMi). That rule in turn made Kc negative with the
+>   sun near overhead, so it was replaced by Schaaf, Li & Strahler (1994) eq. 23A in ed690df:
+>   Po = PiMi beyond the hotspot in backscatter, min(PvMv, PiMi) elsewhere.
 > - The overlap was also using the canopy depth where L&S use the crown-centre height. Fixed in
 >   59121b9.
 >
@@ -27,8 +29,9 @@ remaining error in the geometric-optical proportions.
 > change has since been confirmed in the source: Li & Strahler (1992, IGARSS), conclusion 1 and
 > Fig. 1, model Po = PiMi beyond the hotspot and Po = PvMv inside it "until the large zenith in
 > the forward direction is reached where PvMv > PiMi again", i.e. the smaller of the two. gortt
-> had dropped that last clause. What is
-> left is β (item 9) and a small residual Kt clamp (item 11). The text below is the original
+> had dropped that last clause. β for an overhead
+> sun was also corrected to its limit of 1 (b59ce42). What is left is β (item 9) and a small
+> residual Kt clamp (item 11). The text below is the original
 > question, kept for the record.
 
 **Where:** `gortt_brdf.c`, `gortt_kc` and `gortt_kc_fFbeta`.
@@ -273,6 +276,14 @@ pp. 766–768):
   shows. The paper's own conclusion 4, "the Random Case hardly exists for spheroid shaped primary
   grains … realistic structures can be approximated as UC with good accuracy", matches the MC in
   backscatter but not in forward scatter.
+
+**What Schaaf, Li & Strahler (1994) adds** (`papers/Schaaf_et_al_1994_TGRS.pdf`, appendix): eq. 24A
+states Γi = πR² sec θi′, "the illumination shadow projected on the ground", which confirms
+c0ef2c3. Eq. 23A applies β to f exactly as gortt does, so option 2 below is not how the model's
+authors implemented it. Option 2 is still a legitimate experiment, but it is not a correction.
+With the sun overhead, β now takes its limit of 1 (b59ce42). Against the MC at sza 0 that helps
+SOBS and the dense canopy and overshoots the sparse one at large view zeniths, which is this
+item again (KC-INVESTIGATION.md, section 9).
 
 **Options, roughly in order of how much they change:**
 1. A β that is larger in backscatter than in forward scatter, e.g. a function of cos(raa) or of

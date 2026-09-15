@@ -17,6 +17,12 @@ to that version.
 > section 8, Γi in β was also changed to the illumination shadow area (c0ef2c3). That takes the
 > MC score to 0.064, with a worst error of 0.33. β itself (section 6) is still open as
 > OPEN-QUESTIONS #9, and the residual clamp (section 5) as #11.
+>
+> **Correction (section 9).** Change 1's rule, Po = min(PvMv, PiMi) everywhere, made Kc negative
+> with the sun near overhead, which the sza 15–60 grid never sampled. It is replaced by Schaaf,
+> Li & Strahler (1994) eq. 23A (ed690df), which is identical at sza ≥ 15. β for an overhead sun
+> was also corrected to its limit of 1 (b59ce42). Where sections 2 and "Proposed C changes"
+> describe Po = min(PvMv, PiMi) as the rule, read eq. 23A.
 
 "L&S" is Li & Strahler (1992), IEEE TGRS 30(2) 276–292 (`papers/Li_and_Strahler_1992.pdf`).
 Primes are the ellipsoid→sphere transform, as everywhere else in gortt.
@@ -351,6 +357,53 @@ rough surface", pp. 766–768, arrived after the sections above were written.
 
 ---
 
+## 9. Addendum: Schaaf, Li & Strahler (1994), and the sun near overhead
+
+`papers/Schaaf_et_al_1994_TGRS.pdf`, IEEE TGRS 32(6) 1186–1193. The appendix restates the
+Li–Strahler model in full.
+
+- **Eq. 24A confirms Γi:** "Γi = πR² sec θi′ is the illumination shadow projected on the ground"
+  (c0ef2c3). The β formula carries the same exponent-sign misprint as Abuelgasim & Strahler
+  (1994).
+- **Eq. 23A confirms that β weights f**, as gortt does, not the P terms:
+  f = βF(1 − ΓvPvMv/Γc)/(1 − M) + (1 − β)F.
+- **Eqs 5A–6A** define h as the height to the crown centre (change 2).
+- **Eq. 23A also gives the Po rule, and it corrects change 1.** It keeps the decrement at PvMv
+  "while θv′ > θi′; otherwise, the PvMv can be replaced with PiMi if it is a larger value". Read
+  as backscatter beyond the hotspot, that is Po = PiMi there and Po = min(PvMv, PiMi) elsewhere.
+  It is the old backscatter logic, plus the fix for large forward zeniths.
+  - It differs from min(PvMv, PiMi) only when PiMi > PvMv beyond the hotspot, which happens only
+    for sza below about 15°. There the min rule subtracts PiMi and **Kc goes negative**: −4.2,
+    with BRF −1.9, for λ = 1 at sza 5, vza 80, and down to −59 on a 1° scan.
+  - The main MC grid (sza 15–60) never sampled it. Neither did the test suite, which had no
+    low-sun backscatter row; `lowsun` now pins it.
+  - Read literally on both sides of nadir, the rule is much worse (Kc RMSE 0.153 on the main
+    grid, 0.291 in forward scatter).
+- **The overhead-sun guard in β was wrong.** `gortt_kc_fFbeta` returned β = 0 for sza′ < 1e-9.
+  Eq. 7's limit there is 1, since D = r cot(sza′/2) → ∞, and β is already 0.99 at sza 0.1°.
+  Fixed in b59ce42.
+- **Eqs 7A–9A**, an exact overlap on the principal cone, differ from the Ambrals form near the
+  hotspot by up to 1.85 (in units of πr²) at steep sun. Against the MC on the principal cone the
+  two are indistinguishable: Kg RMSE 0.0015 against 0.0017 for SOBS, with MC standard errors of
+  0.003–0.005. The off-plane approximation, eqs 11A–18A, was not tested.
+
+The MC grid now also covers sza 0, 5 and 10: principal plane, plus vza = 45 across azimuth. Kc
+RMSE against the MC on that grid (`tables.md`, "Low sun"; `kc_low_sun.png`):
+
+| variant | SOBS | same-height | sparse | dense | wide-spread | all | max abs | Kc<0 | clamp |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| gortt at 129ed80 | 0.971 | 1.021 | 0.179 | 2.163 | 0.932 | 1.230 | 17.085 | 0 | 106 |
+| Po = min, β(0) = 0 (8d5fe7c) | 0.168 | 0.204 | 0.073 | 1.235 | 0.135 | 0.569 | 10.602 | 11 | 0 |
+| Po = eq. 23A, β(0) = 0 | 0.167 | 0.205 | 0.074 | 0.225 | 0.134 | 0.170 | 0.500 | 0 | 0 |
+| **gortt now: eq. 23A, β(0) = 1** | **0.095** | **0.098** | **0.088** | **0.085** | **0.127** | **0.100** | **0.299** | **0** | **0** |
+
+By solar zenith for gortt now: RMSE 0.138 at sza 0, 0.078 at 5, 0.084 at 10. The main grid is
+unchanged at 0.064. At sza 0 the sparse canopy overshoots the MC at large view zeniths: β = 1 is
+the formula's limit, but it is too large for a sparse canopy seen obliquely, which is the β
+problem of section 6.
+
+---
+
 ## Proposed C changes, in order
 
 *All three are now made; the measured golden deltas are in their commit messages. Change 1
@@ -360,7 +413,8 @@ by up to 0.044. Change 3 (5399f53) was byte-identical.*
 Each change is measured with `goms_kernels.py` over the sensitivity-sweep grid (sza 15–60,
 principal plane ±80°, and vza 20/45/70 across azimuth; 480 geometries per canopy).
 
-1. **`Po = MIN( PvMv, PiMi )` in `gortt_kc_fFbeta`**, replacing the `raa`/`fabs(vza) > fabs(sza)`
+1. **`Po = MIN( PvMv, PiMi )` in `gortt_kc_fFbeta`** (superseded by Schaaf et al. 1994 eq. 23A
+   in ed690df; see section 9), replacing the `raa`/`fabs(vza) > fabs(sza)`
    case logic.
    - Kc RMSE against the MC: 0.292 → 0.086. The clamp count drops from 39 to 19, and the largest
      error from 6.6 to 0.58.
@@ -396,6 +450,8 @@ principal plane ±80°, and vza 20/45/70 across azimuth; 480 geometries per cano
 - MC "facing the sun" is n·s > 0. Elements inside an intersecting crown count as hidden and
   shadowed, which leaves ΔP, and therefore Kc, unaffected. It does make Pv and Pi individually
   differ from L&S's published Fig. 4.
+- Sections 1–7 use sza 15–60. The sun near overhead (sza 0–10) was added later and has its own
+  table in section 9.
 - The azimuth experiments cover the principal cone vza = sza and vza = 45°. Grazing azimuthal
   geometries are sampled only in the principal plane.
 - L&S's IGARSS '92 paper was not available when this was written. It has since been checked;

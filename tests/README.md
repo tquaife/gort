@@ -58,6 +58,13 @@ bug shows up as a deliberate, reviewable change.
   rejected as an unknown option. `prospect-anth` exercises the spelling that
   does work.
 
+## Low sun
+
+`lowsun` is a dense canopy (`-lambda 1.0`) with the sun at 0 and 5 degrees zenith, printing the
+proportions. It exists because a change to `Po` in `gortt_kc_fFbeta` made Kc negative in
+backscatter at low sun, and no existing case had such a row. Its sza 0 rows also hold β at its
+overhead limit. See `KC-INVESTIGATION.md`, section 9.
+
 ## The -P round trip
 
 `useprobs-extreme` and `useprobs-grazing` exist to hold `-P` to reproducing

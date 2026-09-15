@@ -198,10 +198,16 @@ integrates to `nth-1`, so the last trapezium panel is built from a zero. It need
 against the papers before being touched.
 
 **The geometric-optical kernels were checked against a Monte Carlo** (`KC-INVESTIGATION.md`),
-which led to three changes: F² dropped from `gortt_kc`, `Po = MIN(PvMv, PiMi)` in
-`gortt_kc_fFbeta`, and the shadow overlap averaged over crown-centre heights in [h1, h2]
-(`NH_OVERLAP` Gauss-Legendre points, set up in `gortt_init_params`) instead of using the canopy
-depth. `figures/goms_kernels.py` is a numpy port of those kernels, checked against the binary
+which led to these changes:
+* F² dropped from `gortt_kc`.
+* `Po` per Schaaf et al. (1994) eq. 23A in `gortt_kc_fFbeta`: PiMi beyond the hotspot in
+  backscatter, `MIN(PvMv, PiMi)` elsewhere. `MIN` everywhere goes negative with the sun near
+  overhead; the `lowsun` test case pins that.
+* The shadow overlap averaged over crown-centre heights in [h1, h2] (`NH_OVERLAP`
+  Gauss-Legendre points, set up in `gortt_init_params`) instead of using the canopy depth.
+* Γi in β is the illumination shadow area, and β = 1 (its limit) for an overhead sun.
+
+The MC grid covers sza 0–60; check both ends of it. `figures/goms_kernels.py` is a numpy port of those kernels, checked against the binary
 with `--selftest`, with the rejected alternatives kept as switches. `figures/kc_investigation.py`
 scores any change there against the MC in seconds, because the MC is cached. Use it before
 touching `gortt_kg`/`gortt_kc*`/`gortt_overlap`. β is Li & Strahler (1992, IGARSS) eq. 7 with Γi

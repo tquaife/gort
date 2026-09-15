@@ -15,6 +15,7 @@ on four cores.  --refresh throws the cache away.  Writes, into DIR:
   kg_overlap.png     Kg against MC for the overlap height choices
   kc_variants.png    Kc against MC for the P-term / beta / F choices
   fig5.png           Ni et al. (1999) Fig. 5, with MC
+  kc_low_sun.png     Kc at sza 0/5/10 for the Po and overhead-beta choices
 
 See goms_kernels.py for the variant switches and goms_mc.py for the MC.
 
@@ -63,6 +64,10 @@ LS92 = {
 ALL_CANOPIES = {**CANOPIES, **LS92}
 
 SZAS = (15.0, 30.0, 45.0, 60.0)
+# The sun near overhead, added after Po = min(PvMv, PiMi) turned out to make
+# Kc negative there (section 9).  Kept separate so the tables for SZAS stay
+# the ones sections 1-7 quote.
+LOW_SZAS = (0.0, 5.0, 10.0)
 PP = np.arange(-85.0, 85.1, 5.0)
 
 BASE = gk.GORTT_129ED80.replace(overlap_h="avg")
@@ -77,6 +82,13 @@ KC_VARIANTS = [
     ("eqs 21-22 as printed",           BASE.replace(pimi="eq21", pvmv="eq22")),
     ("gortt_kc_PP_only as coded",      BASE.replace(pimi="eq21raw", pvmv="ppcoded")),
     ("F squared + h avg + Po nest",    BASE.replace(po="nest", fsq="old")),
+    ("gortt now",                      gk.GORTT),
+]
+LOW_SUN_VARIANTS = [
+    ("gortt at 129ed80",               gk.GORTT_129ED80),
+    ("Po = min, beta(0) = 0 (8d5fe7c)", gk.GORTT.replace(po="nest", beta_overhead=0.0)),
+    ("Po = Schaaf 23A, beta(0) = 0",   gk.GORTT.replace(beta_overhead=0.0)),
+    ("gortt now: Schaaf 23A, beta(0) = 1", gk.GORTT),
 ]
 KG_VARIANTS = [(h, az) for h in ("depth", "centre", "avg") for az in ("ambrals", "pp", "eq7", "wenge")]
 
@@ -99,6 +111,12 @@ def geometries():
                 out.append((name, s, s, ra))
             for ra in np.arange(15.0, 166.0, 15.0):
                 out.append((name, 45.0, s, ra))
+        for s in LOW_SZAS:
+            for v in PP:
+                out.append((name, abs(v), s, 180.0 if v < 0 else 0.0))
+            if s > 0.0:     # azimuth is meaningless for an overhead sun
+                for ra in np.arange(15.0, 166.0, 15.0):
+                    out.append((name, 45.0, s, ra))
     for name, c in LS92.items():
         for vp in np.arange(-50.0, 60.1, 5.0):
             v = np.degrees(np.arctan(np.tan(R(abs(vp))) * c.r / c.b))
@@ -139,8 +157,10 @@ def load_mc(path, jobs, refresh):
     return cache
 
 
-def select(cache, canopy, pred=lambda v, s, ra: True):
-    keys = [g for g in sorted(cache) if g[0] == canopy and pred(*g[1:])]
+def select(cache, canopy, pred=lambda v, s, ra: True, low_sun=False):
+    """Geometries for a canopy: the main grid (sza 15-60), or with low_sun the LOW_SZAS set."""
+    grid = LOW_SZAS if low_sun else SZAS
+    keys = [g for g in sorted(cache) if g[0] == canopy and g[2] in grid and pred(*g[1:])]
     v = np.array([g[1] for g in keys])
     s = np.array([g[2] for g in keys])
     ra = np.array([g[3] for g in keys])
@@ -276,6 +296,39 @@ def experiment_azimuth(cache):
             row.append(rmse(e))
         rows.append(row + [rmse(np.concatenate(allerr)), ncl])
     lines.append(md_table(["", *CANOPIES, "all", "clamp"], rows, ["%.3f"] * (len(CANOPIES) + 1) + ["%d"]))
+    return lines
+
+
+def experiment_low_sun(cache):
+    lines = ["### Low sun (sza 0, 5, 10)", "",
+             "Kc against the MC with the sun near overhead: principal plane and vza = 45 across "
+             "azimuth. `Kc<0` counts negative Kc, `clamp` geometries with Kc > 1 - Kg - Kz.", ""]
+    rows = []
+    for label, var in LOW_SUN_VARIANTS:
+        row, allerr, nneg, ncl, mx = [label], [], 0, 0, 0.0
+        for name, c in CANOPIES.items():
+            keys, v, s, ra = select(cache, name, low_sun=True)
+            K = gk.proportions(c, var, R(v), R(s), R(ra))
+            e = K["Kc"] - col(cache, keys, "Kc")
+            allerr.append(e)
+            nneg += int(np.sum(K["Kc"] < -1e-12))
+            ncl += int(np.sum(K["Kt_raw"] < -1e-12))
+            mx = max(mx, float(np.max(np.abs(e))))
+            row.append(rmse(e))
+        rows.append(row + [rmse(np.concatenate(allerr)), mx, nneg, ncl])
+    lines.append(md_table(["variant", *CANOPIES, "all", "max abs", "Kc<0", "clamp"], rows,
+                          ["%.3f"] * (len(CANOPIES) + 2) + ["%d", "%d"]))
+
+    lines += ["", "By solar zenith, gortt now, all five canopies pooled:", ""]
+    rows = []
+    for s0 in LOW_SZAS:
+        errs = []
+        for name, c in CANOPIES.items():
+            keys, v, s, ra = select(cache, name, lambda v, s, ra, s0=s0: s == s0, low_sun=True)
+            errs.append(gk.proportions(c, gk.GORTT, R(v), R(s), R(ra))["Kc"] - col(cache, keys, "Kc"))
+        e = np.concatenate(errs)
+        rows.append(["sza %g" % s0, rmse(e), float(np.max(np.abs(e)))])
+    lines.append(md_table(["", "RMSE", "max abs"], rows, ["%.3f", "%.3f"]))
     return lines
 
 
@@ -513,6 +566,38 @@ def plot_kc(cache, path):
     plt.close(fig)
 
 
+def plot_low_sun(cache, path):
+    show = LOW_SUN_VARIANTS[1:]
+    names = ("SOBS", "dense", "sparse")
+    fig, axes = plt.subplots(len(names), len(LOW_SZAS), figsize=(13, 9.5), sharex=True)
+    for i, name in enumerate(names):
+        c = CANOPIES[name]
+        for j, s0 in enumerate(LOW_SZAS):
+            keys, v, s, ra = select(cache, name, lambda v, s, ra, s0=s0: s == s0 and ra in (0.0, 180.0),
+                                    low_sun=True)
+            x = np.where(ra > 90, -v, v)
+            o = np.argsort(x)
+            keys, x = [keys[k] for k in o], x[o]
+            fine = np.linspace(-85, 85, 681)
+            fv, fs, fra = gk.signed_pp(fine, s0)
+            ax = axes[i, j]
+            style(ax)
+            ax.axhline(0.0, color=MUTED, lw=0.8)
+            mc_points(ax, x, col(cache, keys, "Kc"), col(cache, keys, "Kc_se"))
+            for k, (label, var) in enumerate(show):
+                ax.plot(fine, gk.proportions(c, var, fv, fs, fra)["Kc"], color=SERIES[k], lw=2,
+                        ls=("--", ":", "-")[k], label=label)
+            ax.set_ylim(-1.0, 1.25)
+            ax.set_title("%s, sza %g°" % (name, s0), color=INK, fontsize=9)
+            if i == len(names) - 1:
+                ax.set_xlabel("signed vza (°), + = backscatter", color=MUTED, fontsize=8)
+    axes[0, 0].legend(fontsize=7, frameon=False, loc="lower left")
+    fig.suptitle("Kc with the sun near overhead (principal plane; axis cut at -1)", color=INK, fontsize=11)
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
 # Ni et al. (1999) Fig. 5, read off the page (sza 30): see figures/README.md
 FIG5_PUBLISHED = [(30.0, 0.81), (44.0, 0.79), (60.0, 0.80), (0.0, 0.15), (-40.0, 0.13), (-60.0, 0.15)]
 
@@ -559,7 +644,8 @@ def main():
 
     lines = ["<!-- generated by figures/kc_investigation.py; MC: %d rays, %d elements, %d tiles "
              "per geometry -->" % (MC_RAYS, MC_ELEM, MC_SCENES), ""]
-    for exp in (experiment_P, experiment_kg, experiment_kc, experiment_azimuth, experiment_beta):
+    for exp in (experiment_P, experiment_kg, experiment_kc, experiment_azimuth, experiment_beta,
+                experiment_low_sun):
         lines += exp(cache) + [""]
     with open(os.path.join(a.outdir, "tables.md"), "w") as fh:
         fh.write("\n".join(lines))
@@ -570,6 +656,7 @@ def main():
     plot_kg(cache, os.path.join(a.outdir, "kg_overlap.png"))
     plot_kc(cache, os.path.join(a.outdir, "kc_variants.png"))
     plot_fig5(cache, os.path.join(a.outdir, "fig5.png"))
+    plot_low_sun(cache, os.path.join(a.outdir, "kc_low_sun.png"))
     print("wrote", a.outdir)
 
 

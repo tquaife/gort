@@ -64,6 +64,9 @@ The switches (a Variant):
                          suggests interpolating the P's)
               "direct"   no interpolation: the P terms at the actual azimuth
 
+  beta_overhead  beta for sza' < 1e-9, where eq. 7 divides by zero: 1.0, its
+              limit (gortt), or 0.0 (gortt before this was fixed)
+
   beta        "illum"    IGARSS '92 eq. 7, D = r cot(i'/2), Gamma_i = pi r^2 sec(i'),
                          the illumination shadow area; gortt
               "code"     the same with Gamma_i = Gamma_v (gortt up to 6a6d845)
@@ -116,6 +119,7 @@ class Variant:
     lune: bool = False
     beta: object = "illum"
     az_interp: str = "f"
+    beta_overhead: float = 1.0
 
     def replace(self, **kw):
         return dataclasses.replace(self, **kw)
@@ -130,7 +134,7 @@ class Variant:
 
 GORTT = Variant()
 # the two versions the investigation started from
-GORTT_129ED80 = Variant(po="code", overlap_h="depth", beta="code")
+GORTT_129ED80 = Variant(po="code", overlap_h="depth", beta="code", beta_overhead=0.0)
 GORTT_MASTER = GORTT_129ED80.replace(fsq="old")
 
 
@@ -337,7 +341,7 @@ def fFbeta(c, v, vza, sza, raa, Kg):
             dh = c.h2 - c.h1
             beta = (c.lam * Gi) / (c.lam * Gi + dh / D) \
                 * (1.0 - np.exp(-c.lam * Gi - dh / D)) / (1.0 - np.exp(-c.lam * Gi))
-        beta = np.where(ip < 0.000000001, 0.0, beta)
+        beta = np.where(ip < 0.000000001, v.beta_overhead, beta)
     elif isinstance(v.beta, str) and v.beta == "eq23":
         dh = c.h2 - c.h1
         beta = np.full_like(ip, (1.0 - dh / (4.0 * c.b)) ** 2 if dh <= 4.0 * c.b else 0.0)

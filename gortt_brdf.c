@@ -221,9 +221,16 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 	else
 		Po = MIN( PvMv, PiMi ) ;
 
+	/*
+	beta: Li & Strahler (1992, IGARSS) eq. 7.  D = r cot(sza'/2) is infinite
+	for an overhead sun, so (h2-h1)/D -> 0 and beta -> 1; the formula itself
+	would divide by zero there, hence the guard.  It used to return 0, which
+	made beta jump from 0.99 at sza 0.1 deg to 0 at sza 0 (KC-INVESTIGATION.md
+	section 9).
+	*/
 	if( g->sza_prime < 0.000000001 ){
 
-		*beta = 0.0 ;
+		*beta = 1.0 ;
 
 	}else{
 

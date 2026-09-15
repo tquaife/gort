@@ -28,7 +28,8 @@ double gortt_kg( const gortt_parameters *p, const gortt_geometry *g, double raa 
 The overlap between the view and illumination shadows of one crown, as a
 fraction of pi r^2 (Li & Strahler 1992 eqs 5-6, with the azimuthal
 generalisation of t2 used in the Ambrals/LiSparse kernels -- in the
-principal plane the two are identical).
+principal plane the two are identical), averaged over crown-centre heights
+uniform in [h1,h2] as eq. 3 asks.  See gortt_init_params for the heights.
 
 Two alternatives used to sit here behind if(TRUE)/if(FALSE): L&S's
 principal-plane t2 = |tan i' - tan v' cos raa| applied at every azimuth, and
@@ -40,7 +41,8 @@ double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double
 {
 
 	double overlap, t, D, d ;
-	double t1, t2, cos_t;
+	double t1, t2, cos_t, ratio, secs ;
+	int i ;
 
 
 	/* As in the linear kernels*/
@@ -52,14 +54,21 @@ double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double
 	t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
 	t1 = ( SEC(g->sza_prime) + SEC(g->vza_prime) ) ;
 
-	cos_t = (p->h/p->b) * t2 / t1  ;
+	ratio = t2 / ( t1 * p->b ) ;
+	secs = SEC(g->sza_prime) + SEC(g->vza_prime) ;
 
-	cos_t = MAX( -1.0, cos_t );
-	cos_t = MIN(  1.0, cos_t );
+	overlap = 0.0 ;
+	for( i=0; i<NH_OVERLAP; i++ ){
 
-	t = acos( cos_t );
+		cos_t = p->h_overlap[ i ] * ratio ;
 
-	overlap = MAX( 0.0, ( t - sin( t )*cos_t )*( SEC(g->sza_prime)+SEC(g->vza_prime) )/M_PI ) ;
+		cos_t = MAX( -1.0, cos_t );
+		cos_t = MIN(  1.0, cos_t );
+
+		t = acos( cos_t );
+
+		overlap += p->w_overlap[ i ] * MAX( 0.0, ( t - sin( t )*cos_t )*secs/M_PI ) ;
+	}
 
 	return( overlap );
 

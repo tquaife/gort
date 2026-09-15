@@ -854,11 +854,21 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->ellipticity = p->b / p->r ;
 	p->rr = p->r * p->r ;
 	p->rrr = p->rr * p->r;
-	p->h =  2.0 * p->r * p->ellipticity  + p->h2 - p->h1;
 
 	/*
-	the above = 2. * p->b + p->h2 - p->h1
+	Heights for the overlap average.  Li & Strahler (1992) eqs 4-6 use the
+	height of the crown centre, and eq. 3 the overlap averaged over the
+	distribution of centre heights, which gortt takes as uniform in [h1,h2].
+	(This used to be a single h = 2b + h2 - h1, the canopy depth, which
+	narrowed the hotspot by about half for the SOBS stand.)  The rule is set
+	up on [-1,1] and mapped, so that h1 == h2 gives every point the same
+	height rather than zero weights.
 	*/
+	gauleg( -1.0, 1.0, p->h_overlap, p->w_overlap, NH_OVERLAP ) ;
+	for( i=0; i<NH_OVERLAP; i++ ){
+		p->h_overlap[ i ] = 0.5*( p->h1 + p->h2 ) + 0.5*( p->h2 - p->h1 )*p->h_overlap[ i ] ;
+		p->w_overlap[ i ] = 0.5*p->w_overlap[ i ] ;
+	}
 
 
 	/*

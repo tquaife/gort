@@ -27,6 +27,12 @@
 
 #define MAX_LINE_LEN 1000
 
+/*Gauss-Legendre points for averaging the shadow overlap over crown-centre
+heights in [h1,h2] (gortt_overlap).  24 puts Kg within ~1e-5 of the limit;
+convergence is only algebraic, because the overlap has a kink where it
+reaches zero.*/
+#define NH_OVERLAP 24
+
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
 #define PROSPECT_LOWER_WL 400.0
@@ -214,7 +220,10 @@ typedef struct  {
 		double ellipticity ;	/*b/r: the vertical scaling*/
 		double rr ;				/*r^2*/
 		double rrr ;			/*r^3*/
-		double h ;				/*total canopy depth*/
+		/*crown-centre heights and weights (summing to one) at which
+		gortt_overlap evaluates and averages the overlap: uniform in [h1,h2]*/
+		double h_overlap[ NH_OVERLAP ] ;
+		double w_overlap[ NH_OVERLAP ] ;
 		double k ;				/*leaf projection G at the solar zenith*/
 		double elai ;			/*effective LAI*/
 		double tau ;

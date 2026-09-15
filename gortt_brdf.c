@@ -25,23 +25,40 @@ double gortt_kg( const gortt_parameters *p, const gortt_geometry *g, double raa 
 
 
 /*
-The overlap between the view and illumination shadows of one crown, as a
-fraction of pi r^2 (Li & Strahler 1992 eqs 5-6, with the azimuthal
-generalisation of t2 used in the Ambrals/LiSparse kernels -- in the
-principal plane the two are identical), averaged over crown-centre heights
-uniform in [h1,h2] as eq. 3 asks.  See gortt_init_params for the heights.
+O-bar: the overlap between the illumination and view shadows of a single
+crown, in units of pi r^2, so that Kg = exp(-lambda pi r^2 (sec i' + sec v' - O)).
+All angles are primed.
 
-Two alternatives used to sit here behind if(TRUE)/if(FALSE): L&S's
-principal-plane t2 = |tan i' - tan v' cos raa| applied at every azimuth, and
-a t1 "from Wenge's code" that divides by D and so is undefined at the
-hotspot. Both were scored against a Monte Carlo and are worse
-(KC-INVESTIGATION.md, section 4); they are recorded in figures/goms_kernels.py.
+For a crown centred at height h (Li & Strahler 1992 eqs 5-6):
+
+	O(h)   = ( t - sin(t) cos(t) ) secs / pi
+	cos(t) = (h/b) sep / secs
+	secs   = sec i' + sec v'
+	sep    = sqrt( D^2 + (tan i' tan v' sin raa)^2 )
+	D^2    = tan^2 i' + tan^2 v' - 2 tan i' tan v' cos raa
+
+D is the separation of the two shadow centres per unit height, as in the
+linear kernels, and sep is the effective separation the overlap depends on.
+Its sin(raa) term (the Ambrals/LiSparse form) matters only off the principal
+plane; in the principal plane sep = D = |tan i' - tan v' cos raa|, which is
+L&S eq. 6.  O(h) falls to zero when cos(t) reaches 1, where the shadows stop
+touching, and at the hotspot (sep = 0) it is secs/2 whatever the height.
+
+L&S eq. 3 wants the overlap averaged over the centre heights, which gortt
+takes as uniform in [h1,h2].  The average is a Gauss-Legendre sum over the
+NH_OVERLAP heights p->h_overlap and weights p->w_overlap, set up in
+gortt_init_params; only h varies inside the loop.
+
+Previously a single h = 2b + h2 - h1 (the canopy depth) was used, and two
+alternative forms of sep and secs sat here behind if(TRUE)/if(FALSE).  All
+three were scored against a Monte Carlo and are worse: KC-INVESTIGATION.md,
+section 4, and figures/goms_kernels.py, where they survive as switches.
 */
 double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double raa )
 {
 
 	double overlap, t, D, d ;
-	double t1, t2, cos_t, ratio, secs ;
+	double sep, secs, cos_t, ratio ;
 	int i ;
 
 
@@ -51,11 +68,11 @@ double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double
 
 	D = sqrt( MAX( 0.0, d ) );
 
-	t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
-	t1 = ( SEC(g->sza_prime) + SEC(g->vza_prime) ) ;
-
-	ratio = t2 / ( t1 * p->b ) ;
+	sep  = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
 	secs = SEC(g->sza_prime) + SEC(g->vza_prime) ;
+
+	/*cos(t) = h * ratio: everything but the height, hoisted out of the loop*/
+	ratio = sep / ( secs * p->b ) ;
 
 	overlap = 0.0 ;
 	for( i=0; i<NH_OVERLAP; i++ ){
@@ -215,59 +232,59 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 
 
 /*
-Kuusk's canopy bi-directional gap probability
+Kuusk's bidirectional within-crown gap probability, as used in Ni et al.
+(1999) eqs 3-7:
+
+	P(n>0 | h=0, i, v) = P(n>0 | h=0, i) P(n>0 | h=0, v) H
+
+	H         = exp( tau(i) * path_mean * hotspot )
+	path_mean = sqrt( lsza * lvza )
+	hotspot   = ( 1 - exp(-path_sep/r) ) / ( path_sep/r )
+	path_sep  = sqrt( lsza^2 + lvza^2 - 2 lsza lvza cos(xi) )
+
+tau(i) = k(i) FAVD.  lsza and lvza are the within-crown path lengths along the
+sun and view directions, recovered by inverting Beer's law on the one-way
+within-crown gap probabilities: l = -ln(P) / (k FAVD) (eqs 5-6).  path_sep is
+the distance between the ends of the two paths (eq. 7), and the crown radius r
+plays the role of Kuusk's correlation length (k_l = 1/r).
+
+At the hotspot path_sep = 0 and hotspot = 1, so H = exp(tau path_mean), which
+undoes the double counting of a shared path -- exactly, while k is the same for
+the sun and view directions (true as long as the leaf angle distribution is
+hardwired; OPEN-QUESTIONS #4-5).  As the directions separate, hotspot falls
+towards 0 and H towards 1: the two gaps become independent.
+
+n.b. cos(xi) uses the unprimed angles; a primed version is left commented out.
 */
 double gortt_kuusk( const gortt_parameters *p, const gortt_geometry *g )
 {
 
-	double kuusk, lsza, lvza, lsv, cos_xi, H ;
-	double t1, t2 ;
+	double kuusk, lsza, lvza, path_sep, cos_xi, H ;
+	double path_mean, hotspot ;
 
 	cos_xi = cos( g->sza )*cos( g->vza )+sin( g->sza )*sin( g->vza )*cos( g->raa );
 	/*05/06/06*/
 	/*cos_xi = cos( g->sza_prime )*cos( g->vza_prime )+sin( g->sza_prime )*sin( g->vza_prime )*cos( g->raa );*/
 
-	/*
-	lsza = -log( g->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
-	lvza = -log( g->p_ngt0_heq0_vza ) / ( g->k_vza * p->favd ) ;
-	*/
-
 	lsza = -log( g->p_ngt0_heq0_sza ) / ( p->k * p->favd ) ;
 	lvza = -log( g->p_ngt0_heq0_vza ) / ( g->k_vza * p->favd ) ;
 
 
-	/*sqrt trap for -ve*/
+	/*sqrt trap for -ve; zero separation is the hotspot, where the limit is 1*/
 	if( ( lsza*lsza + lvza*lvza - 2.*lsza*lvza*cos_xi ) > 0.0 ){
-		lsv = sqrt( lsza*lsza + lvza*lvza - 2.*lsza*lvza*cos_xi );
-		t2 = ( 1.0 - exp( -lsv/p->r ) ) / ( lsv/p->r ) ;
+		path_sep = sqrt( lsza*lsza + lvza*lvza - 2.*lsza*lvza*cos_xi );
+		hotspot = ( 1.0 - exp( -path_sep/p->r ) ) / ( path_sep/p->r ) ;
 	}else{
-		t2 = 1.0 ;
+		hotspot = 1.0 ;
 	}
 
 	if( ( lsza * lvza ) > 0.0 ){
-		t1 = sqrt( lsza * lvza ) ;
+		path_mean = sqrt( lsza * lvza ) ;
 	}else{
-		t1 = 0.0 ;
+		path_mean = 0.0 ;
 	}
 
-	/*
-	H = exp( p->k * p->favd * t1 * t2 ) ;
-	*/
-
-
-	H = exp( p->k * p->favd * t1 * t2 ) ;
-
-
-	/*
-	H = exp( p->k * p->favd * sqrt( li * lv ) * ( 1.0 - exp( -liv/p->r ) ) / ( liv/p->r ) );
-	*/
-	/*
-	if( liv > 0.0 )
-		H = exp( p->k * p->favd * sqrt( li * lv ) * ( 1.0 - exp( -liv/p->r ) ) / ( liv/p->r ) );
-	else
-		H = exp( p->k * p->favd * sqrt( li * lv ) );
-	*/
-
+	H = exp( p->k * p->favd * path_mean * hotspot ) ;
 
 	kuusk = g->p_ngt0_heq0_sza * g->p_ngt0_heq0_vza * H ;
 

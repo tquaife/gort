@@ -54,13 +54,16 @@ The switches (a Variant):
               exact interval geometry on the primed sphere in the principal
               plane (KC-INVESTIGATION.md, "the lune model")
 
-  az_interp   "f"        interpolate f between raa = 0 and pi, as gortt_kc does
+  az_interp   "f"        interpolate f linearly in raa between 0 and pi; gortt
+              "fcos"     interpolate f with weight (1 - cos raa)/2 (IGARSS '92, conclusion 3)
               "P"        interpolate PvMv + PiMi - Po instead, and build f from
                          F, M and Gamma at the actual azimuth (L&S sec. H
                          suggests interpolating the P's)
               "direct"   no interpolation: the P terms at the actual azimuth
 
-  beta        "code"     gortt's (IGARSS '92) formula with D = r cot(i'/2)
+  beta        "code"     IGARSS '92 eq. 7, D = r cot(i'/2), with Gamma_i = Gamma_v; gortt
+              "illum"    the same with Gamma_i = pi r^2 sec(i'), the illumination
+                         shadow area the IGARSS text defines Gamma_i as
               "eq23"     (1 - (h2-h1)/4b)^2, 0 if h2-h1 > 4b   (L&S eq. 23)
               a float    fixed, like gortt -beta
 """
@@ -315,10 +318,10 @@ def fFbeta(c, v, vza, sza, raa, Kg):
         elif v.po != "code":
             raise ValueError(v.po)
 
-    if isinstance(v.beta, str) and v.beta == "code":
+    if isinstance(v.beta, str) and v.beta in ("code", "illum"):
         with np.errstate(divide="ignore", invalid="ignore"):
             D = c.r * (1.0 / np.tan(ip / 2.0))
-            Gi = Gamma_v
+            Gi = Gamma_v if v.beta == "code" else np.pi * c.rr * sec(ip)
             dh = c.h2 - c.h1
             beta = (c.lam * Gi) / (c.lam * Gi + dh / D) \
                 * (1.0 - np.exp(-c.lam * Gi - dh / D)) / (1.0 - np.exp(-c.lam * Gi))
@@ -345,6 +348,9 @@ def kc(c, v, vza, sza, raa, Kg):
 
     frac = raa / np.pi
     frac = np.where(frac > 1.0, 2.0 - frac, frac)
+    if v.az_interp == "fcos":
+        # IGARSS '92 conclusion 3: A_c is fitted better by a cosine in azimuth
+        frac = 0.5 * (1.0 - np.cos(raa))
 
     if v.az_interp in ("P", "direct"):
         if v.fsq != "new":

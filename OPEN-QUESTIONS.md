@@ -23,7 +23,11 @@ remaining error in the geometric-optical proportions.
 > - The overlap was also using the canopy depth where L&S use the crown-centre height. Fixed in
 >   59121b9.
 >
-> All three were decided against a Monte Carlo reference; see **KC-INVESTIGATION.md**. What is
+> All three were decided against a Monte Carlo reference; see **KC-INVESTIGATION.md**. The `Po`
+> change has since been confirmed in the source: Li & Strahler (1992, IGARSS), conclusion 1 and
+> Fig. 1, model Po = PiMi beyond the hotspot and Po = PvMv inside it "until the large zenith in
+> the forward direction is reached where PvMv > PiMi again", i.e. the smaller of the two. gortt
+> had dropped that last clause. What is
 > left is β (item 9) and a small residual Kt clamp (item 11). The text below is the original
 > question, kept for the record.
 
@@ -237,17 +241,41 @@ extremes for real height distributions is not:
 * **L&S apply β to the P terms** (eq. 24, P = βP1 + (1 − β)P2). gortt applies it to f. These are
   not the same thing, because F, M and the Γs differ between the extremes.
 * **The RSE '94 variant**, deleted with `gortt_kc_PP_only` and marked "totally wrong as far as I
-  can make out", differed from the IGARSS form only by the signs of both exponents, and gives a negative
-  denominator as transcribed. It was never scored. The
-  IGARSS '92 paper, which the formula in use comes from, was not available when this was
-  written.
+  can make out", differed from the IGARSS form only by the signs of both exponents, and gives a
+  negative denominator as transcribed. It was never scored. Its source has not been identified.
+  `papers/Li_and_Strahler_1994_RSE.pdf` is Liang & Strahler (1994), RSE 50:18–30, a BRDF
+  retrieval paper with nothing on mutual shadowing. A candidate is Abuelgasim & Strahler (1994),
+  RSE 47:261–275, which applies the Li–Strahler model to Oregon conifers.
+
+**What Li & Strahler (1992, IGARSS) settles** (`papers/Li_and_Strahler_1992_IGARSS.pdf`,
+pp. 766–768):
+* **gortt's β is its eq. 7, except for Γi.** The paper defines Γi(h) as "the average shadowing
+  areas at level h, of all the crowns which may cast shadows on that level". It uses the
+  subscript i for illumination throughout (θi, Mi, Pi, and Γ(h,z) = Γi + Γv − O). gortt sets
+  `Gamma_i = Gamma_v`, and that alone is what makes its β depend on vza. It reads like a
+  transcription slip, though it could have been deliberate.
+* **Scored against the MC** (`figures/goms_kernels.py`, `beta="illum"`), Γi = πr² sec(i′) takes
+  overall Kc RMSE from 0.080 to 0.064. It halves the forward-scatter error (0.130 → 0.060 in the
+  principal plane) and makes backscatter worse (0.065 → 0.095). SOBS 0.084 → 0.065, dense
+  0.107 → 0.071, same-height unchanged. So it is better on balance but is not the fix.
+* **The published β cannot depend on view direction, by construction.** Eq. 6, the "probability
+  weighted overlap function" it comes from, is defined at nadir viewing. Option 3 below is
+  therefore done, and the derivation cannot supply the forward/backscatter asymmetry the MC
+  shows. The paper's own conclusion 4, "the Random Case hardly exists for spheroid shaped primary
+  grains … realistic structures can be approximated as UC with good accuracy", matches the MC in
+  backscatter but not in forward scatter.
 
 **Options, roughly in order of how much they change:**
 1. A β that is larger in backscatter than in forward scatter, e.g. a function of cos(raa) or of
    the signed zenith difference. It could be fitted to the MC, or derived as the probability that
    a viewed crown's shadowing neighbours lie in the same height layer.
 2. Apply β to ΔP as eq. 24 does, rather than to f, and re-score it.
-3. Find the IGARSS '92 derivation and check the formula in use against it.
+3. ~~Find the IGARSS '92 derivation and check the formula in use against it.~~ Done, see above.
+   The one discrepancy is Γi; switching it to the illumination area is a cheap improvement on
+   the way to a real fix (RMSE 0.080 → 0.064), and would move most BRF goldens.
+4. The paper's eqs 1–2 give PiMi for a "fuzzy" Mi boundary as a numerical integral over the
+   crown surface; eq. 5, which gortt uses, is its closed-form approximation. It is not a β fix,
+   but it is the more physical form of the uniform-height extreme that β weights.
 
 **To test any of them:** add a `beta` option to `figures/goms_kernels.py` and rerun
 `figures/kc_investigation.py`. The MC is cached, so rescoring every variant takes seconds.
@@ -283,6 +311,12 @@ sparse canopies. The excess is at most 0.10.
 The alternatives tried (interpolating ΔP, or the P terms at the actual azimuth) remove the clamp
 but double to triple the off-plane error (KC-INVESTIGATION.md, section 5). It may go away with
 item 9, since β = 1 makes it much worse.
+
+Li & Strahler (1992, IGARSS), conclusion 3, says a cosine in azimuth fits the sunlit crown area
+Ac better than the linear interpolation their model used. Against the MC it does not help here:
+* interpolating f with weight (1 − cos raa)/2 (`az_interp="fcos"`) gives off-plane RMSE 0.061
+  against 0.057 for linear, with 28 clamps instead of 19;
+* interpolating Kc itself removes the clamps but is worse again, 0.079 linear and 0.092 cosine.
 
 ---
 

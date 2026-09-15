@@ -317,6 +317,32 @@ about that code, not about the GO scene, and should not be used to choose betwee
 
 ---
 
+## 8. Addendum: what Li & Strahler (1992, IGARSS) confirms
+
+`papers/Li_and_Strahler_1992_IGARSS.pdf`, "Mutual shadowing and directional reflectance of a
+rough surface", pp. 766–768, arrived after the sections above were written.
+
+- **Change 1 is in the source.** Conclusion 1 and Fig. 1 (their own MC, uniform heights,
+  principal plane): "it is quite accurate to model Po = PiMi at θv > θi; and Po = PvMv at θv < θi,
+  until the large zenith in the forward direction is reached where PvMv > PiMi again". That is
+  Po = min(PvMv, PiMi). gortt's old logic had kept Po = PvMv across the whole forward side.
+- **The P terms gortt uses are the paper's.** Eq. 4 is gortt's PvMv. Eq. 5 is gortt's PiMi: a
+  "fuzzy" Mi boundary replacing eq. 3, the TGRS eq. 21 form, which "guarantees the right result
+  at the hotspot" and vanishes only when θv′ − θi′cosφ reaches π. That is why it has no zero
+  clamp, and why it beat eq. 21 against the MC in section 3.
+- **gortt's β is the paper's eq. 7, except that gortt sets Γi = Γv.** The paper defines Γi as
+  the shadowing area cast on a level, i.e. the illumination direction. With Γi = πr² sec(i′)
+  (`beta="illum"`), Kc RMSE over the five canopies goes 0.080 → 0.064. Forward scatter improves
+  (0.130 → 0.060) and backscatter gets worse (0.065 → 0.095). Eq. 6, from which eq. 7 follows, is
+  defined at nadir viewing, so the published β is view-independent by construction and cannot
+  give the asymmetry of section 6. OPEN-QUESTIONS #9 stays open.
+- **The cosine-in-azimuth suggestion (conclusion 3) is not supported by our MC.** Using
+  (1 − cos raa)/2 as the interpolation weight gives off-plane RMSE 0.061 against 0.057 for linear,
+  with more clamps. Interpolating Kc rather than f removes the clamps but costs more: 0.079
+  linear, 0.092 cosine.
+
+---
+
 ## Proposed C changes, in order
 
 *All three are now made; the measured golden deltas are in their commit messages. Change 1
@@ -364,5 +390,5 @@ principal plane ±80°, and vza 20/45/70 across azimuth; 480 geometries per cano
   differ from L&S's published Fig. 4.
 - The azimuth experiments cover the principal cone vza = sza and vza = 45°. Grazing azimuthal
   geometries are sampled only in the principal plane.
-- L&S's IGARSS '92 paper, which is the source of the P forms and the β gortt uses, was not
-  available. Those forms are scored here, not checked against their source.
+- L&S's IGARSS '92 paper was not available when this was written. It has since been checked;
+  see section 8.

@@ -202,11 +202,19 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 	PvMv = Mv -( 1.0 - cos( g->vza_prime * cos( raa ) - g->sza_prime ) ) / 2.0 ;
 
 
-	/*set Po*/
+	/*
+	Po: the part of the crown shaded from both directions. The smaller of the
+	two mutually shadowed sets lies (almost) inside the larger, which is what
+	Li & Strahler's cases 2(b) and 2(c) assume and what a Monte Carlo of the
+	scene shows everywhere (KC-INVESTIGATION.md, section 2).
 
-	if( ( raa < DTOR( 270. ) ) && ( raa > DTOR( 90. ) ) ) Po = PvMv ;
-	else if( fabs( g->vza ) > fabs( g->sza ) ) Po = PiMi  ;
-	else Po = PvMv  ;
+	It used to be PvMv throughout forward scatter (L&S p. 282). That cancels
+	the view-direction shadowing, and once PvMv overtakes PiMi at large
+	forward zeniths Kc grows like sec(vza') -- past 1 - Kg - Kz, where
+	gortt_rsurf clamps Kt. With the minimum, Gamma_c/Gamma_v - PvMv =
+	1 - Mv makes Kc <= 1 - Kg - Kz exact in the principal plane at beta = 1.
+	*/
+	Po = MIN( PvMv, PiMi ) ;
 
 	if( g->sza_prime < 0.000000001 ){
 

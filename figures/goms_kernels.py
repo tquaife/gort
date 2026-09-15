@@ -61,9 +61,9 @@ The switches (a Variant):
                          suggests interpolating the P's)
               "direct"   no interpolation: the P terms at the actual azimuth
 
-  beta        "code"     IGARSS '92 eq. 7, D = r cot(i'/2), with Gamma_i = Gamma_v; gortt
-              "illum"    the same with Gamma_i = pi r^2 sec(i'), the illumination
-                         shadow area the IGARSS text defines Gamma_i as
+  beta        "illum"    IGARSS '92 eq. 7, D = r cot(i'/2), Gamma_i = pi r^2 sec(i'),
+                         the illumination shadow area; gortt
+              "code"     the same with Gamma_i = Gamma_v (gortt up to 6a6d845)
               "eq23"     (1 - (h2-h1)/4b)^2, 0 if h2-h1 > 4b   (L&S eq. 23)
               a float    fixed, like gortt -beta
 """
@@ -111,7 +111,7 @@ class Variant:
     pvmv: str = "igarss"
     po: str = "nest"
     lune: bool = False
-    beta: object = "code"
+    beta: object = "illum"
     az_interp: str = "f"
 
     def replace(self, **kw):
@@ -127,7 +127,7 @@ class Variant:
 
 GORTT = Variant()
 # the two versions the investigation started from
-GORTT_129ED80 = Variant(po="code", overlap_h="depth")
+GORTT_129ED80 = Variant(po="code", overlap_h="depth", beta="code")
 GORTT_MASTER = GORTT_129ED80.replace(fsq="old")
 
 
@@ -405,6 +405,7 @@ def selftest(binary, variant, tol=1e-12):
                 rows += [(vz, float(ra), s, 0.0) for vz in (5.0, 20.0, 45.0, 70.0)
                          for ra in np.arange(0.0, 360.0, 15.0)]
             extra = c.args() + (["-beta", repr(beta)] if beta != "code" else [])
+            var = variant if beta == "code" else variant.replace(beta=beta)
             # gortt_run.run prepends SOBS; ours come after, so they win
             got = gr.run(binary, rows, 800.0, extra, want="prop")
 
@@ -412,7 +413,7 @@ def selftest(binary, variant, tol=1e-12):
             sza = np.radians([r[2] for r in rows])
             raa = np.radians([(r[1] - r[3]) % 360.0 for r in rows])
             raa = np.where(raa > np.pi, 2.0 * np.pi - raa, raa)
-            K = proportions(c, variant.replace(beta=beta), vza, sza, raa)
+            K = proportions(c, var, vza, sza, raa)
             mine = np.stack([K["Kc"], K["Kg"], K["Kt"], K["Kz"]], axis=1)
             err = np.max(np.abs(mine - got))
             worst = max(worst, err)

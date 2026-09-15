@@ -167,9 +167,16 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 
 	theta_Mi = acos( 1.0 - 2.0*Mi );
 
-	/*IGARSS 92 paper*/
+	/*IGARSS 92 paper: PvMv is its eq. 4, PiMi its eq. 5*/
 
-	Gamma_i = Gamma_v ;
+	/*
+	Gamma_i for beta: the shadow area a crown casts in the illumination
+	direction. IGARSS '92 eq. 7 defines it as the shadowing area on a level,
+	and Abuelgasim & Strahler (1994) call lambda*Gamma_i the "coverage and sun
+	position". It used to be Gamma_v, which made beta depend on the view
+	zenith. KC-INVESTIGATION.md section 8; OPEN-QUESTIONS #9.
+	*/
+	Gamma_i = M_PI * p->rr * SEC(g->sza_prime) ;
 
 	PiMi = ( 1 - cos( theta_Mi * ( 1 - ( g->sza_prime - g->vza_prime * cos( raa ) )/M_PI ) ) ) / 2.0 ;
 	PvMv = Mv -( 1.0 - cos( g->vza_prime * cos( raa ) - g->sza_prime ) ) / 2.0 ;

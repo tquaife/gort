@@ -39,11 +39,17 @@ degrees because both the direct and `-P` paths return `-nan` at exactly 90.
 ### How good is the reproduction
 
 > **Update.** The discussion below was written before `KC-INVESTIGATION.md`. Since then F² has
-> been removed from `gortt_kc`, `Po` changed and the overlap height fixed. Kc at sza 30 now reads
-> 0.817 at the hotspot, 0.811 at +44, 0.868 at +60, 0.242 at nadir, 0.143 at −40 and 0.191 at
-> −60. A Monte Carlo of the same canopy gives 0.320 at nadir, twice the published ~0.15, so the
-> published Kc curve is not a reliable target (KC-INVESTIGATION.md, section 7). What remains
-> between gortt and the MC is mostly β (OPEN-QUESTIONS #9).
+> been removed from `gortt_kc`, `Po` changed, the overlap height fixed and Γi in β corrected
+> (c0ef2c3). Kc at sza 30 now reads 0.817 at the hotspot, 0.798 at +44, 0.824 at +60, 0.252 at
+> nadir, 0.136 at −40 and 0.148 at −60. That is within a few hundredths of the published curve
+> everywhere except nadir (~0.15). A Monte Carlo of the same canopy gives 0.320 at nadir, so the
+> published Kc curve is still not a reliable target (KC-INVESTIGATION.md, section 7). What
+> remains between gortt and the MC is mostly β (OPEN-QUESTIONS #9).
+>
+> Kc and Kt go flat below about −83° at sza 30. There P_vM_v overtakes P_iM_i, Po switches to
+> P_iM_i, and the uniform-height part of Kc equals its bound 1 − Kg − Kz (all visible crown is
+> sunlit). What is left varies only with F under a β that is fixed for the solar zenith. This is
+> expected behaviour; the MC gives ~0.30 at −85.
 
 Good, with one exception.
 

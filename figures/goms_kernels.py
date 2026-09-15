@@ -45,10 +45,13 @@ The switches (a Variant):
                          tMv - i' + v' cos raa, value from tMv - v' + v' cos raa
 
   po          "nest"     min(PvMv, PiMi): the smaller mutually-shadowed set lies
-                         inside the larger (what the Monte Carlo shows); gortt
+                         inside the larger (gortt 0204222 to 8d5fe7c)
               "code"     PvMv in forward scatter; PiMi if vza > sza; else PvMv
                          (gortt up to 0204222)
               "zerofwd"  as "code" but 0 in forward scatter
+              "schaaf"   Schaaf et al. (1994) eq. 23A: PiMi beyond the hotspot in
+                         backscatter, min(PvMv, PiMi) elsewhere; gortt
+              "schaaf_unsigned"  the same with v' > i' on either side
 
   lune        False, or True: ignore pimi/pvmv/po and compute all three from the
               exact interval geometry on the primed sphere in the principal
@@ -109,7 +112,7 @@ class Variant:
     overlap_az: str = "ambrals"
     pimi: str = "igarss"
     pvmv: str = "igarss"
-    po: str = "nest"
+    po: str = "schaaf"
     lune: bool = False
     beta: object = "illum"
     az_interp: str = "f"
@@ -315,6 +318,15 @@ def fFbeta(c, v, vza, sza, raa, Kg):
             Po = np.where(forward, 0.0, Po)
         elif v.po == "nest":
             Po = np.minimum(PvMv, PiMi)
+        elif v.po in ("schaaf", "schaaf_unsigned"):
+            # Schaaf et al. (1994) eq. 23A: Delta P = PvMv while v' > i',
+            # otherwise the larger of PvMv and PiMi.  "schaaf" reads v' > i'
+            # as the backscatter side beyond the hotspot, "schaaf_unsigned"
+            # literally, on either side.
+            beyond = vp > ip
+            if v.po == "schaaf":
+                beyond = beyond & ~forward
+            Po = np.where(beyond, PiMi, np.minimum(PvMv, PiMi))
         elif v.po != "code":
             raise ValueError(v.po)
 

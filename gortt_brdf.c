@@ -200,18 +200,26 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 
 
 	/*
-	Po: the part of the crown shaded from both directions. The smaller of the
-	two mutually shadowed sets lies (almost) inside the larger, which is what
-	Li & Strahler's cases 2(b) and 2(c) assume and what a Monte Carlo of the
-	scene shows everywhere (KC-INVESTIGATION.md, section 2).
+	Po: the part of the crown shaded from both directions, following Schaaf,
+	Li & Strahler (1994) eq. 23A.  Beyond the hotspot in backscatter
+	(vza' > sza') Po = PiMi, so the decrement is PvMv alone; the uniform-height
+	Kc is then exactly 1 - Kg - Kz, all visible crown sunlit (L&S 1992 eq. 20).
+	Everywhere else the decrement is the larger of PvMv and PiMi, i.e.
+	Po = min(PvMv, PiMi): the smaller mutually shadowed set lies inside the
+	larger, as Li & Strahler (1992, IGARSS) conclusion 1 and a Monte Carlo of
+	the scene both show (KC-INVESTIGATION.md, sections 2 and 9).
 
-	It used to be PvMv throughout forward scatter (L&S p. 282). That cancels
-	the view-direction shadowing, and once PvMv overtakes PiMi at large
-	forward zeniths Kc grows like sec(vza') -- past 1 - Kg - Kz, where
-	gortt_rsurf clamps Kt. With the minimum, Gamma_c/Gamma_v - PvMv =
-	1 - Mv makes Kc <= 1 - Kg - Kz exact in the principal plane at beta = 1.
+	Two rules this replaces, both wrong somewhere:
+	- PvMv throughout forward scatter (L&S 1992 p. 282) cancels the view
+	  shadowing, and once PvMv overtakes PiMi at large forward zeniths Kc grows
+	  like sec(vza') past 1 - Kg - Kz.
+	- min(PvMv, PiMi) everywhere (0204222) subtracts PiMi in backscatter when
+	  the sun is near overhead and PiMi > PvMv, and Kc goes negative.
 	*/
-	Po = MIN( PvMv, PiMi ) ;
+	if( ( g->vza_prime > g->sza_prime ) && !( ( raa < DTOR( 270. ) ) && ( raa > DTOR( 90. ) ) ) )
+		Po = PiMi ;
+	else
+		Po = MIN( PvMv, PiMi ) ;
 
 	if( g->sza_prime < 0.000000001 ){
 

@@ -28,6 +28,12 @@ q08             spec.in     -q08_pn_kopen
 q08-energy      spec.in     -q08_pn_kopen -energy
 lidar           spec.in     -lidar
 
+# sun near overhead, dense canopy.  Po = min(PvMv, PiMi) made Kc negative in
+# backscatter here (Kc -4.2, BRF -1.9 at sza 5, vza 80); the suite had no
+# low-sun backscatter row, so nothing noticed.  The sza 0 rows hold beta at
+# its overhead limit.  See KC-INVESTIGATION.md section 9.
+lowsun          lowsun.in   -lambda 1.0 -prnprop
+
 # ---- gap probabilities themselves (printed at %0.40f -- the precise gate) --
 probs           -           -W
 probs-lai       -           -LAI 4.0 -W

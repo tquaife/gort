@@ -204,8 +204,10 @@ which led to three changes: F² dropped from `gortt_kc`, `Po = MIN(PvMv, PiMi)` 
 depth. `figures/goms_kernels.py` is a numpy port of those kernels, checked against the binary
 with `--selftest`, with the rejected alternatives kept as switches. `figures/kc_investigation.py`
 scores any change there against the MC in seconds, because the MC is cached. Use it before
-touching `gortt_kg`/`gortt_kc*`/`gortt_overlap`. **β is still wrong** (OPEN-QUESTIONS #9): the MC
-wants it large in backscatter and small in forward scatter, and gortt's formula is symmetric.
+touching `gortt_kg`/`gortt_kc*`/`gortt_overlap`. β is Li & Strahler (1992, IGARSS) eq. 7 with Γi
+the illumination shadow area. **β is still wrong** (OPEN-QUESTIONS #9): the MC wants it large in
+backscatter and small in forward scatter, and the published formula does not depend on view
+direction at all.
 
 **`-h1` equal to `-h2` hangs** in the gap-probability code, and nearly equal gives `-nan`
 (OPEN-QUESTIONS #10).

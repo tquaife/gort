@@ -46,7 +46,8 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
   in `figures/goms_kernels.py`. See `KC-INVESTIGATION.md`.
 * ~~Resolve the `F` versus `F²` discrepancy in `gortt_kc`~~ — **done** (129ed80), together with
   `Po` (0204222) and the overlap height (59121b9). See `OPEN-QUESTIONS.md` item 1.
-* Resolve β in `gortt_kc` — `OPEN-QUESTIONS.md` item 9. It is now the largest error in the
+* Resolve β in `gortt_kc` — `OPEN-QUESTIONS.md` item 9. (Γi was corrected to the illumination
+  area in c0ef2c3; the view-direction dependence is what remains.) It is now the largest error in the
   geometric-optical proportions, and fixing it will move most BRF goldens.
 * Make `-h1` equal to `-h2` work, or refuse it — `OPEN-QUESTIONS.md` item 10.
 

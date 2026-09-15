@@ -13,8 +13,10 @@ to that version.
 
 > **Status:** changes 1–3 below are made: `Po` in 0204222, dead code deleted in 5399f53, and the
 > overlap height in 59121b9. `figures/goms_kernels.py` reproduces the resulting binary to
-> 3.7e-13, and the MC scores it at Kc RMSE 0.080 (the "changes 1 + 2" row). β (section 6) is
-> open as OPEN-QUESTIONS #9, the residual clamp (section 5) as #11.
+> 3.7e-13, and the MC scores it at Kc RMSE 0.080 (the "changes 1 + 2" row). After the papers in
+> section 8, Γi in β was also changed to the illumination shadow area (c0ef2c3). That takes the
+> MC score to 0.064, with a worst error of 0.33. β itself (section 6) is still open as
+> OPEN-QUESTIONS #9, and the residual clamp (section 5) as #11.
 
 "L&S" is Li & Strahler (1992), IEEE TGRS 30(2) 276–292 (`papers/Li_and_Strahler_1992.pdf`).
 Primes are the ellipsoid→sphere transform, as everywhere else in gortt.
@@ -332,7 +334,7 @@ rough surface", pp. 766–768, arrived after the sections above were written.
   clamp, and why it beat eq. 21 against the MC in section 3.
 - **gortt's β is the paper's eq. 7, except that gortt sets Γi = Γv.** The paper defines Γi as
   the shadowing area cast on a level, i.e. the illumination direction. With Γi = πr² sec(i′)
-  (`beta="illum"`), Kc RMSE over the five canopies goes 0.080 → 0.064. Forward scatter improves
+  (`beta="illum"`, adopted in c0ef2c3), Kc RMSE over the five canopies goes 0.080 → 0.064. Forward scatter improves
   (0.130 → 0.060) and backscatter gets worse (0.065 → 0.095). Eq. 6, from which eq. 7 follows, is
   defined at nadir viewing, so the published β is view-independent by construction and cannot
   give the asymmetry of section 6. OPEN-QUESTIONS #9 stays open.

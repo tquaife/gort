@@ -230,13 +230,15 @@ extremes for real height distributions is not:
   where you see sunlit crown tops whatever their heights. It is 0.2–0.6 in forward scatter,
   where the height spread decides whether lower crowns' shadows land on the crowns you see.
   Near nadir it is 0.5–0.8. Table in KC-INVESTIGATION.md, section 6.
-* **gortt's β** is the IGARSS '92 formula, with D = r cot(i′/2) and Γi = Γv. It depends on sza
-  and on vza, but *symmetrically* in vza, so it cannot tell the two sides apart. At nadir view it
-  is 0.1–0.5, too low for backscatter. That produces a notch in Kc just beyond the hotspot,
-  where the (1 − β)F(1 − Kg) random term falls sharply (`figures/kc_investigation/kc_variants.png`).
+* **gortt's β** is IGARSS '92 eq. 7, with D = r cot(i′/2) and, since c0ef2c3, Γi = πr² sec(i′),
+  the illumination shadow area (it used to be Γv). It depends only on the canopy and sza, so it
+  cannot tell backscatter from forward scatter. It is too low for backscatter, which leaves a
+  notch in Kc just beyond the hotspot where the (1 − β)F(1 − Kg) random term falls sharply
+  (`figures/kc_investigation/kc_variants.png`). Current Kc RMSE against the MC: 0.064 overall;
+  backscatter 0.095, near nadir 0.044, forward 0.060.
 * **L&S (1992) eq. 23**, β = (1 − (h2 − h1)/4b)², is constant in angle: 0.24 for SOBS, and 0 once
   h2 − h1 > 4b. It is better in forward scatter and worse in backscatter; overall Kc RMSE 0.101
-  against gortt's 0.080. β = 1 everywhere is worse again (0.141, and it restores 88 Kt clamps
+  against gortt's 0.064. β = 1 everywhere is worse again (0.141, and it restores 88 Kt clamps
   off the principal plane).
 * **L&S apply β to the P terms** (eq. 24, P = βP1 + (1 − β)P2). gortt applies it to f. These are
   not the same thing, because F, M and the Γs differ between the extremes.
@@ -260,10 +262,11 @@ pp. 766–768):
   `Gamma_i = Gamma_v`, and that alone is what makes its β depend on vza. It reads like a
   transcription slip, though it could have been deliberate. Abuelgasim & Strahler (1994), who
   describe λΓi as the "coverage and sun position", point the same way.
-* **Scored against the MC** (`figures/goms_kernels.py`, `beta="illum"`), Γi = πr² sec(i′) takes
-  overall Kc RMSE from 0.080 to 0.064. It halves the forward-scatter error (0.130 → 0.060 in the
-  principal plane) and makes backscatter worse (0.065 → 0.095). SOBS 0.084 → 0.065, dense
-  0.107 → 0.071, same-height unchanged. So it is better on balance but is not the fix.
+* **Adopted in c0ef2c3.** Against the MC, Γi = πr² sec(i′) took overall Kc RMSE from 0.080 to
+  0.064 and the worst error from 0.58 to 0.33. It halved the forward-scatter error (0.130 → 0.060
+  in the principal plane) and made backscatter worse (0.065 → 0.095). SOBS 0.084 → 0.065, dense
+  0.107 → 0.071, same-height unchanged. Better on balance, but not the fix. The old form is
+  `beta="code"` in `figures/goms_kernels.py`.
 * **The published β cannot depend on view direction, by construction.** Eq. 6, the "probability
   weighted overlap function" it comes from, is defined at nadir viewing. Option 3 below is
   therefore done, and the derivation cannot supply the forward/backscatter asymmetry the MC
@@ -277,8 +280,7 @@ pp. 766–768):
    a viewed crown's shadowing neighbours lie in the same height layer.
 2. Apply β to ΔP as eq. 24 does, rather than to f, and re-score it.
 3. ~~Find the IGARSS '92 derivation and check the formula in use against it.~~ Done, see above.
-   The one discrepancy is Γi; switching it to the illumination area is a cheap improvement on
-   the way to a real fix (RMSE 0.080 → 0.064), and would move most BRF goldens.
+   The one discrepancy, Γi, is fixed in c0ef2c3.
 4. The paper's eqs 1–2 give PiMi for a "fuzzy" Mi boundary as a numerical integral over the
    crown surface; eq. 5, which gortt uses, is its closed-form approximation. It is not a β fix,
    but it is the more physical form of the uniform-height extreme that β weights.

@@ -24,6 +24,18 @@ double gortt_kg( const gortt_parameters *p, const gortt_geometry *g, double raa 
 }
 
 
+/*
+The overlap between the view and illumination shadows of one crown, as a
+fraction of pi r^2 (Li & Strahler 1992 eqs 5-6, with the azimuthal
+generalisation of t2 used in the Ambrals/LiSparse kernels -- in the
+principal plane the two are identical).
+
+Two alternatives used to sit here behind if(TRUE)/if(FALSE): L&S's
+principal-plane t2 = |tan i' - tan v' cos raa| applied at every azimuth, and
+a t1 "from Wenge's code" that divides by D and so is undefined at the
+hotspot. Both were scored against a Monte Carlo and are worse
+(KC-INVESTIGATION.md, section 4); they are recorded in figures/goms_kernels.py.
+*/
 double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double raa )
 {
 
@@ -37,52 +49,8 @@ double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double
 
 	D = sqrt( MAX( 0.0, d ) );
 
-/*
-	printf( "+++ %f %f %f\n", D, d, cos( raa ) );
-*/
-
-	if( TRUE ){ /*ambrals style*/
-
-		t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
-
-	}else{ /*Li&Strahler '92*/
-
-		/*Principal plane only??*/
-		t2 = fabs( tan( g->sza_prime) - tan(g->vza_prime)*cos(raa) ) ;
-
-	}
-
-
-	if( FALSE ){ /*from Wenge's code*/
-
-		/*
-		Might be required for off-principal plane...
-		*/
-
-		double tmp ;
-
-		tmp = pow( tan( g->sza_prime ) * sin( raa ) / D, 2 ) \
-			  + pow((tan( g->sza_prime ) * cos( raa ) - tan( g->vza_prime ))/D, 2 ) \
-				* pow( SEC( g->sza_prime ), 2 );
-
-		if( tmp < 0.0 ) tmp = 0.0 ;
-
-		t1 = sqrt( tmp ) ;
-
-		tmp = pow( tan( g->vza_prime ) * sin( raa ) / D, 2 ) \
-			  + pow((tan( g->vza_prime ) * cos( raa ) - tan( g->sza_prime ))/D, 2 ) \
-				* pow( SEC( g->vza_prime ), 2 );
-
-		if( tmp < 0.0 ) tmp = 0.0 ;
-
-		t1 += sqrt( tmp ) ;
-
-	}else{ /*Li&Strhaler'92*/
-
-		t1 = ( SEC(g->sza_prime) + SEC(g->vza_prime) ) ;
-
-	}
-
+	t2 = sqrt( D*D + pow( ( tan(g->sza_prime)*tan(g->vza_prime)*sin(raa) ), 2) );
+	t1 = ( SEC(g->sza_prime) + SEC(g->vza_prime) ) ;
 
 	cos_t = (p->h/p->b) * t2 / t1  ;
 
@@ -90,10 +58,6 @@ double gortt_overlap( const gortt_parameters *p, const gortt_geometry *g, double
 	cos_t = MIN(  1.0, cos_t );
 
 	t = acos( cos_t );
-
-	/*
-	overlap = MAX( 0.0, ( t - sin( t )*cos( t ) )*( SEC(g->sza_prime)+SEC(g->vza_prime) )/M_PI ) ;
-	*/
 
 	overlap = MAX( 0.0, ( t - sin( t )*cos_t )*( SEC(g->sza_prime)+SEC(g->vza_prime) )/M_PI ) ;
 
@@ -231,109 +195,6 @@ void gortt_kc_fFbeta( const gortt_parameters *p, const gortt_geometry *g, double
 
 
 	return ;
-}
-
-
-double gortt_kc_PP_only( const gortt_parameters *p, const gortt_geometry *g, double Kg )
-{
-
-	double Kc ;
-
-	double phase_prime, Gamma, Gamma_v, Gamma_c ;
-	double overlap, Mv, Mi, M, f, F, f1, f2  ;
-	double Pv, PvMv, Pi, PiMi, Po ;
-	double theta_Mi, theta_Mv, beta, D ;
-
-	overlap = gortt_overlap( p, g, g->raa );
-	phase_prime = cos( g->vza_prime )*cos( g->sza_prime )+sin( g->vza_prime )*sin( g->sza_prime )*cos( g->raa ) ;
-
-	Mi = ( 1.0  - (1.0 - exp( -p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )/( p->lambda * M_PI * p->rr * SEC(g->sza_prime) ) )  ;
-	Mv = ( 1.0  - (1.0 - exp( -p->lambda * M_PI * p->rr * SEC(g->vza_prime) ) )/( p->lambda * M_PI * p->rr * SEC(g->vza_prime) ) )  ;
-
-	Gamma   = M_PI * p->rr * ( SEC(g->sza_prime)+SEC(g->vza_prime)-overlap ) ;
-	Gamma_c = M_PI * p->rr *   SEC(g->vza_prime) * 0.5 * ( 1.0 + phase_prime ) ;
-	Gamma_v = M_PI * p->rr *   SEC(g->vza_prime) ;
-
-	F = Gamma_c / Gamma ;
-
-	M = 1.0 - ( 1.0 - Kg )/( p->lambda * Gamma ) ;
-
-	theta_Mi = acos( 1.0 - 2.0*Mi );
-	theta_Mv = acos( 1.0 - 2.0*Mv );
-
-	if( FALSE ){
-
-		/*TGARSS '92 paper*/
-
-		/*
-		This is really not correct...!
-		*/
-
-		Pi = ( 1.0 - cos( theta_Mi - g->sza_prime + g->vza_prime * cos( g->raa ) ) ) / ( 1.0 - cos( theta_Mi ) ) ;
-
-		if( ( theta_Mv - g->sza_prime + g->vza_prime * cos( g->raa ) ) >= 0 ){
-			Pv = ( 1.0 - cos( theta_Mv - g->vza_prime + g->vza_prime * cos( g->raa ) ) ) / ( 1.0 - cos( theta_Mv ) ) ;
-		}else{
-			Pv = 0 ;
-		}
-
-		PiMi = Pi*Mi ;
-		PvMv = Pv*Mv ;
-
-		f = F * ( 1.0 - Gamma_v*( PvMv + PiMi - Po )/Gamma_c ) / ( 1.0 - M ) ;
-
-	}else{
-
-		/*IGARSS 92 paper*/
-
-		double Gamma_i ;
-		Gamma_i = Gamma_v ;
-
-		PiMi = ( 1 - cos( theta_Mi * ( 1 - ( g->sza_prime - g->vza_prime * cos( g->raa ) )/M_PI ) ) ) / 2.0 ;
-		PvMv = Mv -( 1.0 - cos( g->vza_prime * cos( g->raa ) - g->sza_prime ) ) / 2.0 ;
-
-
-		/*
-		Angles now redefined, so this is incorrect
-		if( ( g->vza > 0 && g->sza < 0 )||( g->vza < 0 && g->sza > 0 ) ) Po = PvMv ;
-		else if( fabs( g->vza ) > fabs( g->sza ) ) Po = PiMi ;
-		else Po = PvMv  ;
-		*/
-
-
-		/*set Po*/
-
-		if( ( g->raa < DTOR( 270 ) ) && ( g->raa > DTOR( 90 ) ) ) Po = PvMv ;
-		else if( fabs( g->vza ) > fabs( g->sza ) ) Po = PiMi ;
-		else Po = PvMv  ;
-
-
-		D = p->r * ( 1.0 / tan ( g->sza_prime/2.0 ) );
-
-
-		if( TRUE ){ /*IGARSS paper*/
-
-			beta = (p->lambda*Gamma_i)/(p->lambda*Gamma_i+(p->h2-p->h1)/D)*(1.0-exp(-p->lambda*Gamma_i-(p->h2-p->h1)/D))/(1.0-exp(-p->lambda*Gamma_i)) ;
-
-		}else{ /*RSE '94*/
-			/*totally wrong as far as I can make out...*/
-			beta = (p->lambda*Gamma_i)/(p->lambda*Gamma_i+(p->h2-p->h1)/D)*(1.0-exp(-p->lambda*Gamma_i+(p->h2-p->h1)/D))/(1.0-exp(p->lambda*Gamma_i)) ;
-		}
-
-		f1 = F * ( 1.0 - Gamma_v*( PvMv + PiMi - Po )/Gamma_c ) / ( 1.0 - M ) ;
-		f2 = F ;
-
-		f = beta*f1+(1.0-beta)*f2 ;
-
-	}
-
-
-	/*fprintf( stderr, "%f %f\n", Pv, Pi );*/
-
-	Kc = f * ( 1.0 - Kg );
-
-	return Kc ;
-
 }
 
 

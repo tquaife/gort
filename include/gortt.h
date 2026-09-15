@@ -333,7 +333,6 @@ double gortt_prime_theta( const gortt_parameters *, double  );
 double gortt_kg( const gortt_parameters *, const gortt_geometry *, double );
 double gortt_kc( const gortt_parameters *, const gortt_geometry *, double );
 void   gortt_kc_fFbeta( const gortt_parameters *, const gortt_geometry *, double, double, double *, double *, double * );
-double gortt_kc_PP_only( const gortt_parameters *, const gortt_geometry *, double );
 double gortt_kc_ambrals( const gortt_parameters *, const gortt_geometry * 	);
 double gortt_overlap( const gortt_parameters *, const gortt_geometry *, double );
 void   gortt_rt_init( const gortt_parameters *, const gortt_geometry *, const gortt_spectra *, int, gortt_rt * );

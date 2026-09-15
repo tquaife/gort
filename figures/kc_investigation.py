@@ -17,6 +17,11 @@ on four cores.  --refresh throws the cache away.  Writes, into DIR:
   fig5.png           Ni et al. (1999) Fig. 5, with MC
 
 See goms_kernels.py for the variant switches and goms_mc.py for the MC.
+
+The comparisons are relative to gortt at 129ed80 -- F squared removed, but
+before changes 1-3 of KC-INVESTIGATION.md went in -- so that the tables stay
+the ones the report quotes.  "+ overlap h averaged" with "+ Po = min(PvMv,
+PiMi)" is what gortt does now.
 """
 
 import argparse
@@ -60,10 +65,10 @@ ALL_CANOPIES = {**CANOPIES, **LS92}
 SZAS = (15.0, 30.0, 45.0, 60.0)
 PP = np.arange(-85.0, 85.1, 5.0)
 
-BASE = gk.GORTT.replace(overlap_h="avg")
+BASE = gk.GORTT_129ED80.replace(overlap_h="avg")
 KC_VARIANTS = [
-    ("gortt, F squared (master)",      gk.GORTT.replace(fsq="old")),
-    ("gortt (this branch)",            gk.GORTT),
+    ("gortt, F squared (master)",      gk.GORTT_MASTER),
+    ("gortt at 129ed80",            gk.GORTT_129ED80),
     ("+ overlap h averaged",           BASE),
     ("+ Po = min(PvMv, PiMi)",         BASE.replace(po="nest")),
     ("  ... beta = eq. 23",            BASE.replace(po="nest", beta="eq23")),
@@ -194,7 +199,7 @@ def experiment_kg(cache):
         for name, c in CANOPIES.items():
             keys, v, s, ra = select(cache, name)
             cone = (v == s) & (ra > 0) & (ra < 180)
-            kg = gk.kg(c, gk.GORTT.replace(overlap_h=h, overlap_az=az), R(v), R(s), R(ra))
+            kg = gk.kg(c, gk.GORTT_129ED80.replace(overlap_h=h, overlap_az=az), R(v), R(s), R(ra))
             e = kg - col(cache, keys, "Kg")
             bad = ~np.isfinite(e)
             e = np.where(bad, 0.0, e)
@@ -233,7 +238,7 @@ def experiment_kc(cache):
                           ["%.3f"] * (len(CANOPIES) + 2) + ["%d"]))
 
     lines += ["", "Split by direction for SOBS, variant `+ Po = min(PvMv, PiMi)` against "
-              "gortt on this branch: RMSE in backscatter (principal plane, vza > sza), near "
+              "gortt at 129ed80: RMSE in backscatter (principal plane, vza > sza), near "
               "nadir (|vza| <= 20) and forward scatter (principal plane, vza >= 25).", ""]
     rows = []
     c = CANOPIES["SOBS"]
@@ -243,7 +248,7 @@ def experiment_kc(cache):
         signed = np.where(ra > 90, -v, v)
         groups = [("back", signed > s0), ("nadir", np.abs(signed) <= 20), ("fwd", signed <= -25)]
         row = ["sza %g" % s0]
-        for var in (gk.GORTT, BASE.replace(po="nest")):
+        for var in (gk.GORTT_129ED80, BASE.replace(po="nest")):
             K = gk.proportions(c, var, R(v), R(s), R(ra))["Kc"]
             row += [rmse((K - mcK)[m]) for _, m in groups]
         rows.append(row)
@@ -318,7 +323,7 @@ def experiment_P(cache):
         keys, v, s, ra = select(cache, name)
         vp = np.degrees(gk.prime(c, R(v))) * np.where(ra > 90, -1, 1)
         pick = np.isin(np.round(vp), [-50, -30, -10, 0, 20, 40, 60])
-        d = gk.fFbeta(c, gk.GORTT, R(v), R(s), R(ra), gk.kg(c, gk.GORTT, R(v), R(s), R(ra)))
+        d = gk.fFbeta(c, gk.GORTT_129ED80, R(v), R(s), R(ra), gk.kg(c, gk.GORTT_129ED80, R(v), R(s), R(ra)))
         for k in np.flatnonzero(pick)[np.argsort(vp[pick])]:
             mv = [cache[keys[k]][n] for n in ("PvMv", "PiMi", "Po")]
             rows.append(["%s, vza' %+.0f" % (name[:7], vp[k]), mv[0], d["PvMv"][k], mv[1],
@@ -370,9 +375,9 @@ def plot_fig3(cache, path):
         fine = np.linspace(-50, 60, 441)
         fv = np.degrees(np.arctan(np.tan(R(np.abs(fine))) * c.r / c.b))
         fra = np.where(fine < 0, np.pi, 0.0)
-        Kg = gk.kg(c, gk.GORTT, R(fv), R(30.0) + 0 * fv, fra)
-        code = gk.fFbeta(c, gk.GORTT, R(fv), R(30.0) + 0 * fv, fra, Kg)
-        lune = gk.fFbeta(c, gk.GORTT.replace(lune=True), R(fv), R(30.0) + 0 * fv, fra, Kg)
+        Kg = gk.kg(c, gk.GORTT_129ED80, R(fv), R(30.0) + 0 * fv, fra)
+        code = gk.fFbeta(c, gk.GORTT_129ED80, R(fv), R(30.0) + 0 * fv, fra, Kg)
+        lune = gk.fFbeta(c, gk.GORTT_129ED80.replace(lune=True), R(fv), R(30.0) + 0 * fv, fra, Kg)
         pv_p, pi_p = paper_P(c, R(fv), R(30.0) + 0 * fv, fra)
         for j, (P, PM, M) in enumerate((("Pv", "PvMv", "Mv"), ("Pi", "PiMi", "Mi"))):
             ax = axes[i, j]
@@ -393,7 +398,7 @@ def plot_fig3(cache, path):
         mse = np.sqrt(col(cache, keys, "PvMv_se") ** 2 + col(cache, keys, "PiMi_se") ** 2
                       + col(cache, keys, "Po_se") ** 2)
         mc_points(ax, vp, mdp, mse)
-        nest = gk.fFbeta(c, gk.GORTT.replace(po="nest"), R(fv), R(30.0) + 0 * fv, fra, Kg)
+        nest = gk.fFbeta(c, gk.GORTT_129ED80.replace(po="nest"), R(fv), R(30.0) + 0 * fv, fra, Kg)
         ax.plot(fine, dP(code), color=SERIES[0], lw=2, label="gortt")
         ax.plot(fine, np.where(fine >= np.degrees(gk.prime(c, R(30.0))),
                                code["PvMv"], pi_p * code["Mi"]),
@@ -449,7 +454,7 @@ def plot_kg(cache, path):
         style(ax)
         mc_points(ax, x, col(cache, keys, "Kg"), col(cache, keys, "Kg_se"))
         for k, h in enumerate(("depth", "centre", "avg")):
-            ax.plot(fine, gk.kg(c, gk.GORTT.replace(overlap_h=h), fv, fs, fra), color=SERIES[k],
+            ax.plot(fine, gk.kg(c, gk.GORTT_129ED80.replace(overlap_h=h), fv, fs, fra), color=SERIES[k],
                     lw=2, ls=("-", "--", ":")[k], label="h = " + h)
         ax.set_title("SOBS principal plane, sza %g°" % s0, color=INK, fontsize=9)
         ax.set_xlabel("signed vza (°)", color=MUTED, fontsize=8)
@@ -462,7 +467,7 @@ def plot_kg(cache, path):
         style(ax)
         mc_points(ax, ra, col(cache, keys, "Kg"), col(cache, keys, "Kg_se"))
         for k, (h, az) in enumerate((("depth", "ambrals"), ("avg", "ambrals"), ("avg", "eq7"), ("avg", "wenge"))):
-            ax.plot(fra, gk.kg(c, gk.GORTT.replace(overlap_h=h, overlap_az=az), R(s0), R(s0), R(fra)),
+            ax.plot(fra, gk.kg(c, gk.GORTT_129ED80.replace(overlap_h=h, overlap_az=az), R(s0), R(s0), R(fra)),
                     color=SERIES[k], lw=2, ls=("-", "--", ":", "-.")[k], label="h=%s, %s" % (h, az))
         ax.set_title("SOBS principal cone vza = sza = %g°" % s0, color=INK, fontsize=9)
         ax.set_xlabel("relative azimuth (°)", color=MUTED, fontsize=8)

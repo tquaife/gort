@@ -5,8 +5,10 @@ behind a switch.
 
 This is an investigation tool, not a second implementation of the model.  With
 the switches at their defaults it reproduces what gortt prints for -prnprop
-(Kc, Kg, Kt, Kz) -- "--selftest" checks that against a built binary -- and the
-other settings are the alternatives found while checking gortt_brdf.c against
+(Kc, Kg, Kt, Kz) -- "--selftest" checks that against a built binary.
+GORTT_129ED80 and GORTT_MASTER reproduce the two earlier versions the
+investigation started from, and the other settings are the alternatives found
+while checking gortt_brdf.c against
 Li & Strahler (1992), IEEE TGRS 30(2) 276-292 ("L&S" below).  See
 KC-INVESTIGATION.md for what each one is and why it is here.
 
@@ -16,35 +18,37 @@ is backscatter (the viewer on the sun's side).
 
 The switches (a Variant):
 
-  fsq         "new"   f = (1-frac)*f0 + frac*f180            (L&S eq. 25)
-              "old"   f = (1-frac)*f0*F0 + frac*f180*F180    (F squared)
+  fsq         "new"   f = (1-frac)*f0 + frac*f180            (L&S eq. 25), gortt
+              "old"   f = (1-frac)*f0*F0 + frac*f180*F180    (F squared, master)
 
-  overlap_h   "depth"  h = 2b + h2 - h1, what gortt uses (the canopy depth)
+  overlap_h   "avg"    the overlap averaged over centre heights in [h1, h2],
+                       which is what the O-bar in L&S eq. 3 asks for; gortt
               "centre" h = (h1 + h2)/2, the crown-centre height L&S eqs 4-6 use
-              "avg"    the overlap averaged over centre heights in [h1, h2],
-                       which is what the O-bar in L&S eq. 3 asks for
+              "depth"  h = 2b + h2 - h1, the canopy depth (gortt up to 59121b9)
 
-  overlap_az  "ambrals" t2 = sqrt(D^2 + (tan i' tan v' sin raa)^2), gortt's if(TRUE)
-              "pp"      t2 = |tan i' - tan v' cos raa|, L&S eq. 6, gortt's else
+  overlap_az  "ambrals" t2 = sqrt(D^2 + (tan i' tan v' sin raa)^2), gortt
+              "pp"      t2 = |tan i' - tan v' cos raa|, L&S eq. 6 (removed from gortt)
               "eq7"     L&S eq. 7: linear in raa from O(0) to O(pi) at the cutoff
                         Phi = 4R/(h(tan v + tan i))
-              "wenge"   gortt's if(FALSE) t1 "from Wenge's code"
+              "wenge"   a t1 "from Wenge's code" (removed from gortt)
 
   pimi        "igarss"   (1 - cos(tMi*(1 - (i' - v' cos raa)/pi)))/2, gortt
               "eq21"     (1 - cos(tMi - i' + v' cos raa))/2, clamped to 0 when the
                          argument is negative, as the L&S text says
-              "eq21raw"  the same without the clamp, as gortt_kc_PP_only codes it
+              "eq21raw"  the same without the clamp, as the removed
+                         gortt_kc_PP_only coded it
 
   pvmv        "igarss"   Mv - (1 - cos(v' cos raa - i'))/2, gortt
               "clamped"  the same, floored at 0
               "eq22"     (1 - cos(tMv - i' + v' cos raa))/2 or 0, L&S eq. 22 as printed
-              "ppcoded"  gortt_kc_PP_only: condition on tMv - i' + v' cos raa, value
-                         from tMv - v' + v' cos raa
+              "ppcoded"  the removed gortt_kc_PP_only: condition on
+                         tMv - i' + v' cos raa, value from tMv - v' + v' cos raa
 
-  po          "code"     PvMv in forward scatter; PiMi if vza > sza; else PvMv
+  po          "nest"     min(PvMv, PiMi): the smaller mutually-shadowed set lies
+                         inside the larger (what the Monte Carlo shows); gortt
+              "code"     PvMv in forward scatter; PiMi if vza > sza; else PvMv
+                         (gortt up to 0204222)
               "zerofwd"  as "code" but 0 in forward scatter
-              "nest"     min(PvMv, PiMi): the smaller mutually-shadowed set lies
-                         inside the larger (what the Monte Carlo shows)
 
   lune        False, or True: ignore pimi/pvmv/po and compute all three from the
               exact interval geometry on the primed sphere in the principal
@@ -98,11 +102,11 @@ SOBS = Canopy()
 @dataclasses.dataclass(frozen=True)
 class Variant:
     fsq: str = "new"
-    overlap_h: str = "depth"
+    overlap_h: str = "avg"
     overlap_az: str = "ambrals"
     pimi: str = "igarss"
     pvmv: str = "igarss"
-    po: str = "code"
+    po: str = "nest"
     lune: bool = False
     beta: object = "code"
     az_interp: str = "f"
@@ -119,6 +123,9 @@ class Variant:
 
 
 GORTT = Variant()
+# the two versions the investigation started from
+GORTT_129ED80 = Variant(po="code", overlap_h="depth")
+GORTT_MASTER = GORTT_129ED80.replace(fsq="old")
 
 
 def sec(x):
@@ -172,6 +179,30 @@ def _overlap_h(c, v, ip, vp, raa, h, vza, sza):
     return _overlap_at_h(c, v, ip, vp, raa, h / c.b)
 
 
+NH_OVERLAP = 24
+
+
+def gauleg(n, eps=3.0e-11):
+    """gauleg() from gortt_albedo.c on [-1, 1], iteration for iteration, so the
+    overlap average uses the same nodes to the last bit or two."""
+    x, w = np.zeros(n), np.zeros(n)
+    for i in range((n + 1) // 2):
+        z = np.cos(3.141592654 * (i + 0.75) / (n + 0.5))
+        while True:
+            p1, p2 = 1.0, 0.0
+            for j in range(1, n + 1):
+                p3, p2 = p2, p1
+                p1 = ((2.0 * j - 1.0) * z * p2 - (j - 1.0) * p3) / j
+            pp = n * (z * p1 - p2) / (z * z - 1.0)
+            z1 = z
+            z = z1 - p1 / pp
+            if abs(z - z1) <= eps:
+                break
+        x[i], x[n - 1 - i] = -z, z
+        w[i] = w[n - 1 - i] = 2.0 / ((1.0 - z * z) * pp * pp)
+    return x, w
+
+
 def overlap(c, v, vza, sza, raa):
     """gortt_overlap, with the h and azimuth switches."""
     ip, vp = prime(c, sza), prime(c, vza)
@@ -180,7 +211,7 @@ def overlap(c, v, vza, sza, raa):
     if v.overlap_h == "centre":
         return _overlap_h(c, v, ip, vp, raa, 0.5 * (c.h1 + c.h2), vza, sza)
     if v.overlap_h == "avg":
-        x, w = np.polynomial.legendre.leggauss(24)
+        x, w = gauleg(NH_OVERLAP)
         hs = 0.5 * (c.h2 - c.h1) * x + 0.5 * (c.h1 + c.h2)
         return sum(0.5 * wk * _overlap_h(c, v, ip, vp, raa, hk, vza, sza)
                    for hk, wk in zip(hs, w))
@@ -354,7 +385,7 @@ def signed_pp(vza_signed, sza):
 # self-test against gortt
 # ---------------------------------------------------------------------------
 
-def selftest(binary, fsq, tol=1e-12):
+def selftest(binary, variant, tol=1e-12):
     canopies = [SOBS, dataclasses.replace(SOBS, lam=0.1), dataclasses.replace(SOBS, lam=1.0),
                 Canopy(r=1.0, b=3.0, h1=2.0, h2=9.0, lam=0.3)]
     betas = ["code", 1.0, 0.0]
@@ -375,7 +406,7 @@ def selftest(binary, fsq, tol=1e-12):
             sza = np.radians([r[2] for r in rows])
             raa = np.radians([(r[1] - r[3]) % 360.0 for r in rows])
             raa = np.where(raa > np.pi, 2.0 * np.pi - raa, raa)
-            K = proportions(c, Variant(fsq=fsq, beta=beta), vza, sza, raa)
+            K = proportions(c, variant.replace(beta=beta), vza, sza, raa)
             mine = np.stack([K["Kc"], K["Kg"], K["Kt"], K["Kz"]], axis=1)
             err = np.max(np.abs(mine - got))
             worst = max(worst, err)
@@ -392,20 +423,22 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--selftest", action="store_true",
                     help="compare the default Variant with gortt -prnprop")
-    ap.add_argument("--new", default=gr.default_binary(), help="gortt with fsq=new")
-    ap.add_argument("--old", help="gortt with fsq=old (optional)")
+    ap.add_argument("--new", default=gr.default_binary(), help="current gortt")
+    ap.add_argument("--at129ed80", help="gortt built at 129ed80 (optional)")
+    ap.add_argument("--master", help="gortt built at e109ff0 / pre-kc-fsquared (optional)")
     a = ap.parse_args()
     if not a.selftest:
         ap.print_help()
         return
     ok = True
-    for fsq, b in (("new", a.new), ("old", a.old)):
+    for name, var, b in (("current", GORTT, a.new), ("129ed80", GORTT_129ED80, a.at129ed80),
+                         ("master", GORTT_MASTER, a.master)):
         if b is None:
             continue
         gr.check_binary(b)
-        worst, n = selftest(b, fsq)
-        print("selftest fsq=%s: %d geometries x 4 proportions, max |port - gortt| = %.3g"
-              % (fsq, n, worst))
+        worst, n = selftest(b, var)
+        print("selftest %s: %d geometries x 4 proportions, max |port - gortt| = %.3g"
+              % (name, n, worst))
         ok = ok and worst <= 1e-12
     sys.exit(0 if ok else 1)
 

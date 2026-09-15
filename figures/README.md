@@ -38,6 +38,13 @@ degrees because both the direct and `-P` paths return `-nan` at exactly 90.
 
 ### How good is the reproduction
 
+> **Update.** The discussion below was written before `KC-INVESTIGATION.md`. Since then F² has
+> been removed from `gortt_kc`, `Po` changed and the overlap height fixed. Kc at sza 30 now reads
+> 0.817 at the hotspot, 0.811 at +44, 0.868 at +60, 0.242 at nadir, 0.143 at −40 and 0.191 at
+> −60. A Monte Carlo of the same canopy gives 0.320 at nadir, twice the published ~0.15, so the
+> published Kc curve is not a reliable target (KC-INVESTIGATION.md, section 7). What remains
+> between gortt and the MC is mostly β (OPEN-QUESTIONS #9).
+
 Good, with one exception.
 
 * Kt, Kz and Kg reproduce the published shapes: Kt is a sine wave that is zero

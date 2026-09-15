@@ -194,10 +194,21 @@ weights.
 
 **One numerical bug is pinned as known-bad rather than fixed**, so that fixing it shows up as a
 reviewable change in the goldens: `gortt_calc_epgap` fills `t < nth-1` while `gortt_calc_kopen`
-integrates to `nth-1`, so the last trapezium panel is built from a zero. Another is flagged in
-a comment on `gortt_kc`: `gortt_kc_fFbeta` returns `f` with `F`
-already folded in, so the principal-plane interpolation carries `F` squared where
-`gortt_kc_PP_only` uses `F`. Both need checking against the papers before being touched.
+integrates to `nth-1`, so the last trapezium panel is built from a zero. It needs checking
+against the papers before being touched.
+
+**The geometric-optical kernels were checked against a Monte Carlo** (`KC-INVESTIGATION.md`),
+which led to three changes: F² dropped from `gortt_kc`, `Po = MIN(PvMv, PiMi)` in
+`gortt_kc_fFbeta`, and the shadow overlap averaged over crown-centre heights in [h1, h2]
+(`NH_OVERLAP` Gauss-Legendre points, set up in `gortt_init_params`) instead of using the canopy
+depth. `figures/goms_kernels.py` is a numpy port of those kernels, checked against the binary
+with `--selftest`, with the rejected alternatives kept as switches. `figures/kc_investigation.py`
+scores any change there against the MC in seconds, because the MC is cached. Use it before
+touching `gortt_kg`/`gortt_kc*`/`gortt_overlap`. **β is still wrong** (OPEN-QUESTIONS #9): the MC
+wants it large in backscatter and small in forward scatter, and gortt's formula is symmetric.
+
+**`-h1` equal to `-h2` hangs** in the gap-probability code, and nearly equal gives `-nan`
+(OPEN-QUESTIONS #10).
 
 **Both the direct path and `-P` return `-nan` at exactly 90° zenith**, because `theta[nth-1]`
 gives `sec(90°) = inf`. `gortt_init_params` clamps `theta[90]` to 89° to keep the probability
@@ -205,8 +216,8 @@ tables finite, but the BRF path does not. Treating the endpoint analytically is 
 decision, not a tidy-up.
 
 `TODO.md` tracks the intended direction and what is already done. `OPEN-QUESTIONS.md` collects
-the things found during the tidy-up that were deliberately left alone — the `F` versus `F²`
-question above, the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
+the things found during the tidy-up that were deliberately left alone — β in `gortt_kc`,
+the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
 evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in. Read it
 before starting the lidar work.
 

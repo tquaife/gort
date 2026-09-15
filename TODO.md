@@ -40,10 +40,15 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
   there is no FP contraction or reassociation and the golden files can therefore prove a
   refactor changed nothing. Turning it on should be its own commit, with `-ffp-contract=off`,
   and it will move the numbers.
-* Promote the `if(TRUE)`/`if(FALSE)` alternative formulations in `gortt_overlap` and
-  `gortt_kc_PP_only` to a selectable enum — see `OPEN-QUESTIONS.md` item 7.
-* Resolve the `F` versus `F²` discrepancy in `gortt_kc` — `OPEN-QUESTIONS.md` item 1. This is
-  the one open item that changes published numbers.
+* ~~Promote the `if(TRUE)`/`if(FALSE)` alternative formulations in `gortt_overlap` and
+  `gortt_kc_PP_only` to a selectable enum~~ — **done differently:** they were scored against a
+  Monte Carlo, all lost, and they were deleted (5399f53). The alternatives are kept as switches
+  in `figures/goms_kernels.py`. See `KC-INVESTIGATION.md`.
+* ~~Resolve the `F` versus `F²` discrepancy in `gortt_kc`~~ — **done** (129ed80), together with
+  `Po` (0204222) and the overlap height (59121b9). See `OPEN-QUESTIONS.md` item 1.
+* Resolve β in `gortt_kc` — `OPEN-QUESTIONS.md` item 9. It is now the largest error in the
+  geometric-optical proportions, and fixing it will move most BRF goldens.
+* Make `-h1` equal to `-h2` work, or refuse it — `OPEN-QUESTIONS.md` item 10.
 
 ## general
 

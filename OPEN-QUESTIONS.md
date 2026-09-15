@@ -9,15 +9,23 @@ Every commit outside the "behaviour change" ones is byte-identical on all 51 tes
 `make test` is the instrument for measuring anything below: change one thing, run it, and the
 harness prints the largest absolute and relative deviation per case.
 
+**Needs resolving first: item 9, β.** Since items 1 and 7 were fixed, β is the largest
+remaining error in the geometric-optical proportions.
+
 ---
 
 ## 1. `gortt_kc` carries F squared — affects every BRF, principal plane included
 
-> **Status (branch `kc-investigation`):** fixed in 129ed80. L&S (1992) eq. 25 interpolates f,
-> and eq. 17 already contains F. Removing F² exposed an unbounded forward-scatter Kc, which is
-> caused by `Po` in `gortt_kc_fFbeta`, and a wrong height in the overlap. Both are investigated
-> against a Monte Carlo reference in **KC-INVESTIGATION.md**, which proposes the fixes. The text
-> below is the original question.
+> **Status: resolved** on branch `kc-investigation`.
+> - F² removed in 129ed80: L&S (1992) eq. 25 interpolates f, and eq. 17 already contains F.
+> - That exposed an unbounded forward-scatter Kc, which came from `Po` in `gortt_kc_fFbeta`.
+>   Fixed in 0204222.
+> - The overlap was also using the canopy depth where L&S use the crown-centre height. Fixed in
+>   59121b9.
+>
+> All three were decided against a Monte Carlo reference; see **KC-INVESTIGATION.md**. What is
+> left is β (item 9) and a small residual Kt clamp (item 11). The text below is the original
+> question, kept for the record.
 
 **Where:** `gortt_brdf.c`, `gortt_kc` and `gortt_kc_fFbeta`.
 
@@ -165,10 +173,11 @@ only needs the ground, and computing all fifteen layers was about 95% of the run
 
 ## 7. Alternative published formulations are behind `if(TRUE)` / `if(FALSE)`
 
-> **Status:** every one of these has now been scored against a Monte Carlo reference in
-> KC-INVESTIGATION.md (sections 3 and 4). None beats the branch currently taken, and
-> `gortt_kc_PP_only` and Wenge's overlap are broken outright. The proposal there is to delete them
-> rather than promote them to enums.
+> **Status: resolved by deletion** in 5399f53. Every one of these was scored against a Monte
+> Carlo reference in KC-INVESTIGATION.md (sections 3 and 4). None beats the branch that was
+> taken, and `gortt_kc_PP_only` and Wenge's overlap were broken outright. Their provenance is
+> kept as switches in `figures/goms_kernels.py`, where A/B-ing them is a keyword argument. The
+> text below is the original item.
 
 **Where:** `gortt_overlap` (Ambrals vs Li & Strahler '92; and Wenge's off-principal-plane
 variant vs Li & Strahler '92) and `gortt_kc_PP_only` (IGARSS '92 vs RSE '94, and TGARSS '92).
@@ -201,6 +210,79 @@ is the thing you would actually want when writing this up.
   header with a growable buffer, or saying so explicitly, would both be better.
 * **`-soil_spectra` files have no comment syntax.** Two numeric columns only; anything else is
   a fatal error. Worth documenting, or worth allowing `#`.
+
+---
+
+## 9. β, the weight between uniform-height and random mutual shadowing — **needs resolving**
+
+**Where:** `gortt_kc_fFbeta` (the `*beta = …` expression) and `gortt_kc`
+(`f = beta*f + (1-beta)*F`).
+
+Kc = β·Kc(uniform height) + (1 − β)·Kc(random). The uniform-height extreme (β = 1) is now right:
+for same-height crowns Kc matches the Monte Carlo with RMSE 0.074. How gortt mixes the two
+extremes for real height distributions is not:
+
+* **The MC's effective β depends strongly on view direction.** It is 0.8–1.0 in backscatter,
+  where you see sunlit crown tops whatever their heights. It is 0.2–0.6 in forward scatter,
+  where the height spread decides whether lower crowns' shadows land on the crowns you see.
+  Near nadir it is 0.5–0.8. Table in KC-INVESTIGATION.md, section 6.
+* **gortt's β** is the IGARSS '92 formula, with D = r cot(i′/2) and Γi = Γv. It depends on sza
+  and on vza, but *symmetrically* in vza, so it cannot tell the two sides apart. At nadir view it
+  is 0.1–0.5, too low for backscatter. That produces a notch in Kc just beyond the hotspot,
+  where the (1 − β)F(1 − Kg) random term falls sharply (`figures/kc_investigation/kc_variants.png`).
+* **L&S (1992) eq. 23**, β = (1 − (h2 − h1)/4b)², is constant in angle: 0.24 for SOBS, and 0 once
+  h2 − h1 > 4b. It is better in forward scatter and worse in backscatter; overall Kc RMSE 0.101
+  against gortt's 0.080. β = 1 everywhere is worse again (0.141, and it restores 88 Kt clamps
+  off the principal plane).
+* **L&S apply β to the P terms** (eq. 24, P = βP1 + (1 − β)P2). gortt applies it to f. These are
+  not the same thing, because F, M and the Γs differ between the extremes.
+* **The RSE '94 variant**, deleted with `gortt_kc_PP_only` and marked "totally wrong as far as I
+  can make out", differed from the IGARSS form only by the signs of both exponents, and gives a negative
+  denominator as transcribed. It was never scored. The
+  IGARSS '92 paper, which the formula in use comes from, was not available when this was
+  written.
+
+**Options, roughly in order of how much they change:**
+1. A β that is larger in backscatter than in forward scatter, e.g. a function of cos(raa) or of
+   the signed zenith difference. It could be fitted to the MC, or derived as the probability that
+   a viewed crown's shadowing neighbours lie in the same height layer.
+2. Apply β to ΔP as eq. 24 does, rather than to f, and re-score it.
+3. Find the IGARSS '92 derivation and check the formula in use against it.
+
+**To test any of them:** add a `beta` option to `figures/goms_kernels.py` and rerun
+`figures/kc_investigation.py`. The MC is cached, so rescoring every variant takes seconds.
+Compare with the "Effective beta" and "Kc" tables in `tables.md`. The change will move most BRF
+goldens.
+
+---
+
+## 10. `-h1` equal to `-h2` hangs; nearly equal gives `-nan`
+
+`gortt -h1 5.75 -h2 5.75` does not return: the gap-probability calculation never finishes.
+`-h1 5.75 -h2 5.76` returns `-nan`. Both predate the kc-investigation changes; master
+(e109ff0) does the same. It has not been traced. `p->lv = lambda/(h2 - h1)` in
+`gortt_init_params` is the obvious suspect for the first.
+
+Same-height crowns are a legitimate canopy (L&S Fig. 3a, and the cleanest test of the
+geometric-optical kernels), so gortt should either handle them or refuse `h2 <= h1` with a
+message. The overlap average added in 59121b9 already handles h1 == h2.
+
+---
+
+## 11. A small residual Kt clamp off the principal plane, near the hotspot
+
+`gortt_kc` interpolates f in azimuth between raa = 0 and π (L&S eq. 25) and multiplies by
+(1 − Kg) at the actual azimuth. Just off the hotspot, f0 ≈ 1/(1 − Kg0) is paired with a Kg that
+has already fallen and a Kz that has already grown. Kc can then exceed 1 − Kg − Kz, and
+`gortt_rsurf` clamps Kt.
+
+On the investigation's grid this happens in 19 of 1,235 geometries, all on the principal cone
+vza = sza, 10–90° of azimuth from the hotspot, mostly at sza 15°, and only for same-height and
+sparse canopies. The excess is at most 0.10.
+
+The alternatives tried (interpolating ΔP, or the P terms at the actual azimuth) remove the clamp
+but double to triple the off-plane error (KC-INVESTIGATION.md, section 5). It may go away with
+item 9, since β = 1 makes it much worse.
 
 ---
 

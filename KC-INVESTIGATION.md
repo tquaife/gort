@@ -7,8 +7,14 @@ Strahler 1992 eq. 25, commit 129ed80) matches the paper, but it exposed two prob
 - Nadir Kc in the Fig. 5 reproduction moved away from the published value.
 
 This document checks the P terms, the `if(FALSE)` branches and the overlap function against the
-paper, and against an independent Monte Carlo (MC) of the scene GOMS describes. **It proposes C
-changes and makes none**; `gortt_brdf.c` is as of 129ed80.
+paper, and against an independent Monte Carlo (MC) of the scene GOMS describes. It was written
+against `gortt_brdf.c` as of 129ed80, and every "this branch" or "gortt" comparison below refers
+to that version.
+
+> **Status:** changes 1–3 below are made: `Po` in 0204222, dead code deleted in 5399f53, and the
+> overlap height in 59121b9. `figures/goms_kernels.py` reproduces the resulting binary to
+> 3.7e-13, and the MC scores it at Kc RMSE 0.080 (the "changes 1 + 2" row). β (section 6) is
+> open as OPEN-QUESTIONS #9, the residual clamp (section 5) as #11.
 
 "L&S" is Li & Strahler (1992), IEEE TGRS 30(2) 276–292 (`papers/Li_and_Strahler_1992.pdf`).
 Primes are the ellipsoid→sphere transform, as everywhere else in gortt.
@@ -312,6 +318,10 @@ about that code, not about the GO scene, and should not be used to choose betwee
 ---
 
 ## Proposed C changes, in order
+
+*All three are now made; the measured golden deltas are in their commit messages. Change 1
+(0204222) moved only the six `-energy` cases, by up to 0.0027. Change 2 (59121b9) moved 37 of 55,
+by up to 0.044. Change 3 (5399f53) was byte-identical.*
 
 Each change is measured with `goms_kernels.py` over the sensitivity-sweep grid (sza 15–60,
 principal plane ±80°, and vza 20/45/70 across azimuth; 480 geometries per canopy).

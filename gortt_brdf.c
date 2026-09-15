@@ -119,7 +119,8 @@ double gortt_kc_ambrals( const gortt_parameters *p, const gortt_geometry *g )
 This version interpolates between values of
 f calulated on the principal plane to produce
 the actual Kc value. Based on the method used
-by Wenge in her code.
+by Wenge in her code, which is Li & Strahler
+(1992) IEEE TGRS 30(2), sec. H, eq. (25).
 */
 double gortt_kc( const gortt_parameters *p, const gortt_geometry *g, double Kg )
 {
@@ -130,7 +131,6 @@ double gortt_kc( const gortt_parameters *p, const gortt_geometry *g, double Kg )
 	double F, F0, F180 ;
 	double Kg0, Kg180 ;
 	double frac ;
-
 
 	/*at the actual geometry: only F and beta are used, f is discarded*/
 	gortt_kc_fFbeta( p, g, g->raa, Kg, &f, &F, &beta );
@@ -149,21 +149,16 @@ double gortt_kc( const gortt_parameters *p, const gortt_geometry *g, double Kg )
 	if( p->use_user_beta == TRUE ) beta = p->beta ;
 
 	/*
-	n.b. gortt_kc_fFbeta already returns f with a factor of F in it
-	(*f = *F * (...)), so the products below carry F squared, where
-	gortt_kc_PP_only uses F to the first power for the same equation.
-	This affects every off-principal-plane BRF. Flagged, deliberately
-	not changed: it needs checking against Ni et al. / Li & Strahler
-	first, and any fix is a change to the numbers, not a tidy-up.
+	Li & Strahler (1992) sec. H, eq. (25): f is computed at raa = 0, pi
+	and interpolated to the actual azimuth. gortt_kc_fFbeta already
+	returns f with its factor of F in it (eq. 17), so it is not applied
+	again here. This used to read f0*F0 and f180*F180, i.e. F squared.
 	*/
-	f = (1.-frac)*f0*F0 + frac*f180*F180 ;
-
+	f = (1.-frac)*f0 + frac*f180 ;
 
 	f = beta*f+(1.0-beta)*F ;
 
 	Kc = f * ( 1.0 - Kg );
-
-
 
 	return( Kc ) ;
 }

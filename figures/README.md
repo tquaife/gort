@@ -253,38 +253,75 @@ them, which is the quickest way to see which one `gortt` reproduces:
 
 | geometry | P rms / max | dP/dz rms / max | dlogP/dz rms / max |
 |---|---|---|---|
-| h2 = 10 (figure)  | 0.016 / 0.039 | 0.0093 / 0.0336 | 0.0101 / 0.0356 |
-| h2 = 12 (Table I) | 0.058 / 0.094 | 0.0149 / 0.0480 | 0.0166 / 0.0541 |
+| h2 = 10 (figure)  | 0.007 / 0.014 | 0.0027 / 0.0068 | 0.0034 / 0.0118 |
+| h2 = 12 (Table I) | 0.053 / 0.081 | 0.0130 / 0.0269 | 0.0147 / 0.0293 |
 
-At h2 = 10 the rms difference in `P` is 0.016, which is the same size as the
-digitisation error itself (the two independent tracings of `P` in the csv differ
-by 0.01–0.03). In other words the agreement is as good as this comparison can
-resolve. The sigmoid `P`, the single-peaked `dP/dz` and its position in the
-upper canopy all come out right.
+At h2 = 10 the rms difference in `P` is 0.007, which is *below* the digitisation
+error itself (the two independent tracings of `P` in the csv differ by 0.01–0.03).
+In other words the agreement is better than this comparison can resolve, and the
+figure above is the limit of the tracing rather than of the model. The sigmoid
+`P`, the single-peaked `dP/dz` and its position in the upper canopy all come out
+right.
+
+These numbers were 0.016 / 0.039 for `P` and 0.0093 / 0.0336 for `dP/dz` before
+the gap probability quadratures were replaced. The fit to the published figure
+improved by a factor of two to three, which is worth noting because nothing in
+that work was tuned against this figure — it is an independent check that fell
+out the right way.
 
 ### The wobble in the derivative panels
 
-`gortt`'s `dP/dz` and `dlogP/dz` are visibly ragged where the published curves
-are smooth. It is not the differencing — a centred difference has zero gain at
-the Nyquist frequency, so it cannot manufacture a sawtooth. The roughness is in
-the gap probability tables and differencing only exposes it. Measured as the rms
-second difference at 80 layers, the between-crown term `p_n0` is 0.05% of its
-peak and the within-crown term `epgap` 0.21% of its. Both come from quadratures
-that step with the layer thickness: `gortt_crown_proj_volume` integrates over
-crown-centre heights in steps of `dz_p`, and `gortt_s_to_index` bins path lengths
-onto `ds = dz`. Both therefore shrink with `-nlayers`, but only about as fast as
-`sqrt(dz)`:
+`gortt`'s `dP/dz` and `dlogP/dz` used to be visibly ragged where the published
+curves are smooth. It was never the differencing — a centred difference has zero
+gain at the Nyquist frequency, so it cannot manufacture a sawtooth. The roughness
+was in the gap probability tables and differencing only exposed it, and it came
+from four quadratures that stepped with the layer thickness. They have been
+replaced; see `quadrature_convergence.py` below and the "No quadrature in the
+model steps with `nlayers`" section of `CLAUDE.md`.
 
-| `-nlayers` | dz (m) | rms wobble in dP/dz, as % of its peak |
-|---|---|---|
-| 20  | 0.59 | 16% |
-| 40  | 0.29 | 9% |
-| 80  | 0.14 | 6% |
-| 120 | 0.09 | 4% |
+Measured as the rms second difference of `dP/dz` over its peak, for this canopy:
 
-Raising `-nlayers` is expensive, and for a waveform the physical answer is
-`-lidar_pulse`, which convolves it away along with everything else below the
-pulse width.
+| `-nlayers` | dz (m) | before | now |
+|---|---|---|---|
+| 20  | 0.59 | 16% | 4.3% |
+| 40  | 0.29 | 9%  | 1.1% |
+| 80  | 0.14 | 6%  | 0.3% |
+| 120 | 0.09 | 4%  | 0.1% |
+
+It now falls as roughly `dz^2` rather than `sqrt(dz)`, so raising `-nlayers`
+actually buys something. For a waveform the physical answer is still
+`-lidar_pulse`, which convolves the remainder away along with everything else
+below the pulse width.
+
+## quadrature_convergence.py
+
+Evidence that the gap probabilities no longer depend on `-nlayers`, and that the
+quadratures behind them are converged at the default `-nquad`.
+
+```sh
+./quadrature_convergence.py
+./quadrature_convergence.py --ref /path/to/an/older/gortt
+```
+
+Four panels, for three canopies (gortt's default, a dense one and a sparse one):
+
+* **(a)** `k_openep` against `-nlayers`. Flat is the whole point. `--ref` overlays a
+  second binary, so a build from before the change shows the old O(1/n) drift
+  next to the new flat line.
+* **(b)** `k_openep` against `-nquad`, i.e. whether the default orders are converged.
+* **(c)** `p_n0[0][t]` against its closed form. GORT puts the lowest foliage at
+  `z1 = h1 - b`, and `b` becomes `r` under the sphere transform, so the ground
+  layer sits exactly one crown radius below the lowest crown centre. Every crown
+  is then entirely above it, the projection cross section is the constant
+  `pi r^2 sec(theta')`, and `p_n0[0][t] = exp(-lv' pi r^2 sec(theta') (h2_p - h1_p))`
+  with no quadrature at all. gortt matches this to 2.8e-14 across 0–90°, including
+  at 89° where the probability itself is 1e-65.
+* **(d)** the raggedness of the lidar `dP/dz` profile against `-nlayers`.
+
+Run it after anything that touches `gortt_pn_kopen.c`. It is the counterpart of
+`kc_investigation.py` for the gap probabilities: that one scores the
+geometric-optical kernels against a Monte Carlo, this one scores the
+probabilities against closed forms and against their own convergence.
 
 ## Kernel investigation: goms_kernels.py, goms_mc.py, kc_investigation.py, kc_fsquared_sensitivity.py
 

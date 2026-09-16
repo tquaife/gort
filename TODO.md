@@ -25,13 +25,14 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
   Ni-Meister et al. (2001): total nadir gap probability `P(z)` from `p_n0+ epgap`, the canopy
   return `J0 rho_v dP/dz`, the ground return `J0 rho_g P(0)`, and the apparent foliage profile
   `dlogP/dz`, with an optional binned and pulse-convolved waveform. `-nlayers` went in with it
-  and sets the vertical resolution of the whole model. Still open:
+  and sets the reporting resolution of the whole model. Still open:
   * off-nadir. `gortt_set_zenith_dependant_probabilities` is hardwired to `[0]` in four places
     and would need a height-resolved variant; and the one-way attenuation of eq. 1 is only
     right at the hotspot, which nadir guarantees. Item 4 of `OPEN-QUESTIONS.md` bites here.
   * `-P`/`-W` for lidar. The file format holds the ground row only, so the combination is
     refused rather than silently returning zeros. Extending it would make cached probabilities
-    usable for waveforms, which is worth doing — a lidar run is ~11x a BRF run.
+    usable for waveforms, which is worth doing — a lidar run is ~6x a BRF run at 15 layers and
+    ~20x at 60.
   * multi-layer and multi-species canopies (paper section III-B-2).
 * ~~remove compilation warnings~~ — **done for C.** Zero warnings under `-Wall`; a new one is
   something you introduced.
@@ -40,6 +41,23 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
 * Turn off diffuse radiation by default (a bit dangerous the way it's currently set up).
   — **not done.** Still derived per angle from the solar zenith unless `-diffuse` is given, and
   `-diffuse` is still undocumented in `-u`.
+
+* ~~the quadratures behind the gap probabilities~~ — **done.** Four of them stepped with
+  `nlayers`, which is the output grid, so the accuracy of the model depended on how finely you
+  asked for it to be reported, and the BRF was inheriting whatever error the default fifteen
+  layers gave (`k_openep` 26% high). Each now has its own resolution, scaled by `-nquad`:
+  Vgamma and the mean within-crown path length are integrated in closed form except across one
+  band each, the first-contact integral moved off the layer grid and onto its panel midpoints,
+  and the path-length histogram was deleted outright. `p_n0` at the ground now matches its
+  closed form to 2.8e-14 at every zenith angle, and the `-W` tables are byte-identical across
+  any two values of `-nlayers`. See `figures/quadrature_convergence.py`. Still open:
+  * `NQ_CONTACT` is the least converged of the three orders — 1.4e-5 relative on `k_openep`
+    for the built-in canopy, 8e-4 for a sparse one. Raising it is linear in cost. Worth
+    revisiting if anyone needs the gap probabilities to better than about 1e-4.
+  * `gortt_get_s` divides the crown volume above the cut plane by the cross section *at* that
+    plane, while its own limiting branch divides by the crown's full projected area. The two
+    agree in the limit — the `sec(theta')` terms cancel — so this is not a bug, but the
+    general branch is worth checking against the derivation.
 
 ## added since
 

@@ -67,8 +67,23 @@ and convolves them with the transmitted pulse, which is what an instrument recor
 
 The lidar wavelength is set with `-lidar_wl` (default 1064nm) and feeds PROSPECT-D and
 the Price soil model exactly as the reflectance calculation does. `-nlayers` sets the
-number of canopy height layers, and applies to the whole model rather than only to the
-lidar.
+number of canopy height layers the profile is reported on. It is a reporting grid only:
+none of the quadratures in the model step with it, so the BRF does not move when it
+changes.
+
+
+## Numerical accuracy
+
+The gap probabilities are the numerical core of the model, and the quadratures behind
+them are independent of `-nlayers`. Three of the four are analytic over most of their
+range; where one is not, the order is set by `-nquad` (default 1, already converged).
+Two useful consequences:
+
+* the between-crown gap probability at the ground has a closed form at every zenith
+  angle, and `gortt` matches it to 2.8e-14;
+* `gortt -W` output is byte-identical for any two values of `-nlayers`.
+
+`figures/quadrature_convergence.py` draws the evidence for both.
 
 
 ## Install

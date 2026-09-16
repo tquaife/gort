@@ -438,14 +438,38 @@ Print a brief usage message to standard error and exit successfully.
 .BI \-nlayers " n"
 Use
 .I n
-canopy height layers, default 15, minimum 2.  This is the vertical resolution
-of the whole model, not only of the lidar: it sets the layer thickness
-.IR dz ,
-the path\-length bin width
-.I ds
-used by the within\-crown gap probability integral, and hence the BRF as well.
-Raising it is expensive \(em the gap probability tables grow faster than
-linearly \(em and for lidar mode it is the dominant cost.
+canopy height layers, default 15, minimum 2.  This is the
+.I reporting
+grid: it sets how finely the lidar profile is written out, and the height
+index of the gap probability tables.  It is
+.I not
+an accuracy setting.  No quadrature in the model steps with it, so the BRF
+does not move when it changes \(em
+.B \-W
+output is byte\-identical across any two values of
+.BR \-nlayers .
+Raising it costs roughly linearly in lidar mode and nothing at all for a BRF
+run, which needs the probabilities at the ground only.
+.TP
+.BI \-nquad " n"
+Multiply every internal quadrature order by
+.IR n ,
+default 1, minimum 1.  The defaults are chosen to be converged \(em raising
+this changes
+.B k_openep
+by about 2 parts in 100000 for the built\-in canopy, and nothing else at all
+\(em so the option exists to demonstrate that rather than to be used.  It is
+worth checking after a large change of canopy geometry, and
+.B figures/quadrature_convergence.py
+does exactly that.
+.IP
+The orders it scales are
+.B NQ_GL
+(Gauss\-Legendre points across the one non\-analytic band of the crown
+projection volume, and of the mean within\-crown path length) and
+.B NQ_CONTACT
+(panels of the first\-contact height integral), both in
+.BR include/gortt.h .
 .
 .SS Lidar
 .PP
@@ -473,7 +497,10 @@ normal BRF output is suppressed entirely.
 The model is that of Ni\-Meister et al. (2001).  The gap probabilities are
 needed at every canopy layer rather than at the ground only, so a lidar run is
 an order of magnitude slower than a BRF run at the same
-.BR \-nlayers .
+.BR \-nlayers ,
+and unlike the BRF it does get slower as
+.B \-nlayers
+rises.
 .IP
 Cannot be combined with
 .BR \-W ,
@@ -676,10 +703,12 @@ the rest are not.
 .PP
 Two orderings in the chain are load\-bearing and worth knowing about.
 .B \-nlayers
-is tested first, because
+and
+.B \-nquad
+are tested first, because
 .B \-N
-is matched case\-insensitively at two characters and would otherwise swallow it
-as the PROSPECT structure parameter.  All of the
+is matched case\-insensitively at two characters and would otherwise swallow
+both as the PROSPECT structure parameter.  All of the
 .BI \-lidar_ *
 options are tested before
 .BR \-lidar ,

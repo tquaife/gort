@@ -27,7 +27,7 @@ should be its own commit (with `-ffp-contract=off`).
 ## Testing
 
 ```bash
-make test       # 71 golden-file cases, ~6 s; or: cd tests && ./run.sh
+make test       # 82 golden-file cases, ~20 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -58,6 +58,10 @@ echo -en "1 4 450 600 800 1000\n10 0 30 20\n" | ./gortt -LAI 4.0
 echo -en "1 2 550 860\n0 0 30 0\n" | ./gortt -LAI 3.0 -prnspec -prnprop -energy
 
 ./gortt -u    # full option list (written to stderr)
+
+# -nlayers is the reporting grid and -nquad the internal quadrature orders;
+# the BRF must not move with the first, and should not move with the second
+./gortt -W -nlayers 47 < /dev/null | cmp - <( ./gortt -W < /dev/null )
 
 # lidar: no stdin redirection, because lidar mode does not read stdin
 ./gortt -lidar -LAI 4.0                                  # per-layer profile
@@ -142,10 +146,12 @@ quantities in one expression is almost always a bug.
 * `gortt_brdf.c` — geometric-optical kernels (`gortt_kg`, `gortt_kc*`, `gortt_overlap`),
   `gortt_kuusk`, and `gortt_rt_init`, which is the whole radiative-transfer chain in one
   function.
-* `gortt_pn_kopen.c` — the within/between-crown gap probability machinery: P(n=0), P(s), Vgamma,
-  `k_open`/`k_openep`, and the geometry integrals behind them. Largely translated from
-  Wenge Ni-Meister's original code; the `static` helpers at the bottom (`gortt_trisec`,
-  `gortt_sector`, `gortt_triang`, `gortt_cylind`, ...) are internal to this file. Also holds
+* `gortt_pn_kopen.c` — the within/between-crown gap probability machinery: P(n=0), Vgamma,
+  `epgap`, `k_open`/`k_openep`, and the geometry integrals behind them. Largely translated from
+  Wenge Ni-Meister's original code, though the four quadratures have since been replaced (see
+  "No quadrature in the model steps with `nlayers`" below); the `static` helpers at the bottom
+  (`gortt_trisec`, `gortt_sector`, `gortt_triang`, `gortt_cylind`, ...) are internal to this
+  file. Also holds
   `gortt_gap_probabilities_Q08`, the Lewis functional approximation used in Quaife et al. (2008),
   selected with `-q08_pn_kopen` — it is only valid for h=0.
 * `gortt_albedo.c` — `gortt_albedo` (Gauss-Legendre hemispherical integral of the BRF, calls
@@ -167,17 +173,45 @@ inside parens (`gortt_rsurf( p, g, s )`). Match the surrounding file rather than
 `.editorconfig` covers only tabs, trailing whitespace and the final newline. Function
 definitions are ANSI (they were K&R until they were converted wholesale).
 
-**Only rows `h < p->nh_probs` of the height-indexed probability tables are filled.** It
-defaults to 1, because the BRF only needs the gap probabilities at the ground, and computing
-all fifteen layers cost about 95% of the runtime. `-lidar` raises it to `nlayers` and the full
-table comes back — a waveform is a function of height. If you add something that indexes
-`epgap[h][t]` or `pd_s[h][t][s]` above `h=0`, it must raise `nh_probs` too. (`p_n0` and `p_s0`
-are the exception: they are cheap and are filled for every layer regardless.)
+**Only rows `h < p->nh_probs` of `epgap` are filled.** It defaults to 1, because the BRF only
+needs the gap probabilities at the ground, and computing all fifteen layers cost about 95% of
+the runtime. `-lidar` raises it to `nlayers` and the full table comes back — a waveform is a
+function of height. If you add something that indexes `epgap[h][t]` above `h=0`, it must raise
+`nh_probs` too. (`p_n0` is the exception: it is cheap and is filled for every layer
+regardless.)
 
 **The raise happens after the argv loop, not in the `-lidar` branch.** `-nlayers` means the
 two options are order-dependent, and `gortt -lidar -nlayers 30` would otherwise leave
 `nh_probs` at 15 and read calloc zeros for the top half of the canopy. `gortt_lidar` has a
 defensive check for exactly this.
+
+**No quadrature in the model steps with `nlayers`.** `nlayers` is the *output* grid: how finely
+the lidar profile is reported, and the `h` index of the probability tables. It is not an
+accuracy knob and must not become one again. Four quadratures used to take their step from it,
+and because the BRF reads only `h=0` it was silently inheriting whatever error the default
+fifteen layers happened to give — `k_openep` was 26% above its converged value. They now each
+have their own resolution:
+
+| what | where | rule |
+|---|---|---|
+| Vgamma | `gortt_crown_proj_volume` | closed form on three of four pieces, `NQ_GL` Gauss-Legendre points across the band between the `sin t` breakpoints |
+| first contact | `gortt_calc_epgap_ht` | `NQ_CONTACT` panels over `[z1_p, z2_p]`, each represented by its **midpoint** |
+| path length `s` | `gortt_calc_epgap_ht` | none — `exp(-s tau')` is accumulated with the `s` that was computed |
+| `es` | `gortt_get_es` | closed form outside `z_h ± r`, `NQ_GL` Gauss-Legendre points between |
+
+All three `NQ_*` are in `include/gortt.h` beside `NH_OVERLAP`, and all are multiplied by
+`p->nquad` (`-nquad`, default 1) so convergence can be shown without a recompile. **The
+regression suite pins the decoupling**: `nlayers-noop-{a,b,c}` are the same BRF run at 15, 31
+and 120 layers and their goldens must stay byte-identical to each other, and
+`probs-nlayers.out` must stay byte-identical to `probs.out`.
+
+**Two gap probabilities have closed forms, and both are worth checking against.** `z1 = h1 - b`
+and `b` becomes `r` under the sphere transform, so the ground layer sits exactly one crown
+radius below the lowest crown centre. Every crown is then entirely above it, which makes
+`p_n0[0][t] = exp( -lv' pi r^2 sec(theta') ( h2_p - h1_p ) )` and `gortt_get_es` at `h=0` the
+constant `4r/3`, both at *every* zenith angle. gortt matches the first to 2.8e-14 across
+0–90°. `figures/quadrature_convergence.py` draws this, the `-nlayers` independence and the
+`-nquad` convergence; run it after touching anything in `gortt_pn_kopen.c`.
 
 **The CLI parser is prefix-matched and order-dependent.** `gortt_cl_parser` walks argv with
 `strncasecmp`/`strncmp` on fixed lengths, so a shorter option would shadow a longer one — this
@@ -186,10 +220,10 @@ option that shares a prefix with an existing one requires care about both the le
 the position in the if-chain. Note `-HB`, `-BR`, `-PCC`, `-LAI` are case-*sensitive* (`strncmp`)
 while most other options are not.
 
-Two orderings are load-bearing and are commented as such: `-nlayers` is tested **first**,
-because `-N` is `strncasecmp`'d at two characters and would otherwise swallow it as the
-PROSPECT structure parameter; and every `-lidar_*` option is tested **above** `-lidar`, which
-is matched at six characters and would otherwise swallow all of them.
+Two orderings are load-bearing and are commented as such: `-nlayers` and `-nquad` are tested
+**first**, because `-N` is `strncasecmp`'d at two characters and would otherwise swallow both
+as the PROSPECT structure parameter; and every `-lidar_*` option is tested **above** `-lidar`,
+which is matched at six characters and would otherwise swallow all of them.
 
 **An option that is inert is worse than one that errors, because `gortt` blocks on stdin.**
 A `-lidar_*` option without `-lidar` used to set its field and change nothing else, so the run
@@ -227,11 +261,6 @@ weights.
   spelling is rejected. Pinned by the `badanth` test case.
 * The leaf angle distribution is effectively hardwired: `params.lad = LAD_05` and
   `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else.
-
-**One numerical bug is pinned as known-bad rather than fixed**, so that fixing it shows up as a
-reviewable change in the goldens: `gortt_calc_epgap` fills `t < nth-1` while `gortt_calc_kopen`
-integrates to `nth-1`, so the last trapezium panel is built from a zero. It needs checking
-against the papers before being touched.
 
 **The geometric-optical kernels were checked against a Monte Carlo** (`KC-INVESTIGATION.md`),
 which led to these changes:

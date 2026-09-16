@@ -98,10 +98,12 @@ print `-nan` for the absorbed fractions.
 
 ## Lidar
 
-`-lidar` does not read stdin, so every lidar case registers `-` as its input. It is also
-about eleven times slower than a BRF run at the same `-nlayers`, because a waveform needs
-the gap probabilities at every canopy layer rather than only at the ground; the cases that
-are not about vertical resolution therefore use a coarse `-nlayers 8`.
+`-lidar` does not read stdin, so every lidar case registers `-` as its input. It is also much
+slower than a BRF run, because a waveform needs the gap probabilities at every canopy layer
+rather than only at the ground, and it is the only mode whose cost rises with `-nlayers`
+(roughly 0.4 s at 8 layers, 0.6 s at 15 and 2.0 s at 60, against 0.1 s for a BRF run at any
+resolution). The cases that are not about vertical resolution therefore use a coarse
+`-nlayers 8`.
 
 `lidar-waveform` and `lidar-pulse` pin an invariant that is easy to break and invisible in
 a byte comparison: **the pulse convolution conserves energy exactly.** Summing the second
@@ -114,11 +116,17 @@ GORTT_PREC=17 ../gortt -lidar -lidar_waveform -lidar_pulse 2.5 -lidar_binsize 0.
   | awk 'NR==1{db=$6;next}{s+=$2*db} END{printf "%.15g\n", s}'
 ```
 
-`P(z)` is not quite monotonic in height on a coarse grid — the default 15 layers give a
-non-monotonic patch around z = 7-9 m, i.e. a small negative `dP/dz`. That is a
-discretisation artefact of the `ds = dz` path-length binning behind `epgap`, not a modelling
-error: it shrinks with `-nlayers` and is gone by 60 layers. `lidar-nlayers` exists to keep an
-eye on it.
+`P(z)` used to be not quite monotonic in height on a coarse grid — the default 15 layers gave
+a small negative `dP/dz` around z = 7-9 m — and the profile wobbled from layer to layer by
+about a quarter of the peak `dP/dz`. Both were quadrature artefacts, and both are gone: the
+quadratures behind `epgap` no longer step with `nlayers`. `lidar-nlayers` exists to keep an
+eye on it. The measure worth re-running after any change to `gortt_pn_kopen.c` is the rms
+second difference of `dP/dz` over its peak, which `figures/quadrature_convergence.py` prints:
+
+| `-nlayers` | 20 | 40 | 80 | 160 |
+|---|---:|---:|---:|---:|
+| before | 24.1% | 22.3% | 14.3% | 8.9% |
+| now | 4.1% | 1.0% | 0.3% | 0.1% |
 
 The `badlidaropt*` cases cover a hang: a `-lidar_*` option given without `-lidar` used to be
 inert, and an inert `gortt` falls through to the BRF path and blocks on stdin, producing no
@@ -128,14 +136,31 @@ missed one would be silent. `lidar-optorder` pins the other half: the check is m
 argv loop, so `-lidar_wl 1550 ... -lidar` must give byte-identical output to
 `-lidar -lidar_wl 1550 ...`, i.e. `golden/lidar-optorder.out` must equal `golden/lidar-wl.out`.
 
-## -nlayers
+## -nlayers and -nquad
 
-`nlayers-noop` is the case that pins "the default is unchanged": `-nlayers 15` names the
-built-in value explicitly, so `golden/nlayers-noop.out` must be **byte-identical** to
-`golden/default.out`. `nlayers-brf` proves the option reaches the BRF and not only the lidar,
-and `nlayers-vs-N` proves `-N` still works alongside it — `-N` is matched case-insensitively
-at two characters, so if `-nlayers` is ever moved down the if-chain it gets swallowed and
-that case changes.
+`-nlayers` is the reporting grid, not an accuracy setting: it says how finely the lidar
+profile is written out and nothing else. No quadrature in the model steps with it any more,
+so **the BRF must not move at all when it changes**. `nlayers-noop-a`, `-b` and `-c` are the
+same run at 15, 31 and 120 layers and their goldens must stay byte-identical to each other;
+`probs-nlayers` says the same thing about the gap probability tables, which are the sharpest
+probe in the suite, and must stay byte-identical to `probs`. These replaced the older
+`nlayers-noop`/`nlayers-brf` pair, which only pinned the much weaker "`-nlayers 15` is the
+built-in value".
+
+`nlayers-vs-N` proves `-N` still works alongside it — `-N` is matched case-insensitively at
+two characters, so if `-nlayers` or `-nquad` is ever moved down the if-chain it gets swallowed
+and that case changes.
+
+`-nquad` multiplies the internal quadrature orders. `nquad-converged` and `nquad-probs` pin
+the high-order answer; the claim they support is that the defaults are converged, which is a
+*tolerance* statement rather than a byte one and so cannot be expressed as a golden:
+
+```sh
+awk -f numdiff.awk golden/default.out golden/nquad-converged.out
+```
+
+is 1.4e-5 relative today, dominated by `NQ_CONTACT`. If that grows, the default orders in
+`include/gortt.h` have become too low for this canopy.
 
 ## Input-validation cases
 

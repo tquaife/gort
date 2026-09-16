@@ -1614,8 +1614,9 @@ void gortt_usage( char *bin_name )
 
 	fprintf( stderr, "\n============ Numerical resolution:\n" );
 	fprintf( stderr, "-nlayers arg\tset the number of canopy height layers to arg (default 15, minimum 2)\n"  );
-	fprintf( stderr, "            \tthis sets the vertical resolution of the whole model, not just the lidar\n"  );
-	fprintf( stderr, "            \tit is the reporting grid only: it does not affect the accuracy of the model\n"  );
+	fprintf( stderr, "            \tthis is the REPORTING grid: it sets how finely the lidar profile is written\n"  );
+	fprintf( stderr, "            \tout, and nothing else. No quadrature steps with it, so the BRF does not\n"  );
+	fprintf( stderr, "            \tmove when it changes. Only lidar mode gets slower as it rises.\n"  );
 	fprintf( stderr, "-nquad arg  \tmultiply the internal quadrature orders by arg (default 1, minimum 1)\n"  );
 	fprintf( stderr, "            \tthe default is converged; raise it to check that for a given canopy\n"  );
 

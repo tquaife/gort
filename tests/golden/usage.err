@@ -73,8 +73,9 @@ preferred because it reduces equifinality.
 
 ============ Numerical resolution:
 -nlayers arg	set the number of canopy height layers to arg (default 15, minimum 2)
-            	this sets the vertical resolution of the whole model, not just the lidar
-            	it is the reporting grid only: it does not affect the accuracy of the model
+            	this is the REPORTING grid: it sets how finely the lidar profile is written
+            	out, and nothing else. No quadrature steps with it, so the BRF does not
+            	move when it changes. Only lidar mode gets slower as it rises.
 -nquad arg  	multiply the internal quadrature orders by arg (default 1, minimum 1)
             	the default is converged; raise it to check that for a given canopy
 

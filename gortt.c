@@ -518,13 +518,14 @@ static void gortt_free_params( gortt_parameters *p )
 	if( p->theta     != NULL )gortt_dealloc_1d( p->theta );
 	if( p->theta_p   != NULL )gortt_dealloc_1d( p->theta_p );
 
+	if( p->zq        != NULL )gortt_dealloc_1d( p->zq );
 	if( p->xq_vg     != NULL )gortt_dealloc_1d( p->xq_vg );
 	if( p->wq_vg     != NULL )gortt_dealloc_1d( p->wq_vg );
 	if( p->k_open    != NULL )gortt_dealloc_1d( p->k_open );
 	if( p->k_openep  != NULL )gortt_dealloc_1d( p->k_openep );
 	if( p->factorial != NULL )gortt_dealloc_1d( p->factorial );
 
-	if( p->p_s0      != NULL ) gortt_dealloc_2d( p->p_s0, p->nlayers );
+	if( p->pn0q      != NULL ) gortt_dealloc_2d( p->pn0q, p->nq_ct + 1 );
 	if( p->p_n0      != NULL ) gortt_dealloc_2d( p->p_n0, p->nlayers );
 	if( p->epgap     != NULL ) gortt_dealloc_2d( p->epgap, p->nlayers );
 
@@ -1016,7 +1017,8 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->k_open = NULL ;
 	p->k_openep = NULL ;
 	p->factorial = NULL ;
-	p->p_s0 = NULL ;
+	p->zq = NULL ;
+	p->pn0q = NULL ;
 	p->p_n0 = NULL ;
 	p->epgap = NULL ;
 
@@ -1031,6 +1033,21 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->xq_vg = gortt_alloc_1d( p->nq_vg ) ;
 	p->wq_vg = gortt_alloc_1d( p->nq_vg ) ;
 	gauleg( -1.0, 1.0, p->xq_vg, p->wq_vg, p->nq_vg ) ;
+
+	/*
+	The height grid that gortt_calc_epgap_ht partitions the first-contact
+	probability over, and P(n=0) on it. Uniform over the full canopy
+	[z1_p, z2_p] rather than relative to the height being asked about, so
+	that the table can be filled once for every h, and so that z1_p is a
+	node: the ground layer then needs no partial panel and the BRF comes
+	out exactly independent of nlayers.
+	*/
+	p->nq_ct = NQ_CONTACT * p->nquad ;
+	p->zq    = gortt_alloc_1d( p->nq_ct + 1 ) ;
+	p->pn0q  = gortt_alloc_2d( p->nq_ct + 1, p->nth ) ;
+	for( i=0; i<=p->nq_ct; i++ )
+		p->zq[ i ] = p->z1_p
+		           + ( p->z2_p - p->z1_p ) * (double) i / (double) p->nq_ct ;
 
 
 	/*
@@ -1097,7 +1114,6 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 
 	 p->k_open   = gortt_alloc_1d( p->nlayers );
 	 p->k_openep = gortt_alloc_1d( p->nlayers );
-	 p->p_s0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->p_n0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->epgap    = gortt_alloc_2d( p->nlayers , p->nth );
 

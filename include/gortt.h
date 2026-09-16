@@ -39,6 +39,7 @@ reported. All three are scaled by p->nquad (the -nquad option), which
 exists so that convergence can be demonstrated from the command line.
 */
 #define NQ_VGAMMA  24	/*GL points across the non-smooth band of Vgamma*/
+#define NQ_CONTACT 128	/*first-contact height panels over [z1_p, z2_p]*/
 
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
@@ -259,6 +260,14 @@ typedef struct  {
 		int nq_vg ;
 		double *xq_vg ;
 		double *wq_vg ;
+		/*the height grid the first-contact integral partitions, and
+		P(n=0) on it. Absolute -- spanning [z1_p, z2_p] with
+		NQ_CONTACT*nquad uniform panels -- so that it does not depend on
+		nlayers, and so that z1_p is a node and the ground layer needs no
+		partial panel.*/
+		int nq_ct ;
+		double *zq ;
+		double **pn0q ;
 		double k ;				/*leaf projection G at the solar zenith*/
 		double elai ;			/*effective LAI*/
 		double tau ;
@@ -306,7 +315,6 @@ typedef struct  {
 
 		int nh_probs ;
 
-		double **p_s0 ;
 		double **p_n0 ;
 		double **epgap ;
 		double *k_open ;

@@ -147,11 +147,18 @@ lidar-j0        -           -lidar -lidar_J0 2.5 -nlayers 8
 lidar-nlayers   -           -lidar -nlayers 25
 
 # ---- -nlayers across the whole model --------------------------------------
-# 15 is the built-in value, so naming it explicitly must change nothing:
-# nlayers-noop.out must be byte-identical to default.out.
-nlayers-noop    basic.in    -nlayers 15
-# ... and changing it must reach the BRF, not just the lidar.
-nlayers-brf     spec.in     -nlayers 31
+# nlayers is the REPORTING grid: it sets how finely the lidar profile is
+# written out, and nothing else. No quadrature in the model steps with it any
+# more, so the BRF must not move at all when it changes. These three pin that,
+# and all three .out files must be byte-identical to EACH OTHER -- if any of
+# them drifts apart, something has been reconnected to nlayers that should
+# not be.
+nlayers-noop-a  spec.in     -nlayers 15
+nlayers-noop-b  spec.in     -nlayers 31
+nlayers-noop-c  spec.in     -nlayers 120
+# the same thing for the gap probabilities themselves, which are the sharpest
+# probe in the suite: probs-nlayers.out must be byte-identical to probs.out.
+probs-nlayers   -           -W -nlayers 47
 
 # ---- -nquad: the internal quadrature orders -------------------------------
 # -nquad multiplies every internal quadrature order, so raising it says how

@@ -9,6 +9,7 @@ void gortt_gap_probabilities( gortt_parameters *p )
 
 	int h;	/* 'height' index */
 	int t;	/* 'theta' index */
+	int i;	/* first-contact grid index */
 
 	double v_g ;	/* Vgamma at this height and theta */
 
@@ -29,14 +30,17 @@ void gortt_gap_probabilities( gortt_parameters *p )
 
 
 	/*
-	* Get P(s=0) for all heights.  It's just the differential of P(n=0) for
-	* decreasing height.
+	* The same thing on the first-contact height grid. Differences of this
+	* table are the probability that the first crown a beam meets on its
+	* way down to h is entered between one grid height and the next, which
+	* is what gortt_calc_epgap_ht integrates over. It is filled here, once
+	* for every h, because the grid is absolute rather than relative to h.
 	*/
 
-	for (t=0; t<p->nth; t++){
-		p->p_s0[p->nlayers - 1][t] = 0.0;
-		for ( h=p->nlayers-2; h>=0; h-- ){
-			p->p_s0[h][t] = p->p_n0[h + 1][t] - p->p_n0[h][t];
+	for (t = 0; t < p->nth; t++) {
+		for (i = 0; i <= p->nq_ct; i++) {
+			v_g = gortt_crown_proj_volume( p, p->theta_p[t], p->zq[i] );
+			p->pn0q[i][t] = exp(-1.0 * p->lv_p * v_g );
 		}
 	}
 
@@ -44,9 +48,7 @@ void gortt_gap_probabilities( gortt_parameters *p )
 	* Integrate over the within-crown path length to get the within-crown
 	* gap probability. This is the expensive part, and it is bounded by
 	* nh_probs rather than nlayers: nothing downstream reads epgap above
-	* h=0 unless a height profile has been asked for. P(s=0) above is
-	* still filled for every height, because the h=0 integral runs over
-	* the p_s0 values at all the heights above it.
+	* h=0 unless a height profile has been asked for.
 	*/
 
 	gortt_calc_epgap( p );
@@ -352,49 +354,52 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 	* zenith angle: the expected value of exp( -s tau' ) over the
 	* distribution of within-crown path lengths s.
 	*
-	* This used to be two passes. The first (gortt_get_pd_s) built a
-	* histogram of s in bins of width ds = dz, by rounding each s to the
-	* nearest bin; the second (gortt_calc_epgap) read the histogram back
-	* and summed exp( -s tau' ) over it, using the bin centre as s. The
-	* histogram was written in one place and read in one place, so the
-	* round trip through it bought nothing and cost the rounding: every
-	* path length was displaced by up to ds/2 before being exponentiated,
-	* which is where the wobble in the lidar profile came from.
+	* The outer sum is over where the beam first enters a crown on its way
+	* down to h. Splitting [ height_p[h], z2_p ] at the grid heights zq,
+	* the probability that first contact happens in a panel is exactly the
+	* difference of P(n=0) across it, whatever the partition -- so the
+	* panels contribute no quadrature error of their own, and their masses
+	* sum to 1 - p_n0[h][t] identically. What is approximate is only the
+	* path length taken to represent the whole panel, and that is the
+	* panel MIDPOINT.
 	*
-	* Accumulating exp( -s tau' ) directly, with the s that was actually
-	* computed, removes that error rather than refining it, and takes the
-	* nlayers-sized pd_s array with it.
+	* It used to be the panel's lower edge, on a partition fixed by the
+	* layer grid. Both were wrong in the same direction: the lower edge is
+	* the shortest after-entering path length anywhere in the panel, so
+	* the beam was under-attenuated and epgap came out high -- by 26% at
+	* the default resolution, converging as O(dz). The midpoint is O(dz^2)
+	* and unbiased to first order. Taking the partition off the layer grid
+	* is what stops any of this depending on nlayers.
+	*
+	* The midpoint also removes a degenerate case. With the lower edge the
+	* bottom panel gave s' = 0, where the mean-path-length expression
+	* below is 0/0, and the old code sidestepped it by starting the sum one
+	* panel up -- silently dropping that panel's probability mass. A
+	* midpoint is strictly above h, so every panel is now counted.
 	*/
 
 	double	epgap = 0.0;
 
-	/* index to s' array */
-	int	sp_i;
-
-	/* index to P_s0 array */
-	/*int	ps0_i;*/
-
-	/*int	i, maxs;*/
-
 	/* number-of-crowns counter */
 	int	n ;
 
-	/* probability associated with a given s'  value at a given height. */
+	/* index into the first-contact height grid */
+	int	i, i0 ;
+
+	/* probability of first contact within the current panel */
 	double	P_s_p;
 
 	/* probability of penetrating 'n' crowns at a given s' value */
 	double	P_n;
 
 	double	temp1;
-	/*double	temp2;*/
+	double	e_temp1;	/*exp(-temp1): does not depend on n*/
 	double	s;
-
-	/*double	tmp_Lv; */
 
 	/*
 	* es is the average distance that a beam must pass through a single
 	* crown in order to reach this height. s_p is the after-entering-the-
-	* crown pathlength for the current sp_i. Both used to be arrays on
+	* crown pathlength for the current panel. Both used to be arrays on
 	* gortt_parameters, but neither is read outside this function and
 	* neither was indexed by everything it varies with.
 	*/
@@ -402,41 +407,49 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 	double	es;
 	double	s_p;
 
+	double	z_h, z_a, z_b, z_m, dzq, u;
 
-	es = gortt_get_es( p, p->height_p[ h ], t );
+	z_h = p->height_p[ h ];
+	es  = gortt_get_es( p, z_h, t );
+
+	dzq = ( p->z2_p - p->z1_p ) / (double) p->nq_ct ;
+	u   = ( z_h - p->z1_p ) / dzq ;
 
 	/*
-	* Iterate over our possible s' (s_p[]) values.  The s' values are
-	* after-entering-the-crown pathlengths, which are not equivalent to
-	* within-crown pathlengths since they don't account for exiting from
-	* crowns.
+	* First grid node at or above z_h. The 1e-9 keeps a node that z_h sits
+	* on from being missed by a rounding error -- which matters at h=0,
+	* where z_h is z1_p and landing on node 0 is what makes the ground
+	* layer, and so the whole BRF, independent of nlayers.
 	*/
 
-	for( sp_i = p->nlayers-1; sp_i>h; sp_i--) {
+	i0 = (int) ceil( u - 1.0e-9 );
+	if( i0 < 0 ) i0 = 0;
 
-		/*
-		* The s' array (s_p[][]) holds after-entering-the-crown pathlengths
-		* associated with a given zenith angle and within-canopy height.
-		*/
+	for( i=i0; i<=p->nq_ct; i++ ){
 
-		s_p = (double)(p->height_p[sp_i] - p->height_p[h]) / cos(p->theta_p[t]);
+		if( i == i0 ){
 
-		if(sp_i == ( p->nlayers-1 ) ) {
 			/*
-			* Path length is zero.  Calculations wouldn't work, but we know
-			* the gap probability at s=0 is 1.
+			* Partial panel from z_h up to the first grid node. Empty when
+			* z_h is a node, which is always the case at h=0.
 			*/
-			epgap += p->p_s0[sp_i][t];
-			continue;
+
+			if( (double) i0 - u < 1.0e-9 ) continue;
+
+			z_a   = z_h;
+			z_b   = p->zq[ i ];
+			P_s_p = p->pn0q[ i ][ t ] - p->p_n0[ h ][ t ];
+
+		}else{
+
+			z_a   = p->zq[ i-1 ];
+			z_b   = p->zq[ i ];
+			P_s_p = p->pn0q[ i ][ t ] - p->pn0q[ i-1 ][ t ];
 
 		}
 
-		/*
-		* Get the probability associated with the current value of s' at this
-		* height.
-		*/
-
-		P_s_p = p->p_s0[sp_i][t];
+		z_m = 0.5 * ( z_a + z_b );
+		s_p = ( z_m - z_h ) / cos( p->theta_p[t] );
 
 		/*
 		* The expected number of crowns intercepted along s' does not
@@ -444,9 +457,10 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 		* loop below. CFLAGS is -O0, so the compiler will not hoist it.
 		*/
 
-		temp1 = gortt_vol( p, p->height_p[ h ], p->height_p[ sp_i ], t, p->h2_p )
-		      - gortt_vol( p, p->height_p[ h ], p->height_p[ sp_i ], t, p->h1_p );
+		temp1 = gortt_vol( p, z_h, z_m, t, p->h2_p )
+		      - gortt_vol( p, z_h, z_m, t, p->h1_p );
 		temp1 *= p->lv_p;
+		e_temp1 = exp( -temp1 );
 
 		/*
 		* Iterate over number of crowns penetrated by a beam given the
@@ -457,11 +471,11 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 
 			/*
 			* Get the probability that 'n' crowns are penetrated, given the
-			* current after-entering-crown pathlength s_p[i].
+			* current after-entering-crown pathlength s_p.
 			*/
 
-			P_n = (pow(temp1, (double) n) * exp(-temp1)) /
-				(p->factorial[n] * (1.0 - exp(-temp1)));
+			P_n = (pow(temp1, (double) n) * e_temp1) /
+				(p->factorial[n] * (1.0 - e_temp1));
 
 			/*
 			* Get the mean within-crown pathlength.
@@ -469,22 +483,16 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 
 			s = s_p * (1.0 - exp(-1.0 * (double) n * es / s_p));
 
-			/* convert back to original elliptical dimension
-			s *= g.ellipticity * cos(theta_p[t])/cos(theta[t]); */
-
 			/*
 			* Accumulate the gap probability for this path length, weighted
 			* by the probability that 'n' crowns are penetrated and the
-			* probability of finding this particular after-entering-the-
-			* crown pathlength.
+			* probability of first contact within this panel.
 			*/
 
 			epgap += gortt_calc_pgap( p, s, p->theta[t] ) * P_n * P_s_p;
 
-
-
 		}
-  }
+	}
 
 	return( epgap );
 

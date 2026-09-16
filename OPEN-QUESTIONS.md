@@ -351,6 +351,42 @@ Ac better than the linear interpolation their model used. Against the MC it does
 
 ---
 
+## 12. `maxcrowns` cannot safely be raised
+
+`p->maxcrowns` truncates the Poisson sum over the number of crowns a beam penetrates, at 30.
+The weight of the nth term is
+
+```c
+P_n = pow( temp1, n ) * exp( -temp1 ) / ( factorial[n] * ( 1.0 - exp( -temp1 ) ) )
+```
+
+and both `pow( temp1, n )` and `factorial[n]` overflow a double well before the ratio does.
+Raising `maxcrowns` therefore does not just get slower, it breaks: `k_openep` is unchanged at
+100, 110, 120 and 130, and `inf` at 150. **The cliff is somewhere between 130 and 150.** If the
+truncation ever does need lifting, the term has to be built up recurrently
+(`P_n = P_{n-1} * temp1 / n`) rather than evaluated from its closed form.
+
+The truncation itself is harmless as it stands. Where it bites — grazing angles in a dense
+canopy, where the expected crown count is high — it costs `epgap` at most 1.2e-19 in absolute
+terms, against values there of order 1e-17, and `gortt_calc_kopen` weights those angles by
+`sin(2 theta)` which is heading for zero. `k_openep` is bit-identical at `maxcrowns` 30 and 60
+for all three test canopies.
+
+It is worth knowing how to *see* the truncation, because the obvious test is misleading. Set
+`-favd` to something tiny and every `pgap` becomes 1, so `p_n0 + epgap` should be exactly 1:
+
+```sh
+./gortt -W -favd 1e-12 < /dev/null | awk '$1>=0{printf "%d %.12f\n", $1, $2+$3}'
+```
+
+That holds to 1e-12 out to about 70 degrees and then falls away — 0.99992 at 80, 0 at 89. It
+looks alarming and is not: `favd -> 0` is exactly the limit in which the truncation is
+*maximally* exposed, because a real canopy multiplies those terms by an `exp(-s tau')` that has
+already gone to zero. The panel masses in `gortt_calc_epgap_ht` telescope to `1 - p_n0[h][t]`
+exactly, by construction, whatever `maxcrowns` is.
+
+---
+
 ## What is *not* on this list
 
 The four bugs fixed in Phase 3 (`-P` round trip, the `epgap` grid, the Q08 seeding,

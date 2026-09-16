@@ -58,6 +58,9 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
     plane, while its own limiting branch divides by the crown's full projected area. The two
     agree in the limit — the `sec(theta')` terms cancel — so this is not a bug, but the
     general branch is worth checking against the derivation.
+  * `maxcrowns` overflows if raised much past 130, because `P_n` is evaluated from its closed
+    form rather than recurrently. Harmless at its current 30, but a trap — item 12 of
+    `OPEN-QUESTIONS.md`.
 
 ## added since
 

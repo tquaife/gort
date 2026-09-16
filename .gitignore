@@ -15,6 +15,11 @@ figures/*.png
 figures/*.pdf
 figures/*.svg
 
+#...except the Fig. 5 reproduction, which README.md shows on the GitHub page.
+#Regenerate it with figures/fig5_ni1999.py after anything that moves Kc, Kg,
+#Kt or Kz, and commit the new image with that change.
+!figures/fig5_ni1999.png
+
 #output of figures/kc_investigation.py (regenerated; the MC cache is ~1 MB)
 figures/kc_investigation/
 

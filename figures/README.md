@@ -7,6 +7,13 @@ invokes the model and parses its output; the rest are the figures.
 The papers themselves live in `papers/`, which is gitignored; nothing here
 reads them, so the scripts work without it.
 
+The images are gitignored too, with one exception: `fig5_ni1999.png` is tracked,
+because the top-level `README.md` shows it on the GitHub page. Regenerate it
+with `fig5_ni1999.py` after any change that moves Kc, Kg, Kt or Kz, and commit
+the new image along with that change. It is byte-identical when regenerated
+from the same code with the same matplotlib, so it only shows up in `git status`
+when something really has changed.
+
 The site is the same throughout: the BOREAS Old Black Spruce stand (SOBS),
 Table I of Ni et al. (1999) — R=0.76, b=2.7, lambda=0.41, h1=3.0, h2=8.5,
 FAVD=0.858. That is near enough `gortt`'s own defaults; `gortt_set_defaults`

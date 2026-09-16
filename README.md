@@ -21,7 +21,7 @@ Quaife et al. (2008).
 
 The following figure is a reproduction of Figure 5 from Ni et al. (1999) using the most recent version of the code.
 
-![A reproduction of Figure 5 from Ni et al. (1999) using the current version of the code.](sfigures/fig5_ni1999.png)
+![A reproduction of Figure 5 from Ni et al. (1999) using the current version of the code.](figures/fig5_ni1999.png)
 
 
 ## Authors

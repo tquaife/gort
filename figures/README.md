@@ -211,6 +211,81 @@ tabulated value if you want to see it.
 Fig. 6 is 670 nm rather than 540 nm: panel (b) at nadir is ~0.032 in the paper,
 against 0.041 at 670 nm and ~0.10 at 540 nm from the model.
 
+## fig4_nimeister2001.py
+
+Figure 4, case B, of Ni-Meister et al. (2001): the three lidar profiles against
+height — the total nadir gap probability `P(z)`, the waveform `dP/dz`, and the
+apparent foliage profile `dlogP/dz`. These are the first four columns
+`gortt -lidar` prints, so the script is one model run per curve.
+
+```sh
+figures/fig4_nimeister2001.py                  # -> figures/fig4_nimeister2001.png
+figures/fig4_nimeister2001.py --h2 both        # both candidate geometries (see below)
+figures/fig4_nimeister2001.py --nlayers 120    # finer vertical grid, slower
+figures/fig4_nimeister2001.py --csv fig4.csv   # also dump the model numbers
+```
+
+It prints rms and max differences against the published curves when it finishes.
+
+Unlike the other scripts here this one needs a reference dataset, because the
+published curves are not something `gortt` can produce: they are checked in as
+`fig4_nimeister2001_digitised.csv`, traced off a 400 dpi render of the scanned
+page. (`papers/` is gitignored, so the paper itself is not available to the
+script.) That file's header documents how, and how accurately.
+
+### Table I says h2 = 12; the figure was drawn with h2 = 10
+
+Table I gives case B as R=1.2, b=3.6, lambda=0.24, h1=6, **h2=12**, Fa=0.44.
+It does not reproduce the figure, and the figure itself says why. All three
+panels carry dotted reference lines labelled z1, h1, h2 and z2; traced off the
+page they sit at
+
+    z1 = 2.40    h1 = 6.00    h2 = 10.00    z2 = 13.60   (m)
+
+agreeing across the three panels to better than 0.03 m. GORT has z1 = h1 − b
+and z2 = h2 + b, so z1 = 2.40 with h1 = 6 forces b = 3.60 — Table I's value
+exactly — and z2 = 13.60 with that b then forces **h2 = 10.00**. No (h1, b)
+pair gives both z1 = 2.4 and z2 = 13.6 with h2 = 12, and h2 = 12 would put z2 at
+15.6 m, off the top of the figure's own 0–15 m axis.
+
+So the two disagree, and this script follows the figure. `--h2 both` overlays
+them, which is the quickest way to see which one `gortt` reproduces:
+
+| geometry | P rms / max | dP/dz rms / max | dlogP/dz rms / max |
+|---|---|---|---|
+| h2 = 10 (figure)  | 0.016 / 0.039 | 0.0093 / 0.0336 | 0.0101 / 0.0356 |
+| h2 = 12 (Table I) | 0.058 / 0.094 | 0.0149 / 0.0480 | 0.0166 / 0.0541 |
+
+At h2 = 10 the rms difference in `P` is 0.016, which is the same size as the
+digitisation error itself (the two independent tracings of `P` in the csv differ
+by 0.01–0.03). In other words the agreement is as good as this comparison can
+resolve. The sigmoid `P`, the single-peaked `dP/dz` and its position in the
+upper canopy all come out right.
+
+### The wobble in the derivative panels
+
+`gortt`'s `dP/dz` and `dlogP/dz` are visibly ragged where the published curves
+are smooth. It is not the differencing — a centred difference has zero gain at
+the Nyquist frequency, so it cannot manufacture a sawtooth. The roughness is in
+the gap probability tables and differencing only exposes it. Measured as the rms
+second difference at 80 layers, the between-crown term `p_n0` is 0.05% of its
+peak and the within-crown term `epgap` 0.21% of its. Both come from quadratures
+that step with the layer thickness: `gortt_crown_proj_volume` integrates over
+crown-centre heights in steps of `dz_p`, and `gortt_s_to_index` bins path lengths
+onto `ds = dz`. Both therefore shrink with `-nlayers`, but only about as fast as
+`sqrt(dz)`:
+
+| `-nlayers` | dz (m) | rms wobble in dP/dz, as % of its peak |
+|---|---|---|
+| 20  | 0.59 | 16% |
+| 40  | 0.29 | 9% |
+| 80  | 0.14 | 6% |
+| 120 | 0.09 | 4% |
+
+Raising `-nlayers` is expensive, and for a waveform the physical answer is
+`-lidar_pulse`, which convolves it away along with everything else below the
+pulse width.
+
 ## Kernel investigation: goms_kernels.py, goms_mc.py, kc_investigation.py, kc_fsquared_sensitivity.py
 
 These are the tools behind `KC-INVESTIGATION.md` at the top of the repo. They are not figure

@@ -398,10 +398,10 @@ double gortt_left_circle_area( double, double );
 double gortt_right_ellipse_area( double, double, double );
 void   gortt_get_pd_s( gortt_parameters *, int, int );
 
-double gortt_get_es( gortt_parameters *, int, int );
-double gortt_get_s( gortt_parameters *, int, double, int );
+double gortt_get_es( gortt_parameters *, double, int );
+double gortt_get_s( gortt_parameters *, double, double, int );
 double gortt_get_pcc( gortt_parameters *, double  );
-double gortt_vol( gortt_parameters *, int, int, int, double ) ;
+double gortt_vol( gortt_parameters *, double, double, int, double ) ;
 
 void   gortt_calc_epgap( gortt_parameters * );
 double gortt_calc_pgap( gortt_parameters *, double, double );

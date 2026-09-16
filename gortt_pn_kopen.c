@@ -370,7 +370,7 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 	double	s_p;
 
 
-	es = gortt_get_es( p, h, t );
+	es = gortt_get_es( p, p->height_p[ h ], t );
 
 	/*
 	* Iterate over our possible s' (s_p[]) values.  The s' values are
@@ -407,6 +407,16 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 		P_s_p = p->p_s0[sp_i][t];
 
 		/*
+		* The expected number of crowns intercepted along s' does not
+		* depend on n, so it is computed once here rather than inside the
+		* loop below. CFLAGS is -O0, so the compiler will not hoist it.
+		*/
+
+		temp1 = gortt_vol( p, p->height_p[ h ], p->height_p[ sp_i ], t, p->h2_p )
+		      - gortt_vol( p, p->height_p[ h ], p->height_p[ sp_i ], t, p->h1_p );
+		temp1 *= p->lv_p;
+
+		/*
 		* Iterate over number of crowns penetrated by a beam given the
 		* pathlength s'.
 		*/
@@ -417,11 +427,6 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 			* Get the probability that 'n' crowns are penetrated, given the
 			* current after-entering-crown pathlength s_p[i].
 			*/
-
-			temp1 = gortt_vol( p, h, sp_i, t, p->h2_p) - gortt_vol( p, h, sp_i, t, p->h1_p);
-			temp1 *= p->lv_p;
-
-
 
 			P_n = (pow(temp1, (double) n) * exp(-temp1)) /
 				(p->factorial[n] * (1.0 - exp(-temp1)));
@@ -455,7 +460,7 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 }
 
 
-double gortt_get_es( gortt_parameters *p, int z, int t )
+double gortt_get_es( gortt_parameters *p, double z_h, int t )
 {
 
 
@@ -477,7 +482,7 @@ double gortt_get_es( gortt_parameters *p, int z, int t )
 
 
 	for (h = p->h1_p + dh / 2.0; h <= p->h2_p; h += dh)
-		ES += gortt_get_s( p, z, h, t) * ( gortt_get_pcc( p, h ) * dh );
+		ES += gortt_get_s( p, z_h, h, t) * ( gortt_get_pcc( p, h ) * dh );
 
 
 
@@ -485,7 +490,7 @@ double gortt_get_es( gortt_parameters *p, int z, int t )
 }
 
 
-double gortt_get_s( gortt_parameters *p, int z, double h, int th )
+double gortt_get_s( gortt_parameters *p, double z_h, double h, int th )
 {
 	double /*th_p,*/ S;
 
@@ -498,14 +503,14 @@ double gortt_get_s( gortt_parameters *p, int z, double h, int th )
 	* projected area.
 	*/
 
-	if (p->height_p[z] > h + p->r - 0.0001){
+	if (z_h > h + p->r - 0.0001){
 		/*
 		* Plane is above the sphere.  Average distance is zero.
 		*/
 		S = 0.0;
 
 
-	}else if(p->height_p[z] < h - p->r + 0.0001){
+	}else if(z_h < h - p->r + 0.0001){
       /*
        * Plane is below the sphere.  Average distance is the volume of the
        * sphere divided by its projected area.
@@ -524,12 +529,12 @@ double gortt_get_s( gortt_parameters *p, int z, double h, int th )
 
 		V_sphere = 4.0 * M_PI * p->rrr / 3.0;
 
-		zdiff = fabs(h - p->height_p[z]);
+		zdiff = fabs(h - z_h);
 
 		ht = p->r - zdiff;
 		V_slice = M_PI * ht * ht / 3.0 * (3.0 * p->r - ht);
 
-		if (p->height_p[z] > h)
+		if (z_h > h)
 			V_tot = V_slice;
 		else
 			V_tot = V_sphere - V_slice;
@@ -546,7 +551,7 @@ double gortt_get_s( gortt_parameters *p, int z, double h, int th )
 		* _away_ from the sun, so we flip things around.
 		*/
 
-		if( h < p->height_p[z] )
+		if( h < z_h )
 			proj_area = gortt_crown_proj_cross_section( p, p->theta_p[th], h, (h - zdiff) );
 		else
 	 		proj_area = gortt_crown_proj_cross_section( p, p->theta_p[th], h, (h + zdiff) );
@@ -582,40 +587,40 @@ double gortt_get_pcc( gortt_parameters *p, double h )
 
 
 
-double gortt_vol( gortt_parameters *p, int h, int h_s, int t, double h_b )
+double gortt_vol( gortt_parameters *p, double z_h, double z_s, int t, double h_b )
 {
 
 	double   V, V_0, V_sp1, V_sp2, V_cyln;
 	double   tmp_s;
 	double   h_t, h_tt;
 
-	tmp_s = (p->height_p[h_s] - p->height_p[h]) / cos(p->theta_p[t]) ;
+	tmp_s = (z_s - z_h) / cos(p->theta_p[t]) ;
 	V_0 =  M_PI * p->rr * tmp_s;
 	V_0 += (4.0/3.0) * M_PI * p->rrr;
 
-	if( (p->height_p[h] - p->r) >= h_b ){
+	if( (z_h - p->r) >= h_b ){
 
 		V = 0.0;
 
-	}else if( (p->height_p[h] - p->r*sin(p->theta_p[t])) >= h_b ) {
+	}else if( (z_h - p->r*sin(p->theta_p[t])) >= h_b ) {
 
-		h_t = p->r - ( p->height_p[h] - h_b );
+		h_t = p->r - ( z_h - h_b );
 		V = (M_PI/3.0) * h_t * h_t * (3.0*p->r - h_t);
 
 
 
-	}else if( (p->height_p[h] + p->r*sin(p->theta_p[t])) >= h_b ) {
+	}else if( (z_h + p->r*sin(p->theta_p[t])) >= h_b ) {
 		V_sp1 = (2.0/3.0)*M_PI*p->rrr ;
-		V_sp1 -= gortt_trisec(p->height_p[h], h_b, p->theta_p[t], p->r);
-		h_tt = (h_b-(p->height_p[h]-p->r*sin(p->theta_p[t])))/cos(p->theta_p[t]);
+		V_sp1 -= gortt_trisec(z_h, h_b, p->theta_p[t], p->r);
+		h_tt = (h_b-(z_h-p->r*sin(p->theta_p[t])))/cos(p->theta_p[t]);
 
 
 
-		if( p->height_p[h_s]-p->r*sin(p->theta_p[t]) >= h_b ) {
+		if( z_s-p->r*sin(p->theta_p[t]) >= h_b ) {
 
 			double hh1, hh2, hh;
 
-			hh1 = (p->height_p[h]-h_b)/sin(p->theta_p[t]);
+			hh1 = (z_h-h_b)/sin(p->theta_p[t]);
 			hh2 = p->r;
 			hh = h_tt;
 			V_cyln = gortt_cylind(p->r, hh1, hh2, hh);
@@ -628,47 +633,47 @@ double gortt_vol( gortt_parameters *p, int h, int h_s, int t, double h_b )
 			double hh1, hh2, hh;
 
 			V_sp2 = 0.0;
-			hh1 = (p->height_p[h]-h_b)/sin(p->theta_p[t]);
-			hh2 =(p->height_p[h_s]-h_b)/sin(p->theta_p[t]);
-			hh = (p->height_p[h_s]-p->height_p[h])/cos(p->theta_p[t]) ;
+			hh1 = (z_h-h_b)/sin(p->theta_p[t]);
+			hh2 =(z_s-h_b)/sin(p->theta_p[t]);
+			hh = (z_s-z_h)/cos(p->theta_p[t]) ;
 			V_cyln = gortt_cylind(p->r, hh1, hh2, hh);
-			V_sp2 = gortt_trisec( h_b,p->height_p[h_s], p->theta_p[t], p->r);
+			V_sp2 = gortt_trisec( h_b,z_s, p->theta_p[t], p->r);
 
 
 		}
 
 	V = V_sp1 + V_cyln + V_sp2;
 
-	}else if( p->height_p[h_s] - p->r*sin(p->theta_p[t]) >= h_b ) {
+	}else if( z_s - p->r*sin(p->theta_p[t]) >= h_b ) {
 
 		double tmp_h;
 
-		tmp_h = (h_b-p->height_p[h])/cos(p->theta_p[t]);
+		tmp_h = (h_b-z_h)/cos(p->theta_p[t]);
 		V_cyln = M_PI*p->r*p->r*tmp_h;
 		V_sp1 = (2.0/3.0)*M_PI*p->rrr ;
 		V = V_sp1 + V_cyln;
 
 
 
-	}else if( p->height_p[h_s] + p->r*sin(p->theta_p[t]) >= h_b ) {
+	}else if( z_s + p->r*sin(p->theta_p[t]) >= h_b ) {
 
 		double hh1, hh2, hh;
 		double tmp_h;
 
-		h_tt = (p->height_p[h_s]+p->r*sin(p->theta_p[t]) - h_b)/cos(p->theta_p[t]);
-		hh1 = (h_b-p->height_p[h_s])/sin(p->theta_p[t]);
+		h_tt = (z_s+p->r*sin(p->theta_p[t]) - h_b)/cos(p->theta_p[t]);
+		hh1 = (h_b-z_s)/sin(p->theta_p[t]);
 		hh2 = p->r;
 		hh = h_tt;
-		tmp_h = (p->height_p[h_s]-p->height_p[h])/cos(p->theta_p[t]);
+		tmp_h = (z_s-z_h)/cos(p->theta_p[t]);
 		V_cyln = M_PI*p->r*p->r*tmp_h - gortt_cylind(p->r, hh1, hh2, hh);
-		V_sp2 = gortt_trisec( h_b, p->height_p[h_s], p->theta_p[t], p->r);
+		V_sp2 = gortt_trisec( h_b, z_s, p->theta_p[t], p->r);
 		V_sp1 = (2.0/3.0)*M_PI*p->rrr ;
 		V = V_cyln + V_sp2 + V_sp1;
 
 
-	}else if( p->height_p[h_s] + p->r  >= h_b ){
+	}else if( z_s + p->r  >= h_b ){
 
-		h_t = p->r - (h_b - p->height_p[h_s]);
+		h_t = p->r - (h_b - z_s);
 		V_sp1 = (M_PI/3.0) * h_t * h_t * ( 3.0*p->r - h_t);
 		V = V_0 - V_sp1;
 

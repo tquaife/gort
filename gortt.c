@@ -12,11 +12,13 @@ of the model, so they are static here rather than declared in gortt.h.
 */
 
 static void gortt_set_output_format( char *, int, char * );
-static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control * );
+static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control *,
+                                gortt_lidar_params * );
 static void gortt_compute_probabilities( gortt_parameters *, gortt_control * );
 static void gortt_write_prob_file( gortt_parameters * );
 static void gortt_read_prob_file( gortt_parameters *, char * );
 static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
+static void gortt_lidar_spectra( gortt_spectra *, const gortt_lidar_params * );
 static void gortt_alloc_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
 static void gortt_free_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
 static void gortt_free_params( gortt_parameters * );
@@ -33,6 +35,7 @@ int main( int argc, char **argv )
 	gortt_parameters params ;
 	gortt_spectra spect ;
 	gortt_control cont ;
+	gortt_lidar_params lid ;
 
 	char line[ MAX_LINE_LEN ], out_head[ MAX_LINE_LEN ] ;
 	char fmt[ 16 ] ;
@@ -42,9 +45,9 @@ int main( int argc, char **argv )
 
 
 	gortt_set_output_format( fmt, sizeof( fmt ), *argv );
-	gortt_set_defaults( &params, &geom, &spect, &cont );
+	gortt_set_defaults( &params, &geom, &spect, &cont, &lid );
 
-	gortt_cl_parser( argc, argv, &params, &spect, &cont ) ;
+	gortt_cl_parser( argc, argv, &params, &spect, &cont, &lid ) ;
 
 
 	/*read soil spectra if requested*/
@@ -76,6 +79,33 @@ int main( int argc, char **argv )
 	/*3) read existing probability file*/
 	if( params.read_prob_file == TRUE )
 		gortt_read_prob_file( &params, *argv );
+
+
+	/**
+	Lidar mode short-circuits the rest of main() the same way -W does,
+	and for the same kind of reason: the device is always at nadir, so
+	no view/sun geometry on stdin would mean anything and stdin is never
+	read at all. The spectral grid is the single lidar wavelength, which
+	is all gortt_price_soil and gortt_prospect_interface need to give the
+	waveform its leaf transmittance and soil reflectance.
+	**/
+
+	if( cont.lidar_mode == TRUE ){
+
+		gortt_lidar_spectra( &spect, &lid );
+		gortt_alloc_outputs( &params, &spect, &cont );
+
+		gortt_price_soil( &spect, default_soil_vector_1, default_soil_vector_2,
+		                          default_soil_vector_3, default_soil_vector_4 );
+		gortt_prospect_interface( &spect );
+
+		gortt_lidar( &params, &spect, &lid, fmt );
+
+		gortt_free_outputs( &params, &spect, &cont );
+		gortt_free_params( &params );
+		return( EXIT_SUCCESS );
+
+	}
 
 
 	/**
@@ -113,12 +143,6 @@ int main( int argc, char **argv )
 
 		/*gortt*/
 		gortt_run_geometry( &params, &geom, &spect );
-
-		/**
-		LIDAR calculations
-		**/
-
-		gortt_lidar( &params, &geom, &spect );
 
 		gortt_print_result( &params, &geom, &spect, &cont, fmt,
 		                    out_vza, out_vaa, out_sza, out_saa );
@@ -175,7 +199,8 @@ static void gortt_set_output_format( char *fmt, int len, char *bin_name )
 Model defaults, applied before the command line is parsed so that any
 option overrides them.
 */
-static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s, gortt_control *c )
+static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_spectra *s, gortt_control *c,
+                                gortt_lidar_params *l )
 {
 
 	c->print_comp_spectra=FALSE ;
@@ -252,6 +277,17 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	per geometry from the solar zenith, so user_fd is never read*/
 	p->use_user_fd=FALSE ;
 	p->user_fd=1.0 ;
+
+	/*the lidar instrument. 1064nm is the VCL/LVIS/SLICER line, and the
+	one Ni-Meister et al. (2001) quote their rho_v = omega/5 at. J0 is
+	a pure scale factor on both returns, so the default of one makes the
+	output a fraction of the emitted pulse energy. binsize <= 0 means
+	"use p->dz", which is not known until gortt_init_params has run.*/
+	l->wl=1064.0 ;
+	l->J0=1.0 ;
+	l->pulse=0.0 ;
+	l->binsize=-1.0 ;
+	l->binned_output=FALSE ;
 
 	return ;
 
@@ -384,6 +420,26 @@ static void gortt_read_header( FILE *fp, gortt_spectra *s, int *na_check, char *
 		fprintf( stderr, "%s: expected number of wavelengths (%d) does not match with number found (%d)\n", bin_name, nw_check, s->nw );
 		exit( EXIT_FAILURE );
 	}
+
+	return ;
+
+}
+
+
+/*
+The lidar equivalent of gortt_read_header: lidar mode never reads stdin,
+so the spectral grid is built from -lidar_wl instead of from a header
+line. One waveband is all the waveform needs -- rho_v and rho_g are
+evaluated at the laser line and nowhere else -- and setting it up this
+way means gortt_alloc_outputs, gortt_price_soil, gortt_prospect_interface
+and gortt_free_outputs are all reused untouched.
+*/
+static void gortt_lidar_spectra( gortt_spectra *s, const gortt_lidar_params *l )
+{
+
+	s->nw = 1 ;
+	s->wavelength = (double *)malloc( s->nw * sizeof( double ) );
+	s->wavelength[ 0 ] = l->wl ;
 
 	return ;
 
@@ -1220,7 +1276,8 @@ NULL, and atof/strcpy then segfault.
 }
 
 
-void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra *s, gortt_control *c )
+void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra *s, gortt_control *c,
+                      gortt_lidar_params *l )
 {
 
 
@@ -1238,7 +1295,12 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 		if( *argv[ i ] == '-' ){
 
-			/**/ if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) );
+			/*n.b. -nlayers must stay at the TOP of this chain: -N below is
+			matched case-insensitively on two characters, and would
+			otherwise swallow it as the PROSPECT structure parameter.*/
+			/**/ if( !strncmp( argv[ i ], "-nlayers", 8 ) )    p->nlayers  = atoi( gortt_next_arg( argc, argv, &i ) );
+
+			else if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-h2", 3 ) )     p->h2       = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-lambda", 7 ) ) p->lambda   = atof( gortt_next_arg( argc, argv, &i ) );
@@ -1290,11 +1352,21 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
 			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;
-			/*a waveform is a function of height, so this needs the gap
-			probabilities at every layer, not just at the ground.
-			n.b. nlayers is fixed by gortt_set_defaults and no option
-			changes it, so it is already correct here.*/
-			else if( !strncmp( argv[ i ], "-lidar", 6 ) ){ c->lidar_mode=TRUE; p->nh_probs=p->nlayers; }
+
+			/*the lidar options. n.b. every one of these must stay ABOVE
+			the "-lidar" test below, which is matched on six characters
+			and would otherwise swallow all of them. None of them is a
+			prefix of another: -lidar_wl and -lidar_waveform diverge at
+			index 8, so their relative order does not matter.
+			n.b. p->nh_probs is NOT raised here -- see the post-loop
+			block, which has to wait for -nlayers.*/
+			else if( !strncmp( argv[ i ], "-lidar_waveform", 15 ) ) l->binned_output=TRUE;
+			else if( !strncmp( argv[ i ], "-lidar_wl", 9 ) )      l->wl      = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncmp( argv[ i ], "-lidar_J0", 9 ) )      l->J0      = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncmp( argv[ i ], "-lidar_pulse", 12 ) )  l->pulse   = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncmp( argv[ i ], "-lidar_binsize", 14 ) ) l->binsize = atof( gortt_next_arg( argc, argv, &i ) );
+
+			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;
 
 			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, gortt_next_arg( argc, argv, &i ) );}
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;
@@ -1373,6 +1445,65 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 	if( use_lai ){
 
 		p->favd=lai*3./(p->lambda*p->r*p->r*M_PI*p->b*4.0) ;
+
+	}
+
+	/*
+	gortt_init_params divides by nlayers-1 to get dz, and the probability
+	tables are indexed h and h+1.
+	*/
+	if( p->nlayers < 2 ){
+		fprintf( stderr, "%s: -nlayers must be at least 2 (got %d)\n", argv[ 0 ], p->nlayers );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	A waveform is a function of height, so lidar mode needs the gap
+	probabilities at every layer rather than only at the ground.
+
+	n.b. this has to happen HERE rather than in the -lidar branch of the
+	loop above, because -nlayers may be given after -lidar on the command
+	line. Doing it in the branch would leave nh_probs at whatever nlayers
+	happened to be at the time, and gortt_lidar would silently read the
+	calloc zeros above that row.
+	*/
+	if( c->lidar_mode == TRUE ) p->nh_probs = p->nlayers ;
+
+	/*
+	Lidar mode is incompatible with three things, all for the same reason:
+	they only ever deal with the gap probabilities at the ground.
+
+	  -P / -W   gortt_write_prob_file and gortt_read_prob_file serialise
+	            row 0 alone, so a -P run has zeros above the ground. -W
+	            also short-circuits main(), as lidar mode does.
+	  -q08      gortt_gap_probabilities_Q08 is only coded for h=0 and
+	            says so itself.
+
+	Silently returning zeros for the whole canopy is a much worse outcome
+	than refusing, so refuse.
+	*/
+	if( c->lidar_mode == TRUE ){
+
+		if( p->read_prob_file == TRUE || p->write_prob_file == TRUE ){
+			fprintf( stderr, "%s: -lidar cannot be combined with -P or -W: the gap probability\n", argv[ 0 ] );
+			fprintf( stderr, "file format holds the ground layer only, and a waveform needs every layer\n" );
+			exit( EXIT_FAILURE );
+		}
+
+		if( c->use_q08_pn_kopen == TRUE ){
+			fprintf( stderr, "%s: -lidar cannot be combined with -q08_pn_kopen: the Q08\n", argv[ 0 ] );
+			fprintf( stderr, "approximation is only valid at the ground (h=0)\n" );
+			exit( EXIT_FAILURE );
+		}
+
+		/*PROSPECT-D and the Price soil EOFs both run 400-2500nm*/
+		if( l->wl < PROSPECT_LOWER_WL ||
+		    l->wl > PROSPECT_LOWER_WL + ( PROSPECT_NWBANDS - 1 ) * PROSPECT_SPECTRAL_RESLN ){
+			fprintf( stderr, "%s: -lidar_wl must be between %g and %gnm (got %g)\n", argv[ 0 ],
+			         PROSPECT_LOWER_WL,
+			         PROSPECT_LOWER_WL + ( PROSPECT_NWBANDS - 1 ) * PROSPECT_SPECTRAL_RESLN, l->wl );
+			exit( EXIT_FAILURE );
+		}
 
 	}
 
@@ -1466,6 +1597,23 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "         \tpre-computed gap probabilities. The model must be run using the same crown and canopy\n"  );
 	fprintf( stderr, "         \tgeometry options for the read and write. Spectral options (i.e. Prospect and Price options)\n"  );
 	fprintf( stderr, "         \tmay be varied whist running using a give probability file.\n"  );
+
+	fprintf( stderr, "\n============ Numerical resolution:\n" );
+	fprintf( stderr, "-nlayers arg\tset the number of canopy height layers to arg (default 15, minimum 2)\n"  );
+	fprintf( stderr, "            \tthis sets the vertical resolution of the whole model, not just the lidar\n"  );
+
+	fprintf( stderr, "\n============ Lidar options:\n" );
+	fprintf( stderr, "-lidar           \tpredict the lidar waveform instead of the BRF, and exit\n"  );
+	fprintf( stderr, "                 \tn.b. lidar mode does not read stdin at all: the device is assumed to be\n"  );
+	fprintf( stderr, "                 \tat nadir, so no view/illumination geometry is required. Normal output is\n"  );
+	fprintf( stderr, "                 \tsuppressed. Cannot be combined with -W, -P or -q08_pn_kopen, all of which\n"  );
+	fprintf( stderr, "                 \tonly deal with the gap probabilities at the ground.\n"  );
+	fprintf( stderr, "-lidar_wl arg    \tset the lidar wavelength (nm) to arg (default 1064, must be 400-2500)\n"  );
+	fprintf( stderr, "-lidar_J0 arg    \tset the emitted pulse energy to arg (default 1, a pure scale factor)\n"  );
+	fprintf( stderr, "-lidar_waveform  \temit the binned waveform rather than the per-layer profile\n"  );
+	fprintf( stderr, "-lidar_pulse arg \tset the Gaussian pulse width (sigma, m) to arg (default 0, no convolution)\n"  );
+	fprintf( stderr, "-lidar_binsize arg\tset the range bin size (m) to arg (default: the canopy layer thickness)\n"  );
+	fprintf( stderr, "                 \tn.b. the last two apply to -lidar_waveform only\n"  );
 
 	fprintf( stderr, "\n============ Input/output options:\n" );
 

@@ -60,6 +60,28 @@ typedef struct  {
 } gortt_control ;
 
 
+/*
+The lidar instrument: everything the waveform needs that is neither the
+canopy nor the scene spectra. Written by gortt_cl_parser, read by
+gortt_lidar.
+
+Unlike p/g/s/c this is not threaded through the model. Lidar mode
+short-circuits main() -- the device is always at nadir, so there is no
+per-angle loop for it to be threaded through -- and gortt_lidar is the
+only function that ever sees it.
+*/
+
+typedef struct  {
+
+    double wl ;                     /*wavelength, nm*/
+    double J0 ;                     /*emitted pulse energy*/
+    double pulse ;                  /*Gaussian pulse sigma, m; 0 = no convolution*/
+    double binsize ;                /*range bin size, m; <=0 means use p->dz*/
+    unsigned short binned_output ;  /*emit the binned waveform, not the profile*/
+
+} gortt_lidar_params ;
+
+
 
 /*
 One view/sun geometry, plus everything derived from it. Every field below
@@ -348,7 +370,14 @@ void   gortt_rt_init( const gortt_parameters *, const gortt_geometry *, const go
 double gortt_kuusk( const gortt_parameters *, const gortt_geometry * );
 double gortt_leaf_angle_distribution( const gortt_parameters *, double );
 
-void  gortt_lidar( const gortt_parameters *, const gortt_geometry *, gortt_spectra * );
+/*
+The lidar waveform. No gortt_geometry: the device is at nadir, which is
+theta[0] == 0 exactly, so nothing has to be interpolated. The char * is
+the GORTT_PREC output format, so the waveform prints as sharply as the
+BRF does.
+*/
+void  gortt_lidar( const gortt_parameters *, const gortt_spectra *,
+                   const gortt_lidar_params *, char * );
 
 
 /*TQ's integral routines*/
@@ -399,7 +428,8 @@ void	gortt_read_soil_lut( gortt_spectra * );
 
 /*parsing and usage*/
 
-void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_spectra *, gortt_control * );
+void   gortt_cl_parser( int, char **, gortt_parameters *, gortt_spectra *, gortt_control *,
+                        gortt_lidar_params * );
 void   gortt_usage( char * );
 char	 get_first_string_token( char *, char * );
 

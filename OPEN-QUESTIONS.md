@@ -176,6 +176,15 @@ only needs the ground, and computing all fifteen layers was about 95% of the run
 `-lidar` already raises it to `nlayers`. **Anything else that indexes those tables above
 `h = 0` must raise it too**, or it will silently read zeros.
 
+Two refinements since `-nlayers` and the lidar waveform went in:
+
+* `p_n0` and `p_s0` are the exception — they are cheap and are filled for every layer at any
+  `nh_probs`. It is `epgap`, `pd_s`, `k_open` and `k_openep` that stop at `nh_probs`.
+* the raise now happens **after** the argv loop, not inside the `-lidar` branch. With
+  `-nlayers` in the parser the two options are order-dependent, and `gortt -lidar -nlayers 30`
+  would otherwise leave `nh_probs` at the default 15. `gortt_lidar` checks
+  `nh_probs >= nlayers` on entry and refuses rather than reading zeros.
+
 ---
 
 ## 7. Alternative published formulations are behind `if(TRUE)` / `if(FALSE)`

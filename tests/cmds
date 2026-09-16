@@ -26,7 +26,10 @@ endpoints       endpoints.in
 energy-lai      basic.in    -LAI 4.0 -energy
 q08             spec.in     -q08_pn_kopen
 q08-energy      spec.in     -q08_pn_kopen -energy
-lidar           spec.in     -lidar
+# -lidar no longer reads stdin at all (it short-circuits main() the way -W
+# does), so the input file is "-". This case was an ordinary BRF line until
+# the waveform went in, because the flag used only to raise nh_probs.
+lidar           -           -lidar
 
 # sun near overhead, dense canopy.  Po = min(PvMv, PiMi) made Kc negative in
 # backscatter here (Kc -4.2, BRF -1.9 at sza 5, vza 80); the suite had no
@@ -120,3 +123,48 @@ badalbleaf      -           -alb_leaf 0.4
 badsoilmissing  soilwl.in   -soil_spectra cases/nosuchfile.spec
 badsoilstart    soilwl.in   -soil_spectra cases/soilstart.spec
 badsoilend      soilwl.in   -soil_spectra cases/soilend.spec
+
+# ---- lidar waveforms ------------------------------------------------------
+# Ni-Meister et al. (2001). -lidar is ~11x slower than a BRF run because it
+# needs the gap probabilities at every layer rather than at the ground only,
+# so the cases that are not about vertical resolution use a coarse -nlayers.
+#
+# the spectral options must reach the waveform the same way they reach the
+# BRF: rho_v is 2/3 of the PROSPECT-D leaf transmittance at -lidar_wl, and
+# rho_g half the Price soil reflectance there.
+lidar-wl        -           -lidar -lidar_wl 1550 -Cab 60 -nlayers 8
+lidar-soil      -           -lidar -alb_soil 0.25 -nlayers 8
+lidar-leaf      -           -lidar -refl_leaf 0.5 -trans_leaf 0.45 -nlayers 8
+# the binned waveform, and the pulse convolution that puts the ground delta
+# and the canopy return on the same footing.  n.b. the convolution is
+# energy-conserving to the last bit: the sum of column 2 times the binsize
+# on the header line must not change with -lidar_pulse.
+lidar-waveform  -           -lidar -lidar_waveform -nlayers 8
+lidar-pulse     -           -lidar -lidar_waveform -lidar_pulse 1.0 -lidar_binsize 0.5 -nlayers 8
+# J0 is a pure scale factor on both returns
+lidar-j0        -           -lidar -lidar_J0 2.5 -nlayers 8
+# the vertical grid itself
+lidar-nlayers   -           -lidar -nlayers 25
+
+# ---- -nlayers across the whole model --------------------------------------
+# 15 is the built-in value, so naming it explicitly must change nothing:
+# nlayers-noop.out must be byte-identical to default.out.
+nlayers-noop    basic.in    -nlayers 15
+# ... and changing it must reach the BRF, not just the lidar.
+nlayers-brf     spec.in     -nlayers 31
+
+# ---- lidar option and combination errors ----------------------------------
+# all three of these would otherwise read calloc zeros for the whole canopy:
+# the -W/-P file format holds the ground layer only, and the Q08
+# approximation is only coded for h=0.
+badlidarprobs   -           -lidar -P @PROBS_DEFAULT@
+badlidarw       -           -lidar -W
+badlidarq08     -           -lidar -q08_pn_kopen
+# outside the PROSPECT-D and Price grids
+badlidarwl      -           -lidar -lidar_wl 300
+# gortt_init_params divides by nlayers-1
+badnlayers      -           -nlayers 1
+# -nlayers must not be swallowed by -N, which is matched case-insensitively
+# on two characters further down the if-chain. If it ever is, this case
+# starts setting the PROSPECT structure parameter to 0 instead.
+nlayers-vs-N    spec.in     -nlayers 31 -N 2.1

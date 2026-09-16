@@ -96,6 +96,39 @@ energy balance divides by the soil reflectance. Their outputs agree to about 3e-
 which is what makes the black-soil case a limit rather than a special case. `blacksoil` used to
 print `-nan` for the absorbed fractions.
 
+## Lidar
+
+`-lidar` does not read stdin, so every lidar case registers `-` as its input. It is also
+about eleven times slower than a BRF run at the same `-nlayers`, because a waveform needs
+the gap probabilities at every canopy layer rather than only at the ground; the cases that
+are not about vertical resolution therefore use a coarse `-nlayers 8`.
+
+`lidar-waveform` and `lidar-pulse` pin an invariant that is easy to break and invisible in
+a byte comparison: **the pulse convolution conserves energy exactly.** Summing the second
+column and multiplying by the `binsize` on the header line gives the total returned energy,
+and that number must not change with `-lidar_pulse` or `-lidar_binsize`. It must also equal
+`J0*rho_v*(1-P(0)) + Rg`, which is eq. 22 of Ni-Meister et al. (2001). Checked by hand:
+
+```sh
+GORTT_PREC=17 ../gortt -lidar -lidar_waveform -lidar_pulse 2.5 -lidar_binsize 0.1 \
+  | awk 'NR==1{db=$6;next}{s+=$2*db} END{printf "%.15g\n", s}'
+```
+
+`P(z)` is not quite monotonic in height on a coarse grid — the default 15 layers give a
+non-monotonic patch around z = 7-9 m, i.e. a small negative `dP/dz`. That is a
+discretisation artefact of the `ds = dz` path-length binning behind `epgap`, not a modelling
+error: it shrinks with `-nlayers` and is gone by 60 layers. `lidar-nlayers` exists to keep an
+eye on it.
+
+## -nlayers
+
+`nlayers-noop` is the case that pins "the default is unchanged": `-nlayers 15` names the
+built-in value explicitly, so `golden/nlayers-noop.out` must be **byte-identical** to
+`golden/default.out`. `nlayers-brf` proves the option reaches the BRF and not only the lidar,
+and `nlayers-vs-N` proves `-N` still works alongside it — `-N` is matched case-insensitively
+at two characters, so if `-nlayers` is ever moved down the if-chain it gets swallowed and
+that case changes.
+
 ## Input-validation cases
 
 `badmissingval`, `badmissingval2`, `badnowl` and `badwlcount` cover crashes

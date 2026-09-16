@@ -27,7 +27,7 @@ should be its own commit (with `-ffp-contract=off`).
 ## Testing
 
 ```bash
-make test       # 41 golden-file cases, ~3 s; or: cd tests && ./run.sh
+make test       # 71 golden-file cases, ~6 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -58,6 +58,10 @@ echo -en "1 4 450 600 800 1000\n10 0 30 20\n" | ./gortt -LAI 4.0
 echo -en "1 2 550 860\n0 0 30 0\n" | ./gortt -LAI 3.0 -prnspec -prnprop -energy
 
 ./gortt -u    # full option list (written to stderr)
+
+# lidar: no stdin redirection, because lidar mode does not read stdin
+./gortt -lidar -LAI 4.0                                  # per-layer profile
+./gortt -lidar -lidar_waveform -lidar_pulse 1.0 -LAI 4.0 # binned waveform
 ```
 
 Input on stdin is a header line `<n_angles> <n_wavelengths> <wl1> <wl2> ...` (nm, must be
@@ -83,8 +87,14 @@ Single binary, one pass over stdin. `main()` in `gortt.c` is the whole driver.
 or read from file) → parse stdin header → `gortt_price_soil` + `gortt_prospect_interface`
 (spectra are computed once, they do not depend on angle) → per-angle loop
 { `gortt_set_geometry` → `gortt_run_geometry` → `gortt_print_result` → optionally
-`gortt_energy` }. `main()` is a ~110-line driver over eleven `static` helpers, all declared at
+`gortt_energy` }. `main()` is a ~110-line driver over twelve `static` helpers, all declared at
 the top of `gortt.c`.
+
+**Two options short-circuit that flow and return before stdin is read at all**: `-W`, which
+writes the gap probabilities and exits, and `-lidar`, which builds a one-waveband spectral
+grid from `-lidar_wl` (`gortt_lidar_spectra`, the lidar counterpart of `gortt_read_header`),
+reuses `gortt_alloc_outputs`/`gortt_price_soil`/`gortt_prospect_interface` unchanged, calls
+`gortt_lidar` and exits. Neither reaches the per-angle loop.
 
 **Four state structs are threaded through nearly every function**, conventionally named
 `p`, `g`, `s`, `c` (defined in `include/gortt.h`). They are separated by *lifetime*, and that
@@ -101,7 +111,13 @@ separation is the load-bearing invariant of the codebase — keep it when adding
   outputs (`rsurf`, `scomp`, `albedo`, `favegt`, `fasoil`).
 * `gortt_control` (`c`) — output/mode switches only.
 
-A fifth, `gortt_rt`, is a local rather than a threaded parameter: `gortt_rt_init` fills it with
+`gortt_lidar_params` is a fifth, but it is not threaded: `gortt_cl_parser` writes it and
+`gortt_lidar` reads it, and nothing in between ever sees it, because lidar mode short-circuits
+`main()` before the per-angle loop exists to thread it through. It holds the instrument
+(wavelength, `J0`, pulse width, bin size, output layout), which belongs neither in `p` (the
+canopy) nor in `c` (documented as output/mode switches only).
+
+A sixth, `gortt_rt`, is a local rather than a threaded parameter: `gortt_rt_init` fills it with
 every radiative-transfer term for one (geometry, waveband) pair, in the order Ni et al. derive
 them. `gortt_rsurf`'s waveband loop then reads `rt.t_prime_ff` and friends as plain values.
 Add new RT terms there, not as another function that recomputes its own dependencies.
@@ -135,9 +151,12 @@ quantities in one expression is almost always a bug.
 * `gortt_albedo.c` — `gortt_albedo` (Gauss-Legendre hemispherical integral of the BRF, calls
   `gortt_rsurf` at each quadrature point) and `gortt_energy` (SW energy balance → albedo,
   fraction absorbed by vegetation, fraction absorbed by soil). `gauleg` lives here too.
-* `gortt_lidar.c` — stub. `gortt_lidar` is called unconditionally from the per-angle loop and
-  currently returns immediately. `-lidar` sets `cont.lidar_mode`, which nothing reads yet, and
-  `p->nh_probs = p->nlayers`, which does have an effect: see below.
+* `gortt_lidar.c` — the lidar waveform of Ni-Meister et al. (2001). `gortt_lidar` is *not*
+  called from the per-angle loop: `-lidar` short-circuits `main()` the way `-W` does, because
+  the device is at nadir and no input geometry is meaningful, so stdin is never read. It takes
+  no `gortt_geometry` — nadir is `theta[0] == 0` exactly, so nothing is interpolated. Two
+  output layouts (per-layer profile, or binned and pulse-convolved waveform), chosen by
+  `-lidar_waveform`.
 * `include/soil_rho.h` — **defines** (not just declares) the four Price soil EOF vectors, so it
   must only ever be included by `gortt.c`.
 
@@ -152,7 +171,13 @@ definitions are ANSI (they were K&R until they were converted wholesale).
 defaults to 1, because the BRF only needs the gap probabilities at the ground, and computing
 all fifteen layers cost about 95% of the runtime. `-lidar` raises it to `nlayers` and the full
 table comes back — a waveform is a function of height. If you add something that indexes
-`p_n0[h][t]`, `epgap[h][t]` or `pd_s[h][t][s]` above `h=0`, it must raise `nh_probs` too.
+`epgap[h][t]` or `pd_s[h][t][s]` above `h=0`, it must raise `nh_probs` too. (`p_n0` and `p_s0`
+are the exception: they are cheap and are filled for every layer regardless.)
+
+**The raise happens after the argv loop, not in the `-lidar` branch.** `-nlayers` means the
+two options are order-dependent, and `gortt -lidar -nlayers 30` would otherwise leave
+`nh_probs` at 15 and read calloc zeros for the top half of the canopy. `gortt_lidar` has a
+defensive check for exactly this.
 
 **The CLI parser is prefix-matched and order-dependent.** `gortt_cl_parser` walks argv with
 `strncasecmp`/`strncmp` on fixed lengths, so a shorter option would shadow a longer one — this
@@ -160,6 +185,11 @@ is why `-b` and `-r` are deliberately tested last ("leave these at the bottom!")
 option that shares a prefix with an existing one requires care about both the length argument and
 the position in the if-chain. Note `-HB`, `-BR`, `-PCC`, `-LAI` are case-*sensitive* (`strncmp`)
 while most other options are not.
+
+Two orderings are load-bearing and are commented as such: `-nlayers` is tested **first**,
+because `-N` is `strncasecmp`'d at two characters and would otherwise swallow it as the
+PROSPECT structure parameter; and every `-lidar_*` option is tested **above** `-lidar`, which
+is matched at six characters and would otherwise swallow all of them.
 
 **Two ways to specify geometry, and the new style silently overrides the old.** Setting any of
 `-HB`/`-BR`/`-PCC` makes the parser recompute `r` (fixed to 10 m), `b`, `h1`, `h2` and `lambda`

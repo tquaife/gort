@@ -21,11 +21,18 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
 * add functions to read in leaf spectra — **not done.** The soil equivalent now works
   (`-soil_spectra`, see below) and `gortt_read_soil_lut` is the obvious template; leaf optics
   are still PROSPECT-D or a pair of constants via `-refl_leaf`/`-trans_leaf`.
-* lidar routines — **not done, but unblocked.** `gortt_lidar` is still a stub. The groundwork
-  is in: `p->nh_probs` makes the full height-resolved probability tables available (`-lidar`
-  sets it to `nlayers`), `gortt_parameters` is `const` throughout the BRF/albedo path so the
-  compiler now enforces what a new routine may touch, and per-geometry state lives in
-  `gortt_geometry` where it belongs. Read items 4 and 6 of `OPEN-QUESTIONS.md` first.
+* ~~lidar routines~~ — **done for the nadir, single-layer case.** `gortt_lidar` implements
+  Ni-Meister et al. (2001): total nadir gap probability `P(z)` from `p_n0+ epgap`, the canopy
+  return `J0 rho_v dP/dz`, the ground return `J0 rho_g P(0)`, and the apparent foliage profile
+  `dlogP/dz`, with an optional binned and pulse-convolved waveform. `-nlayers` went in with it
+  and sets the vertical resolution of the whole model. Still open:
+  * off-nadir. `gortt_set_zenith_dependant_probabilities` is hardwired to `[0]` in four places
+    and would need a height-resolved variant; and the one-way attenuation of eq. 1 is only
+    right at the hotspot, which nadir guarantees. Item 4 of `OPEN-QUESTIONS.md` bites here.
+  * `-P`/`-W` for lidar. The file format holds the ground row only, so the combination is
+    refused rather than silently returning zeros. Extending it would make cached probabilities
+    usable for waveforms, which is worth doing — a lidar run is ~11x a BRF run.
+  * multi-layer and multi-species canopies (paper section III-B-2).
 * ~~remove compilation warnings~~ — **done for C.** Zero warnings under `-Wall`; a new one is
   something you introduced.
   * especially those from C binds added to PROSPECT — **not done.** `-Wc-binding-type` and

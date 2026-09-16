@@ -16,6 +16,7 @@ Quaife et al. (2008).
 * Coupled to PROSPECT-D to (optionally) provide leaf optical properties.
 * Soil reflectance using EOFs from Price (1990).
 * Reads/writes LUTs of key intermediate variables to speed up some applications.
+* Predicts full waveform lidar returns at nadir, following Ni-Meister et al. (2001).
 
 ## Example ouputs
 
@@ -48,6 +49,28 @@ The following example calculates the reflectance for a forest with an LAI of 4.0
 `echo -en "1 4 450 600 800 1000\n10 0 30 20\n"|./gortt -LAI 4.0`
 
 
+## Lidar
+
+`-lidar` predicts the lidar waveform of the canopy instead of its reflectance. The
+instrument is assumed to be at nadir, so no view-illumination geometry is needed and
+nothing is read from `stdin`; the normal output is suppressed.
+
+`./gortt -lidar -LAI 4.0`
+
+By default this writes the per-layer profile: the total nadir gap probability `P(z)`,
+its vertical derivative, the apparent foliage profile `dlogP/dz` and the canopy return
+density, one row per canopy layer, with the ground return on the header line. Adding
+`-lidar_waveform` instead bins the canopy and ground returns onto a uniform range grid
+and convolves them with the transmitted pulse, which is what an instrument records:
+
+`./gortt -lidar -lidar_waveform -lidar_pulse 1.0 -lidar_binsize 0.15 -nlayers 60 -LAI 4.0`
+
+The lidar wavelength is set with `-lidar_wl` (default 1064nm) and feeds PROSPECT-D and
+the Price soil model exactly as the reflectance calculation does. `-nlayers` sets the
+number of canopy height layers, and applies to the whole model rather than only to the
+lidar.
+
+
 ## Install
 
 I have only ever tried installing on Linux platforms. As long as you have the standard development tools installed (specifically `gcc`, `gfortran` and `make`) it should just be a case of typing `make`. Note that currently the C bindings for the PROSPECT are throwing a number of warnings. As far as I can tell these are harmless.
@@ -56,6 +79,8 @@ I have only ever tried installing on Linux platforms. As long as you have the st
 ## References
 
 Ni, W., Li, X., Woodcock, C. E., Caetano, M. R., & Strahler, A. H. (1999). An analytical hybrid GORT model for bidirectional reflectance over discontinuous plant canopies. IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987-999.
+
+Ni-Meister, W., Jupp, D. L. B., & Dubayah, R. (2001). Modeling lidar waveforms in heterogeneous and discrete canopies. IEEE Transactions on Geoscience and Remote Sensing, 39(9), 1943-1958.
 
 Price, J. C. (1990). On the information content of soil reflectance spectra. Remote Sensing of Environment, 33(2), 113-121.
 

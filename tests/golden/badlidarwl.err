@@ -1,0 +1,1 @@
+../gortt: -lidar_wl must be between 400 and 2500nm (got 300)

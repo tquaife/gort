@@ -1,0 +1,2 @@
+../gortt: -lidar cannot be combined with -q08_pn_kopen: the Q08
+approximation is only valid at the ground (h=0)

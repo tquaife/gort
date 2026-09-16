@@ -1,0 +1,2 @@
+../gortt: -lidar cannot be combined with -P or -W: the gap probability
+file format holds the ground layer only, and a waveform needs every layer

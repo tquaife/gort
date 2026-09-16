@@ -1,6 +1,6 @@
 .\" Man page for gortt, the GORT canopy reflectance model.
 .\" View with:  man ./man/gortt.1
-.TH GORTT 1 "2026-07-29" "gortt" "User Commands"
+.TH GORTT 1 "2026-09-16" "gortt" "User Commands"
 .
 .SH NAME
 gortt \- geometric optic radiative transfer model for discontinuous plant canopies
@@ -20,6 +20,12 @@ gortt \- geometric optic radiative transfer model for discontinuous plant canopi
 .I /dev/null
 >
 .I probs.dat
+.br
+.B gortt
+.B \-lidar
+.RI [ options ]
+>
+.I waveform.dat
 .br
 .B gortt
 .B \-u
@@ -152,6 +158,57 @@ is set (see
 .BR ENVIRONMENT ).
 The echoed angles are always
 .BR %f .
+.
+.SS Lidar output
+.B \-lidar
+replaces all of the above.  Nothing is read from standard input and no BRF is
+printed; the output is a single waveform, in one of two layouts.
+.
+.PP
+By default the per-layer profile is written: a header line
+.RS
+.IR "nlayers wavelength " rho_v " " rho_g " " J0 " " Rg
+.RE
+followed by one line per canopy height layer,
+.RS
+.IR z " " P(z) " " dP/dz " " Fapp(z) " " Rv(z)
+.RE
+running top-down, which is the order in which the return arrives.
+.I P(z)
+is the total gap probability at nadir,
+.I Fapp(z)
+the apparent foliage profile
+.RI "d log " P "/d" z ,
+and
+.I Rv(z)
+the canopy return density.
+.I Rg
+is on the header line rather than in a data row because the ground return is an
+energy while
+.I Rv
+is an energy density.
+.
+.PP
+With
+.B \-lidar_waveform
+the canopy and ground returns are instead binned onto a uniform range grid and
+convolved with the transmitted pulse, so that both appear on the same footing.
+The header line is
+.RS
+.IR "nbins wavelength " rho_v " " rho_g " " J0 " " binsize " " sigma
+.RE
+and each of the
+.I nbins
+following lines is
+.RI "\fIz\fR " w(z) ,
+again top-down, with
+.I w
+a density in the same units as
+.IR Rv .
+The convolution conserves energy exactly, so
+.RI "sum(" w ") * " binsize
+does not change with
+.BR \-lidar_pulse .
 .
 .SH OPTIONS
 .SS Crown geometry
@@ -373,13 +430,83 @@ Without this option the direct fraction is derived per geometry from the solar
 zenith angle following Ni et al. (1999).  Not listed by
 .BR \-u .
 .TP
-.B \-lidar
-Select lidar mode.  This currently has one real effect: the gap probabilities
-are computed for all canopy layers rather than at the ground only, which is
-considerably slower.  The waveform calculation itself is not yet implemented.
-.TP
 .B \-u
 Print a brief usage message to standard error and exit successfully.
+.
+.SS Numerical resolution
+.TP
+.BI \-nlayers " n"
+Use
+.I n
+canopy height layers, default 15, minimum 2.  This is the vertical resolution
+of the whole model, not only of the lidar: it sets the layer thickness
+.IR dz ,
+the path\-length bin width
+.I ds
+used by the within\-crown gap probability integral, and hence the BRF as well.
+Raising it is expensive \(em the gap probability tables grow faster than
+linearly \(em and for lidar mode it is the dominant cost.
+.
+.SS Lidar
+.TP
+.B \-lidar
+Predict the lidar waveform instead of the BRF, then exit.
+.IP
+Lidar mode does not read standard input at all.  The device is assumed to be at
+nadir, so no view/illumination geometry is meaningful, and
+.B gortt
+short\-circuits in the same way
+.B \-W
+does: it computes the gap probabilities, writes one waveform and returns.  The
+normal BRF output is suppressed entirely.
+.IP
+The model is that of Ni\-Meister et al. (2001).  The gap probabilities are
+needed at every canopy layer rather than at the ground only, so a lidar run is
+an order of magnitude slower than a BRF run at the same
+.BR \-nlayers .
+.IP
+Cannot be combined with
+.BR \-W ,
+.B \-P
+or
+.BR \-q08_pn_kopen ;
+see
+.B CAVEATS
+below.
+.TP
+.BI \-lidar_wl " nm"
+Lidar wavelength in nm, default 1064 (the VCL, LVIS and SLICER line).  Must lie
+within 400\-2500.  The leaf and soil optics at this wavelength come from
+PROSPECT\-D and the Price soil model exactly as they do for the BRF, so
+.BR \-Cab ,
+.BR \-alb_soil ,
+.B \-soil_spectra
+and the rest all apply.
+.TP
+.BI \-lidar_J0 " x"
+Emitted pulse energy, default 1.  It multiplies both the canopy and the ground
+return, so the default makes the output a fraction of the emitted energy.
+.TP
+.B \-lidar_waveform
+Emit the range\-binned, pulse\-convolved waveform rather than the per\-layer
+profile.  See
+.B Lidar output
+above for the two layouts.
+.TP
+.BI \-lidar_pulse " m"
+Gaussian pulse width (one standard deviation) in metres, default 0, meaning no
+convolution.  Applies to
+.B \-lidar_waveform
+only.
+.TP
+.BI \-lidar_binsize " m"
+Range bin size in metres.  The default is the canopy layer thickness
+.IR dz ,
+which depends on the geometry and on
+.BR \-nlayers .
+Applies to
+.B \-lidar_waveform
+only.
 .
 .SH ENVIRONMENT
 .TP
@@ -478,6 +605,41 @@ GORTT_PREC=17 gortt \-HB 2.5 \-BR 1.5 \-PCC 0.6 \-LAI 4.0 < angles.dat
 .EE
 .RE
 .
+.PP
+The lidar waveform of a canopy, as a per\-layer profile.  Note that there is no
+input redirection: lidar mode does not read standard input.
+.
+.PP
+.RS
+.EX
+gortt \-lidar \-LAI 4.0 > profile.dat
+.EE
+.RE
+.
+.PP
+The same canopy as an instrument would record it, at 1064 nm with a 1 m pulse
+and 15 cm range bins, on a fine vertical grid:
+.
+.PP
+.RS
+.EX
+gortt \-lidar \-lidar_waveform \-lidar_pulse 1.0 \-lidar_binsize 0.15 \e
+      \-nlayers 60 \-LAI 4.0 > waveform.dat
+.EE
+.RE
+.
+.PP
+The tree geometry of Ni\-Meister et al. (2001), table I, case B, which their
+figure 4 plots:
+.
+.PP
+.RS
+.EX
+gortt \-lidar \-r 1.2 \-b 3.6 \-lambda 0.24 \-h1 6 \-h2 12 \-favd 0.44 \e
+      \-nlayers 40
+.EE
+.RE
+.
 .SH CAVEATS
 .SS Option matching
 Options are matched by case\-insensitive prefix over a fixed number of
@@ -501,6 +663,36 @@ and
 are case
 .IR sensitive ;
 the rest are not.
+.PP
+Two orderings in the chain are load\-bearing and worth knowing about.
+.B \-nlayers
+is tested first, because
+.B \-N
+is matched case\-insensitively at two characters and would otherwise swallow it
+as the PROSPECT structure parameter.  All of the
+.BI \-lidar_ *
+options are tested before
+.BR \-lidar ,
+which is matched at six characters and would otherwise swallow all of them.
+.
+.SS Mutually exclusive options
+.B \-lidar
+is refused, with a message on standard error and a non\-zero exit status, in
+combination with any of
+.BR \-W ,
+.B \-P
+or
+.BR \-q08_pn_kopen .
+All three deal only with the gap probabilities at the ground: the
+.B \-W
+file format stores that one row, and the Q08 functional approximation is only
+derived for it.  A waveform is a function of height and needs every layer, so
+the alternative to refusing would be to return zeros for the whole canopy
+above the ground.
+.PP
+This means a lidar run cannot reuse a cached
+.B \-P
+probability file, and must recompute the probabilities every time.
 .
 .SS Grazing angles
 Both the direct path and
@@ -545,6 +737,13 @@ Ni, W., Li, X., Woodcock, C. E., Caetano, M. R. and Strahler, A. H. (1999).
 .I "An analytical hybrid GORT model for bidirectional reflectance over
 .I "discontinuous plant canopies."
 IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987\-999.
+.
+.PP
+Ni\-Meister, W., Jupp, D. L. B. and Dubayah, R. (2001).
+.I "Modeling lidar waveforms in heterogeneous and discrete canopies."
+IEEE Transactions on Geoscience and Remote Sensing, 39(9), 1943\-1958.
+The model behind
+.BR \-lidar .
 .
 .PP
 Price, J. C. (1990).

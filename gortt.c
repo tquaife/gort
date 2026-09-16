@@ -268,7 +268,6 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	/*the following prob.
 	don't need changing*/
 	p->maxcrowns = 30 ;
-	p->nh_es = 20 ;
 
 	/*multiplier on the NQ_* quadrature orders. 1 is the converged
 	setting; -nquad exists to be able to show that it is.*/
@@ -519,8 +518,8 @@ static void gortt_free_params( gortt_parameters *p )
 	if( p->theta_p   != NULL )gortt_dealloc_1d( p->theta_p );
 
 	if( p->zq        != NULL )gortt_dealloc_1d( p->zq );
-	if( p->xq_vg     != NULL )gortt_dealloc_1d( p->xq_vg );
-	if( p->wq_vg     != NULL )gortt_dealloc_1d( p->wq_vg );
+	if( p->xq_gl     != NULL )gortt_dealloc_1d( p->xq_gl );
+	if( p->wq_gl     != NULL )gortt_dealloc_1d( p->wq_gl );
 	if( p->k_open    != NULL )gortt_dealloc_1d( p->k_open );
 	if( p->k_openep  != NULL )gortt_dealloc_1d( p->k_openep );
 	if( p->factorial != NULL )gortt_dealloc_1d( p->factorial );
@@ -1012,8 +1011,8 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->height_p = NULL ;
 	p->theta = NULL ;
 	p->theta_p = NULL ;
-	p->xq_vg = NULL ;
-	p->wq_vg = NULL ;
+	p->xq_gl = NULL ;
+	p->wq_gl = NULL ;
 	p->k_open = NULL ;
 	p->k_openep = NULL ;
 	p->factorial = NULL ;
@@ -1023,16 +1022,16 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->epgap = NULL ;
 
 	/*
-	The rule gortt_crown_proj_volume uses for the one part of the crown
-	projection that is not integrable in closed form. It is set up on
-	[-1,1] once here rather than per call, because Vgamma is evaluated
-	tens of thousands of times a run and gauleg finds its nodes by
-	Newton iteration.
+	The rule gortt_crown_proj_volume and gortt_get_es use for the one
+	part of their integrands that is not integrable in closed form. It is
+	set up on [-1,1] once here rather than per call, because between them
+	they are evaluated tens of thousands of times a run and gauleg finds
+	its nodes by Newton iteration.
 	*/
-	p->nq_vg = NQ_VGAMMA * p->nquad ;
-	p->xq_vg = gortt_alloc_1d( p->nq_vg ) ;
-	p->wq_vg = gortt_alloc_1d( p->nq_vg ) ;
-	gauleg( -1.0, 1.0, p->xq_vg, p->wq_vg, p->nq_vg ) ;
+	p->nq_gl = NQ_GL * p->nquad ;
+	p->xq_gl = gortt_alloc_1d( p->nq_gl ) ;
+	p->wq_gl = gortt_alloc_1d( p->nq_gl ) ;
+	gauleg( -1.0, 1.0, p->xq_gl, p->wq_gl, p->nq_gl ) ;
 
 	/*
 	The height grid that gortt_calc_epgap_ht partitions the first-contact

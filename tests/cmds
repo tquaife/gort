@@ -168,7 +168,8 @@ probs-nlayers   -           -W -nlayers 47
 #
 #   awk -f numdiff.awk golden/default.out golden/nquad-converged.out
 #
-# which is 1.8e-10 relative today. If that grows, the defaults are too low.
+# which is 1.4e-5 relative today, dominated by NQ_CONTACT. If that grows,
+# the defaults are too low.
 nquad-converged basic.in    -nquad 8
 # and it must reach the -W tables, which are the sharpest probe in the suite.
 nquad-probs     -           -W -nquad 4

@@ -120,9 +120,9 @@ double gortt_crown_proj_volume( gortt_parameters *p, double t, double h )
 		double	xm = 0.5 * ( b + a );
 		double	xl = 0.5 * ( b - a );
 
-		for( i=0; i<p->nq_vg; i++ )
-			vol += xl * p->wq_vg[ i ]
-			     * gortt_weird_cross_section( p, t, h, xm + xl * p->xq_vg[ i ] );
+		for( i=0; i<p->nq_gl; i++ )
+			vol += xl * p->wq_gl[ i ]
+			     * gortt_weird_cross_section( p, t, h, xm + xl * p->xq_gl[ i ] );
 	}
 
 	/*
@@ -505,24 +505,60 @@ double gortt_get_es( gortt_parameters *p, double z_h, int t )
 
 	/*
 	* Return the expected value of S(z, h) -- on average, the distance that a
-	* beam passes through a single crown in order to reach the height z. This
-	* could be seriously optimized.  But anyway, we integrate over heights at
-	* which such a sphere could be centered.
+	* beam must pass through a single crown in order to reach the height z.
+	* We integrate over the heights at which such a sphere could be centered.
+	*
+	* This used to be a midpoint rule in nh_es = 20 steps across the whole
+	* of [h1_p, h2_p]. Like Vgamma, the integrand is piecewise and two of
+	* its three pieces are constant: gortt_get_s returns zero for a crown
+	* entirely below the plane (h < z_h - r) and 4r/3 for one entirely
+	* above it (h > z_h + r), with a smooth sigmoid in between. It is
+	* continuous at both breakpoints -- the sec(theta') in the volume and
+	* the sec(theta') in the projected area cancel at the upper one -- so
+	* splitting there and using Gauss-Legendre across the middle is safe.
+	*
+	* n.b. at the ground layer this is exact whatever the rule: z1_p is
+	* h1_p - r, so every crown centre in [h1_p, h2_p] is at or above
+	* z_h + r and the integrand is the constant 4r/3 throughout. The BRF
+	* reads only h=0, so none of this reaches it -- it is the lidar
+	* profile above the ground that the old rule was costing.
 	*/
 
 
-	double h;
-	double dh;
 	double ES = 0.0;
+	double a, b;
+	int    i;
 
 
+	/*
+	* Crowns the beam has already passed: S is the constant 4r/3.
+	*/
 
-	dh = (p->h2_p - p->h1_p) / (double) p->nh_es;
+	a = MAX( z_h + p->r, p->h1_p );
+	b = p->h2_p;
 
+	if( b > a )
+		ES += ( 4.0 * p->r / 3.0 ) * gortt_get_pcc( p, 0.5*(a+b) ) * ( b - a );
 
-	for (h = p->h1_p + dh / 2.0; h <= p->h2_p; h += dh)
-		ES += gortt_get_s( p, z_h, h, t) * ( gortt_get_pcc( p, h ) * dh );
+	/*
+	* The band where the plane cuts the crown. Below it S is zero and
+	* contributes nothing, so there is no third term.
+	*/
 
+	a = MAX( z_h - p->r, p->h1_p );
+	b = MIN( z_h + p->r, p->h2_p );
+
+	if( b > a ){
+
+		double	xm = 0.5 * ( b + a );
+		double	xl = 0.5 * ( b - a );
+		double	h;
+
+		for( i=0; i<p->nq_gl; i++ ){
+			h = xm + xl * p->xq_gl[ i ];
+			ES += xl * p->wq_gl[ i ] * gortt_get_s( p, z_h, h, t ) * gortt_get_pcc( p, h );
+		}
+	}
 
 
    return (ES);

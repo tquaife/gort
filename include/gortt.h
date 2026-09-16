@@ -38,7 +38,7 @@ the model must not depend on how finely the user asks for it to be
 reported. All three are scaled by p->nquad (the -nquad option), which
 exists so that convergence can be demonstrated from the command line.
 */
-#define NQ_VGAMMA  24	/*GL points across the non-smooth band of Vgamma*/
+#define NQ_GL      24	/*GL points per non-smooth piece (Vgamma, es)*/
 #define NQ_CONTACT 128	/*first-contact height panels over [z1_p, z2_p]*/
 
 /*prospect*/
@@ -222,7 +222,6 @@ typedef struct  {
 		double dth ;		/*zenith step of the probability tables*/
 		int nlayers ;		/*number of height layers*/
 		int maxcrowns ;		/*truncation of the Poisson crown count*/
-		int nh_es ;
 		int npoints ;		/*Gauss-Legendre points for the albedo*/
 		int nquad ;			/*multiplier on the NQ_* quadrature orders*/
 
@@ -255,11 +254,14 @@ typedef struct  {
 		gortt_overlap evaluates and averages the overlap: uniform in [h1,h2]*/
 		double h_overlap[ NH_OVERLAP ] ;
 		double w_overlap[ NH_OVERLAP ] ;
-		/*Gauss-Legendre rule on [-1,1], NQ_VGAMMA*nquad points, mapped
-		onto whatever interval gortt_crown_proj_volume needs it for*/
-		int nq_vg ;
-		double *xq_vg ;
-		double *wq_vg ;
+		/*Gauss-Legendre rule on [-1,1], NQ_GL*nquad points, mapped onto
+		whatever interval needs it. Both gortt_crown_proj_volume and
+		gortt_get_es integrate a piecewise function whose pieces are
+		analytic except for one band in the middle, and this is the rule
+		they use across that band.*/
+		int nq_gl ;
+		double *xq_gl ;
+		double *wq_gl ;
 		/*the height grid the first-contact integral partitions, and
 		P(n=0) on it. Absolute -- spanning [z1_p, z2_p] with
 		NQ_CONTACT*nquad uniform panels -- so that it does not depend on

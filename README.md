@@ -17,6 +17,11 @@ Quaife et al. (2008).
 * Soil reflectance using EOFs from Price (1990).
 * Reads/writes LUTs of key intermediate variables to speed up some applications.
 
+## Example ouputs
+
+The following figure is a reproduction of Figure 5 from Ni et al. (1999) using the most recent version of the code.
+
+![A reproduction of Figure 5 from Ni et al. (1999) using the current version of the code.](sfigures/fig5_ni1999.png)
 
 
 ## Authors

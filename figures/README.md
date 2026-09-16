@@ -153,32 +153,59 @@ and therefore always gave `g_asym = 0`; it was removed when the pair went in,
 because a single albedo cannot describe a real leaf.
 
 Using the true r and t raises C at the hotspot appreciably and barely moves it
-at nadir:
+at nadir. The figures below were measured before the gap probability
+quadratures were replaced, so they are right about the *effect of the option*
+but no longer match what gortt prints:
 
 | | nadir | hotspot |
 |---|---:|---:|
 | 670 nm | 0.0395 → 0.0409 | 0.098 → 0.124 |
 | 865 nm | 0.4791 → 0.4797 | 0.584 → 0.596 |
 
+For reference, gortt now gives 0.0380 nadir / 0.0986 hotspot at 670 nm and
+0.4720 / 0.5573 at 865 nm, with the true r and t.
+
 ### How good is the reproduction
 
 The shapes come out right and the magnitudes are close but not exact.
 
-* Panel (a) reproduces well in the red: C starts at 0.037 against a published
-  ~0.035 and peaks at 0.149 against a published ~0.14. Our peak sits at ~55
-  degrees where the paper's is nearer 68.
+* Panel (a) in the red: C starts at 0.036 against a published ~0.035, and
+  peaks at 0.109 against a published ~0.14. Our peak sits at ~55 degrees where
+  the paper's is nearer 68, and that offset is unchanged by anything done so
+  far.
 * Panel (b) has the right shape in both bands — a flat forward-scatter side
-  with a sharp hotspot spike at +45 — but overestimates the spike. We give
-  0.041 flat / 0.124 peak in the red against a published ~0.032 / ~0.09, and
-  0.48 / 0.596 in the NIR against ~0.365 / ~0.45.
+  with a sharp hotspot spike at +45. We give 0.035 flat / 0.099 peak in the
+  red against a published ~0.032 / ~0.09, and 0.470 / 0.557 in the NIR against
+  ~0.365 / ~0.45. The red is close; the NIR is still high on both.
 * The two panels are mutually consistent, and so is the paper: interpolating
   the published panel (a) to a solar zenith of 45 gives ~0.09, which is what
-  its panel (b) shows at the hotspot. Ours reads ~0.12 both ways.
+  its panel (b) shows at the hotspot. Ours reads ~0.099 both ways.
+
+Replacing the gap probability quadratures moved all of these, because C is
+built from `k_open`/`k_openep`. It pulled panel (b) toward the published curves
+and pushed panel (a)'s red peak past them:
+
+| | before | now | published |
+|---|---:|---:|---:|
+| (a) red, C at sza 0 | 0.037 | 0.036 | ~0.035 |
+| (a) red, peak C | 0.149 | 0.109 | ~0.14 |
+| (b) red, forward-scatter | 0.037 | 0.035 | ~0.032 |
+| (b) red, hotspot | 0.124 | 0.099 | ~0.09 |
+| (b) NIR, forward-scatter | 0.477 | 0.470 | ~0.365 |
+| (b) NIR, hotspot | 0.596 | 0.557 | ~0.45 |
+
+Four of the six got closer and the red peak in panel (a) got further away,
+going from a slight overestimate to an underestimate. That is the expected
+shape of this kind of change: the old numbers were unconverged, so any
+agreement they showed was partly luck. See `quadrature_convergence.py` below
+for why the new ones are the right ones.
 * Giving Table II's true asymmetric leaf (rather than the symmetric one the
-  old `-alb_leaf` forced) pulled panel (a) toward the published curve — the
-  red peak went 0.117 → 0.149 against ~0.14 — and pushed panel (b)'s hotspot
-  away, 0.098 → 0.124 against ~0.09. It is the right input either way; the
-  residual disagreement is the model's, not the option's.
+  old `-alb_leaf` forced) pulled panel (a) toward the published curve and
+  pushed panel (b)'s hotspot away. It is the right input either way; the
+  residual disagreement is the model's, not the option's. (The numbers that
+  used to be quoted here, 0.117 → 0.149 and 0.098 → 0.124, were measured
+  before the quadrature work and are not directly comparable with the table
+  above.)
 * **The published solid curve in panel (a) is C at the hotspot, not at a fixed
   view.** The paper says C "has a maximum value at the hotspot viewing
   direction", and C at a fixed nadir view *falls* slightly with solar zenith

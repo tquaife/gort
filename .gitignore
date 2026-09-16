@@ -26,3 +26,7 @@ figures/kc_investigation/
 
 #python bytecode from the figure scripts
 __pycache__/
+
+#working notes towards a paper: LaTeX source, its build products and the
+#figures it copies in. Not part of the model or its documentation.
+latex_notes/

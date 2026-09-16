@@ -1283,6 +1283,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 	int i, use_true_p=FALSE, use_lai=FALSE;
 	int got_refl_leaf=FALSE, got_trans_leaf=FALSE;
+	int got_lidar_opt=FALSE;
 	float hb=2.0, br=1.0, pcc=0.5, lai=2.0;
 
 	p->read_prob_file=FALSE ;
@@ -1360,11 +1361,11 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			index 8, so their relative order does not matter.
 			n.b. p->nh_probs is NOT raised here -- see the post-loop
 			block, which has to wait for -nlayers.*/
-			else if( !strncmp( argv[ i ], "-lidar_waveform", 15 ) ) l->binned_output=TRUE;
-			else if( !strncmp( argv[ i ], "-lidar_wl", 9 ) )      l->wl      = atof( gortt_next_arg( argc, argv, &i ) );
-			else if( !strncmp( argv[ i ], "-lidar_J0", 9 ) )      l->J0      = atof( gortt_next_arg( argc, argv, &i ) );
-			else if( !strncmp( argv[ i ], "-lidar_pulse", 12 ) )  l->pulse   = atof( gortt_next_arg( argc, argv, &i ) );
-			else if( !strncmp( argv[ i ], "-lidar_binsize", 14 ) ) l->binsize = atof( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncmp( argv[ i ], "-lidar_waveform", 15 ) ){ got_lidar_opt=TRUE; l->binned_output=TRUE; }
+			else if( !strncmp( argv[ i ], "-lidar_wl", 9 ) )      { got_lidar_opt=TRUE; l->wl      = atof( gortt_next_arg( argc, argv, &i ) ); }
+			else if( !strncmp( argv[ i ], "-lidar_J0", 9 ) )      { got_lidar_opt=TRUE; l->J0      = atof( gortt_next_arg( argc, argv, &i ) ); }
+			else if( !strncmp( argv[ i ], "-lidar_pulse", 12 ) )  { got_lidar_opt=TRUE; l->pulse   = atof( gortt_next_arg( argc, argv, &i ) ); }
+			else if( !strncmp( argv[ i ], "-lidar_binsize", 14 ) ){ got_lidar_opt=TRUE; l->binsize = atof( gortt_next_arg( argc, argv, &i ) ); }
 
 			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;
 
@@ -1446,6 +1447,20 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 		p->favd=lai*3./(p->lambda*p->r*p->r*M_PI*p->b*4.0) ;
 
+	}
+
+	/*
+	A -lidar_* option on its own does nothing, and "nothing" here means the
+	run falls through to the BRF path and blocks on stdin with no output and
+	no message -- which looks exactly like a hang. None of these options has
+	any meaning outside lidar mode, so refuse instead.
+
+	n.b. this is checked after the loop, so the order on the command line
+	does not matter: -lidar_wl 1550 -lidar is as good as -lidar -lidar_wl 1550.
+	*/
+	if( got_lidar_opt == TRUE && c->lidar_mode == FALSE ){
+		fprintf( stderr, "%s: the -lidar_* options require -lidar\n", argv[ 0 ] );
+		exit( EXIT_FAILURE );
 	}
 
 	/*
@@ -1614,6 +1629,7 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-lidar_pulse arg \tset the Gaussian pulse width (sigma, m) to arg (default 0, no convolution)\n"  );
 	fprintf( stderr, "-lidar_binsize arg\tset the range bin size (m) to arg (default: the canopy layer thickness)\n"  );
 	fprintf( stderr, "                 \tn.b. the last two apply to -lidar_waveform only\n"  );
+	fprintf( stderr, "                 \tn.b. all of the -lidar_* options require -lidar, and are refused without it\n"  );
 
 	fprintf( stderr, "\n============ Input/output options:\n" );
 

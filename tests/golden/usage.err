@@ -87,6 +87,7 @@ preferred because it reduces equifinality.
 -lidar_pulse arg 	set the Gaussian pulse width (sigma, m) to arg (default 0, no convolution)
 -lidar_binsize arg	set the range bin size (m) to arg (default: the canopy layer thickness)
                  	n.b. the last two apply to -lidar_waveform only
+                 	n.b. all of the -lidar_* options require -lidar, and are refused without it
 
 ============ Input/output options:
 -prnspec	print the scene component spectra for each wavelength inside {}

@@ -191,6 +191,12 @@ because `-N` is `strncasecmp`'d at two characters and would otherwise swallow it
 PROSPECT structure parameter; and every `-lidar_*` option is tested **above** `-lidar`, which
 is matched at six characters and would otherwise swallow all of them.
 
+**An option that is inert is worse than one that errors, because `gortt` blocks on stdin.**
+A `-lidar_*` option without `-lidar` used to set its field and change nothing else, so the run
+fell through to the BRF path and waited on a terminal with no output and no message — which
+reads as a hang, not as a usage error. The parser now refuses the combination. Anything new
+that is only meaningful in one mode needs the same treatment.
+
 **Two ways to specify geometry, and the new style silently overrides the old.** Setting any of
 `-HB`/`-BR`/`-PCC` makes the parser recompute `r` (fixed to 10 m), `b`, `h1`, `h2` and `lambda`
 at the end of parsing, discarding any `-r`/`-b`/`-h1`/`-h2`/`-lambda` given. Similarly `-LAI`

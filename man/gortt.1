@@ -448,6 +448,16 @@ Raising it is expensive \(em the gap probability tables grow faster than
 linearly \(em and for lidar mode it is the dominant cost.
 .
 .SS Lidar
+.PP
+All of the
+.BI \-lidar_ *
+options below require
+.BR \-lidar ,
+and are refused with a message on standard error if it is absent.  They would
+otherwise be silently inert, and an inert
+.B gortt
+waits on standard input, which is indistinguishable from a hang.  The check is
+made after the whole command line has been read, so the order does not matter.
 .TP
 .B \-lidar
 Predict the lidar waveform instead of the BRF, then exit.

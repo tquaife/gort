@@ -164,6 +164,17 @@ badlidarq08     -           -lidar -q08_pn_kopen
 badlidarwl      -           -lidar -lidar_wl 300
 # gortt_init_params divides by nlayers-1
 badnlayers      -           -nlayers 1
+# a -lidar_* option on its own used to fall through to the BRF path and block
+# on stdin: no output, no message, indistinguishable from a hang. It must be
+# refused instead. One case per option, because each sets its own flag.
+badlidaropt     -           -lidar_waveform
+badlidaropt2    -           -lidar_wl 1550
+badlidaropt3    -           -lidar_J0 2
+badlidaropt4    -           -lidar_pulse 1
+badlidaropt5    -           -lidar_binsize 0.5
+# ... and the check is made after the argv loop, so the order does not matter:
+# lidar-optorder.out must be byte-identical to lidar-wl.out.
+lidar-optorder  -           -lidar_wl 1550 -Cab 60 -nlayers 8 -lidar
 # -nlayers must not be swallowed by -N, which is matched case-insensitively
 # on two characters further down the if-chain. If it ever is, this case
 # starts setting the PROSPECT structure parameter to 0 instead.

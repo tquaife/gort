@@ -120,6 +120,14 @@ discretisation artefact of the `ds = dz` path-length binning behind `epgap`, not
 error: it shrinks with `-nlayers` and is gone by 60 layers. `lidar-nlayers` exists to keep an
 eye on it.
 
+The `badlidaropt*` cases cover a hang: a `-lidar_*` option given without `-lidar` used to be
+inert, and an inert `gortt` falls through to the BRF path and blocks on stdin, producing no
+output and no message. The golden suite can only see that as an exit status, which is why
+there is one case per option rather than one for the family — each sets its own flag, and a
+missed one would be silent. `lidar-optorder` pins the other half: the check is made after the
+argv loop, so `-lidar_wl 1550 ... -lidar` must give byte-identical output to
+`-lidar -lidar_wl 1550 ...`, i.e. `golden/lidar-optorder.out` must equal `golden/lidar-wl.out`.
+
 ## -nlayers
 
 `nlayers-noop` is the case that pins "the default is unchanged": `-nlayers 15` names the

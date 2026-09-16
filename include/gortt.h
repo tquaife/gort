@@ -1,8 +1,6 @@
 #ifndef GORTT
 #define GORTT
 
-#define PD_S_BUFF 3
-
 #define DTOR(x)  ((x)*M_PI/180.0)
 #define RTOD(x)  ((x)*180.0/M_PI)
 #define SEC(x)   ((1.0/cos((x))))
@@ -263,7 +261,6 @@ typedef struct  {
 		/*discretisation, all fixed by nlayers and dth*/
 		double dz ;
 		double dz_p ;
-		double ds ;
 		int nh1 ;
 		int nh2 ;
 		int nth ;				/*number of zenith angles, 0..90 deg*/
@@ -299,7 +296,6 @@ typedef struct  {
 		double **epgap ;
 		double *k_open ;
 		double *k_openep ;
-		double ***pd_s ;
 
 		} gortt_parameters ;
 
@@ -388,15 +384,13 @@ void   gauleg( double, double, double *, double *, int );
 
 /*Wenge's functions for within crown probs*/
 void   gortt_init_params( gortt_parameters *, gortt_geometry * );
-int    gortt_s_to_index( gortt_parameters *, double );
-double gortt_index_to_s( gortt_parameters *, int );
 
 double gortt_crown_proj_volume( gortt_parameters *, double, double );
 double gortt_crown_proj_cross_section( gortt_parameters *, double, double, double );
 double gortt_weird_cross_section( gortt_parameters *, double, double, double );
 double gortt_left_circle_area( double, double );
 double gortt_right_ellipse_area( double, double, double );
-void   gortt_get_pd_s( gortt_parameters *, int, int );
+double gortt_calc_epgap_ht( gortt_parameters *, int, int );
 
 double gortt_get_es( gortt_parameters *, double, int );
 double gortt_get_s( gortt_parameters *, double, double, int );

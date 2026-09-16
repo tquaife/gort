@@ -522,7 +522,6 @@ static void gortt_free_params( gortt_parameters *p )
 	if( p->p_n0      != NULL ) gortt_dealloc_2d( p->p_n0, p->nlayers );
 	if( p->epgap     != NULL ) gortt_dealloc_2d( p->epgap, p->nlayers );
 
-	if( p->pd_s    	 != NULL ) gortt_dealloc_3d( p->pd_s, p->nlayers, p->nth );
 
 	return ;
 
@@ -904,7 +903,7 @@ double gortt_leaf_angle_distribution( const gortt_parameters *p, double za )
 void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 {
 
-	int i, j, s_max ;
+	int i ;
 
 
 	p->ellipticity = p->b / p->r ;
@@ -979,7 +978,6 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 
 
  	p->dz =  (double)(p->z2 - p->z1) / ((double) p->nlayers - 1.0 )  ;
-	p->ds = p->dz ;
  	p->dz_p = p->dz / p->ellipticity ;
 
 
@@ -1012,7 +1010,6 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->p_s0 = NULL ;
 	p->p_n0 = NULL ;
 	p->epgap = NULL ;
-	p->pd_s = NULL ;
 
 
 	/*
@@ -1082,52 +1079,6 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	 p->p_s0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->p_n0     = gortt_alloc_2d( p->nlayers , p->nth );
 	 p->epgap    = gortt_alloc_2d( p->nlayers , p->nth );
-
-
-	/*
-	* Allocate the probability distribution table.
-	*/
-	if( !(  p->pd_s = (double ***)calloc( p->nlayers, sizeof(double ** ) ) ) ){;
-		fprintf(stderr, "unable to alloc p->pd_s\n");
-		exit( EXIT_FAILURE );
-	}
-
-	for( i=0; i<p->nlayers; i++ ){
-
-		if( !(  p->pd_s[i] = (double **)calloc( p->nth, sizeof( double * ) ) ) ){;
-			fprintf(stderr, "unable to alloc p->pd_s[%d]\n", i );
-			exit( EXIT_FAILURE );
-		}
-
-
-		for ( j=0; j<p->nth; j++ ){
-
-			/*
-			* figure out maximum path length at this height and this angle.
-			* Allocate enough memory to hold all possible s values.
-			*/
-
-			/*s_max = gortt_s_to_index( p ,(p->z2 - p->height[i]) / cos( p->theta_p[j] ) );*/
-
-			s_max = gortt_s_to_index( p ,(p->z2_p - p->height_p[i]) / cos( p->theta_p[j] ) );
-
-			/*
-			fprintf(stderr,"s_max %d\n",s_max);
-			fflush( stderr );
-			*/
-
-			p->pd_s[i][j] = gortt_alloc_1d( s_max + PD_S_BUFF ) ;
-
-			/*
-			if( !(  p->pd_s[i][j] = ( double *)calloc( ( s_max+PD_S_BUFF ) , sizeof( double ) ) ) ){;
-				fprintf(stderr, "unable to alloc p->pd_s[%d]\n", i );
-				exit( EXIT_FAILURE );
-			}
-			*/
-
-		}
-
-	}
 
 
 	return;

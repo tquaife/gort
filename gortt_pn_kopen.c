@@ -7,12 +7,8 @@
 void gortt_gap_probabilities( gortt_parameters *p )
 {
 
-	int i ;
-
 	int h;	/* 'height' index */
 	int t;	/* 'theta' index */
-
-	int s_max_p ;
 
 	double v_g ;	/* Vgamma at this height and theta */
 
@@ -45,38 +41,13 @@ void gortt_gap_probabilities( gortt_parameters *p )
 	}
 
 	/*
-	* Get probability distributions for s for each possible h and theta.
-	*
-	* n.b. this is the expensive loop, and it is bounded by nh_probs
-	* rather than nlayers: nothing downstream reads pd_s above h=0
-	* unless a height profile has been asked for. P(s=0) above is still
-	* filled for every height, because gortt_get_pd_s at h=0 integrates
-	* over the p_s0 values at all the heights above it.
+	* Integrate over the within-crown path length to get the within-crown
+	* gap probability. This is the expensive part, and it is bounded by
+	* nh_probs rather than nlayers: nothing downstream reads epgap above
+	* h=0 unless a height profile has been asked for. P(s=0) above is
+	* still filled for every height, because the h=0 integral runs over
+	* the p_s0 values at all the heights above it.
 	*/
-	for (t = 0; t < p->nth; t++) {
-		for (h = 0; h < p->nh_probs; h++) {
-
-			/*
-			* figure out maximum path length at this height and this angle.
-			*/
-
-			s_max_p = gortt_s_to_index( p, (p->z2_p - p->height_p[h]) / cos( p->theta_p[t]) );
-
-			/*
-			fprintf(stderr,"s_max_p %d\n",s_max_p);
-			fflush( stderr );
-			*/
-
-			for ( i=0; i<(s_max_p+PD_S_BUFF); i++ ){
-				p->pd_s[h][t][i] = 0.0;
-			}
-
-			gortt_get_pd_s( p, h, t );
-
-		}
-	}
-
-
 
 	gortt_calc_epgap( p );
 	gortt_calc_kopen( p );
@@ -85,17 +56,6 @@ void gortt_gap_probabilities( gortt_parameters *p )
 }
 
 
-
-
-int gortt_s_to_index( gortt_parameters *p, double s )
-{
-	return ( (int) ( s / p->ds + 0.5 ) );
-}
-
-double gortt_index_to_s( gortt_parameters *p, int index )
-{
-	return ( (double) index * p->ds );
-}
 
 
 double gortt_crown_proj_volume( gortt_parameters *p, double t, double h )
@@ -324,16 +284,29 @@ static double gortt_cylind_fcn( double, double );
 static double gortt_sector( double, double, double );
 static double gortt_triang( double, double, double, int );
 
-void gortt_get_pd_s( gortt_parameters *p, int h, int t )
+double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 {
 
 	/*
-	* Get a probability distribution for the within-crown path length 's' at
-	* the given height and zenith angle. This routine fills the array
-	* PD_s[h][t][...].
+	* Return the within-crown gap probability at the given height and
+	* zenith angle: the expected value of exp( -s tau' ) over the
+	* distribution of within-crown path lengths s.
+	*
+	* This used to be two passes. The first (gortt_get_pd_s) built a
+	* histogram of s in bins of width ds = dz, by rounding each s to the
+	* nearest bin; the second (gortt_calc_epgap) read the histogram back
+	* and summed exp( -s tau' ) over it, using the bin centre as s. The
+	* histogram was written in one place and read in one place, so the
+	* round trip through it bought nothing and cost the rounding: every
+	* path length was displaced by up to ds/2 before being exponentiated,
+	* which is where the wobble in the lidar profile came from.
+	*
+	* Accumulating exp( -s tau' ) directly, with the s that was actually
+	* computed, removes that error rather than refining it, and takes the
+	* nlayers-sized pd_s array with it.
 	*/
 
-	/*static int	first_time = 0; */
+	double	epgap = 0.0;
 
 	/* index to s' array */
 	int	sp_i;
@@ -391,10 +364,9 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 		if(sp_i == ( p->nlayers-1 ) ) {
 			/*
 			* Path length is zero.  Calculations wouldn't work, but we know
-			* that the appropriate index is zero and we know what the
-			* probability is.
+			* the gap probability at s=0 is 1.
 			*/
-			p->pd_s[h][t][0] += p->p_s0[sp_i][t];
+			epgap += p->p_s0[sp_i][t];
 			continue;
 
 		}
@@ -441,21 +413,20 @@ void gortt_get_pd_s( gortt_parameters *p, int h, int t )
 			s *= g.ellipticity * cos(theta_p[t])/cos(theta[t]); */
 
 			/*
-			* Accumulate the appropriate value.  We use the calculated path
-			* length 's' as an index into the array that we are filling, and
-			* increment its value by the product of the probability that 'n'
-			* crowns are penetrated and the probability of finding this
-			* particular after-entering-the-crown pathlength.
+			* Accumulate the gap probability for this path length, weighted
+			* by the probability that 'n' crowns are penetrated and the
+			* probability of finding this particular after-entering-the-
+			* crown pathlength.
 			*/
 
-			p->pd_s[h][t][gortt_s_to_index( p, s )] += P_n * P_s_p;
+			epgap += gortt_calc_pgap( p, s, p->theta[t] ) * P_n * P_s_p;
 
 
 
 		}
   }
 
-	return;
+	return( epgap );
 
 }
 
@@ -850,41 +821,15 @@ void gortt_calc_epgap( gortt_parameters *p )
 {
 	int h;
 	int t;
-	int s;
-	int maxs_p;
-	double sum_Ps;
-	double m_s;
-
 
 	/*
 	* n.b. t < nth, not nth-1. gortt_calc_kopen integrates this table
 	* over t = 1..nth-1 inclusive, so leaving the last angle unfilled
 	* built the final trapezium panel of k_openep out of a zero.
 	*/
-	for (h = 0; h < p->nh_probs; h++) {
-		for (t = 0; t < p->nth; t++) {
-			p->epgap[h][t] = 0.0;
-			sum_Ps = 0.0;
-			m_s = 0.0;
-
-			/*
-			* Integrate over path lengths.
-			*/
-
-			maxs_p = gortt_s_to_index( p, (p->z2_p - p->height_p[h]) / cos(p->theta_p[t]));
-
-			for (s = 0; s <= maxs_p;  s++) {
-				m_s += gortt_index_to_s( p, s ) * p->pd_s[h][t][s] ;
-				sum_Ps += p->pd_s[h][t][s] ;
-				p->epgap[h][t] += gortt_calc_pgap( p, gortt_index_to_s( p, s ), p->theta[t]) * p->pd_s[h][t][s] ;
-			}
-
-			/*
-			if(h==0)   printf("\n %4.2f %8.4f %8.4f", RTOD(p->theta[t]),p->p_n0[h][t],p->epgap[h][t]);
-			*/
-		}
-
-	}
+	for (h = 0; h < p->nh_probs; h++)
+		for (t = 0; t < p->nth; t++)
+			p->epgap[h][t] = gortt_calc_epgap_ht( p, h, t );
 
 	return ;
 

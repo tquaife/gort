@@ -31,6 +31,15 @@ convergence is only algebraic, because the overlap has a kink where it
 reaches zero.*/
 #define NH_OVERLAP 24
 
+/*
+Quadrature resolutions for the gap probabilities. These are deliberately
+NOT derived from nlayers: nlayers is the output grid, and the accuracy of
+the model must not depend on how finely the user asks for it to be
+reported. All three are scaled by p->nquad (the -nquad option), which
+exists so that convergence can be demonstrated from the command line.
+*/
+#define NQ_VGAMMA  24	/*GL points across the non-smooth band of Vgamma*/
+
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
 #define PROSPECT_LOWER_WL 400.0
@@ -214,6 +223,7 @@ typedef struct  {
 		int maxcrowns ;		/*truncation of the Poisson crown count*/
 		int nh_es ;
 		int npoints ;		/*Gauss-Legendre points for the albedo*/
+		int nquad ;			/*multiplier on the NQ_* quadrature orders*/
 
 		/*diffuse fraction: if the user supplied one it is held here and
 		copied into g->fd for every geometry, otherwise g->fd is derived
@@ -244,6 +254,11 @@ typedef struct  {
 		gortt_overlap evaluates and averages the overlap: uniform in [h1,h2]*/
 		double h_overlap[ NH_OVERLAP ] ;
 		double w_overlap[ NH_OVERLAP ] ;
+		/*Gauss-Legendre rule on [-1,1], NQ_VGAMMA*nquad points, mapped
+		onto whatever interval gortt_crown_proj_volume needs it for*/
+		int nq_vg ;
+		double *xq_vg ;
+		double *wq_vg ;
 		double k ;				/*leaf projection G at the solar zenith*/
 		double elai ;			/*effective LAI*/
 		double tau ;

@@ -62,16 +62,76 @@ double gortt_crown_proj_volume( gortt_parameters *p, double t, double h )
 {
 
 	/*
-	* Calculate crown projection volume for a crown at the given height, by
-	* numerical integration, using the midpoint rule.
+	* Vgamma: the crown projection volume for a crown at height h, i.e. the
+	* crown projection cross section integrated over the heights at which a
+	* crown centre could sit, [h1_p, h2_p].
+	*
+	* This used to be a midpoint rule stepping with dz_p, which made the
+	* accuracy of the whole model a function of nlayers. It is now done
+	* piece by piece. gortt_crown_proj_cross_section is piecewise in z with
+	* breakpoints at h-r, h - r sin t and h + r sin t, and three of its
+	* four pieces integrate in closed form:
+	*
+	*   z <  h - r         A = 0                      (below the crown)
+	*   .. <= h - r sin t  A = pi ( r^2 - (h-z)^2 )   (circular section)
+	*   .. <  h + r sin t  A = neither                (quadrature)
+	*   ..                 A = pi r^2 sec t           (elliptical section)
+	*
+	* so quadrature is needed only across the middle band. That band has
+	* zero width at nadir, which means Vgamma -- and therefore the gap
+	* probabilities the lidar profile is built from -- is exact at t = 0.
 	*/
 
 	double	vol = 0.0;
-	double	z;
+	double	st = sin( t );
+	double	a, b;
+	int		i;
 
-	for ( z=p->h1_p+p->dz_p/2.0; z<=p->h2_p; z+=p->dz_p ) {
-		vol += gortt_crown_proj_cross_section( p, t, h, z ) * (p->dz_p);
+	/*
+	* Circular section. The integral of pi ( r^2 - (h-z)^2 ) over [a,b] is
+	* pi [ r^2 (b-a) + ( (h-b)^3 - (h-a)^3 ) / 3 ].
+	*/
+
+	a = MAX( h - p->r,      p->h1_p );
+	b = MIN( h - p->r * st, p->h2_p );
+
+	if( b > a )
+		vol += M_PI * ( p->rr * ( b - a )
+		              + ( (h-b)*(h-b)*(h-b) - (h-a)*(h-a)*(h-a) ) / 3.0 );
+
+	/*
+	* The section that is part circle and part ellipse. Gauss-Legendre on
+	* the rule set up in gortt_init_params, mapped onto [a,b].
+	*
+	* n.b. as t approaches 90 degrees the integrand acquires a square root
+	* profile at both ends of this band, where Gauss-Legendre converges
+	* only as N^-3. theta[nth-1] is clamped to 89 degrees, which bounds
+	* that, but it is why -nquad is worth checking at grazing angles and
+	* not just at nadir.
+	*/
+
+	a = MAX( h - p->r * st, p->h1_p );
+	b = MIN( h + p->r * st, p->h2_p );
+
+	if( b > a ){
+
+		double	xm = 0.5 * ( b + a );
+		double	xl = 0.5 * ( b - a );
+
+		for( i=0; i<p->nq_vg; i++ )
+			vol += xl * p->wq_vg[ i ]
+			     * gortt_weird_cross_section( p, t, h, xm + xl * p->xq_vg[ i ] );
 	}
+
+	/*
+	* Elliptical section, where the cross section no longer depends on z.
+	*/
+
+	a = MAX( h + p->r * st, p->h1_p );
+	b = p->h2_p;
+
+	if( b > a )
+		vol += M_PI * p->rr * SEC( t ) * ( b - a );
 
 	return( vol );
 }

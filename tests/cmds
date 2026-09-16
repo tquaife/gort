@@ -153,6 +153,19 @@ nlayers-noop    basic.in    -nlayers 15
 # ... and changing it must reach the BRF, not just the lidar.
 nlayers-brf     spec.in     -nlayers 31
 
+# ---- -nquad: the internal quadrature orders -------------------------------
+# -nquad multiplies every internal quadrature order, so raising it says how
+# far from converged the defaults in include/gortt.h are. These two cases pin
+# the high-order answer; the convergence claim is that they stay CLOSE to
+# default.out and probs.out, not byte-identical to them:
+#
+#   awk -f numdiff.awk golden/default.out golden/nquad-converged.out
+#
+# which is 1.8e-10 relative today. If that grows, the defaults are too low.
+nquad-converged basic.in    -nquad 8
+# and it must reach the -W tables, which are the sharpest probe in the suite.
+nquad-probs     -           -W -nquad 4
+
 # ---- lidar option and combination errors ----------------------------------
 # all three of these would otherwise read calloc zeros for the whole canopy:
 # the -W/-P file format holds the ground layer only, and the Q08
@@ -164,6 +177,8 @@ badlidarq08     -           -lidar -q08_pn_kopen
 badlidarwl      -           -lidar -lidar_wl 300
 # gortt_init_params divides by nlayers-1
 badnlayers      -           -nlayers 1
+# -nquad multiplies the quadrature orders, so zero would leave no points
+badnquad        -           -nquad 0
 # a -lidar_* option on its own used to fall through to the BRF path and block
 # on stdin: no output, no message, indistinguishable from a hang. It must be
 # refused instead. One case per option, because each sets its own flag.

@@ -270,6 +270,10 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->maxcrowns = 30 ;
 	p->nh_es = 20 ;
 
+	/*multiplier on the NQ_* quadrature orders. 1 is the converged
+	setting; -nquad exists to be able to show that it is.*/
+	p->nquad = 1 ;
+
 	/*number integral points*/
 	p->npoints=32 ;
 
@@ -514,6 +518,8 @@ static void gortt_free_params( gortt_parameters *p )
 	if( p->theta     != NULL )gortt_dealloc_1d( p->theta );
 	if( p->theta_p   != NULL )gortt_dealloc_1d( p->theta_p );
 
+	if( p->xq_vg     != NULL )gortt_dealloc_1d( p->xq_vg );
+	if( p->wq_vg     != NULL )gortt_dealloc_1d( p->wq_vg );
 	if( p->k_open    != NULL )gortt_dealloc_1d( p->k_open );
 	if( p->k_openep  != NULL )gortt_dealloc_1d( p->k_openep );
 	if( p->factorial != NULL )gortt_dealloc_1d( p->factorial );
@@ -926,6 +932,7 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	}
 
 
+
 	/*
 	* figure out tau.
 	*/
@@ -1004,12 +1011,26 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	p->height_p = NULL ;
 	p->theta = NULL ;
 	p->theta_p = NULL ;
+	p->xq_vg = NULL ;
+	p->wq_vg = NULL ;
 	p->k_open = NULL ;
 	p->k_openep = NULL ;
 	p->factorial = NULL ;
 	p->p_s0 = NULL ;
 	p->p_n0 = NULL ;
 	p->epgap = NULL ;
+
+	/*
+	The rule gortt_crown_proj_volume uses for the one part of the crown
+	projection that is not integrable in closed form. It is set up on
+	[-1,1] once here rather than per call, because Vgamma is evaluated
+	tens of thousands of times a run and gauleg finds its nodes by
+	Newton iteration.
+	*/
+	p->nq_vg = NQ_VGAMMA * p->nquad ;
+	p->xq_vg = gortt_alloc_1d( p->nq_vg ) ;
+	p->wq_vg = gortt_alloc_1d( p->nq_vg ) ;
+	gauleg( -1.0, 1.0, p->xq_vg, p->wq_vg, p->nq_vg ) ;
 
 
 	/*
@@ -1247,10 +1268,12 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 		if( *argv[ i ] == '-' ){
 
-			/*n.b. -nlayers must stay at the TOP of this chain: -N below is
-			matched case-insensitively on two characters, and would
-			otherwise swallow it as the PROSPECT structure parameter.*/
+			/*n.b. -nlayers and -nquad must stay at the TOP of this chain:
+			-N below is matched case-insensitively on two characters, and
+			would otherwise swallow both of them as the PROSPECT structure
+			parameter.*/
 			/**/ if( !strncmp( argv[ i ], "-nlayers", 8 ) )    p->nlayers  = atoi( gortt_next_arg( argc, argv, &i ) );
+			else if( !strncmp( argv[ i ], "-nquad", 6 ) )      p->nquad    = atoi( gortt_next_arg( argc, argv, &i ) );
 
 			else if( !strncasecmp( argv[ i ], "-favd", 5 ) )   p->favd     = atof( gortt_next_arg( argc, argv, &i ) );
 			else if( !strncasecmp( argv[ i ], "-h1", 3 ) )     p->h1       = atof( gortt_next_arg( argc, argv, &i ) );
@@ -1424,6 +1447,16 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 	}
 
 	/*
+	-nquad scales the internal quadrature orders, which are otherwise
+	independent of nlayers. 1 is already converged; larger values are for
+	demonstrating that.
+	*/
+	if( p->nquad < 1 ){
+		fprintf( stderr, "%s: -nquad must be at least 1 (got %d)\n", argv[ 0 ], p->nquad );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
 	A waveform is a function of height, so lidar mode needs the gap
 	probabilities at every layer rather than only at the ground.
 
@@ -1567,6 +1600,9 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "\n============ Numerical resolution:\n" );
 	fprintf( stderr, "-nlayers arg\tset the number of canopy height layers to arg (default 15, minimum 2)\n"  );
 	fprintf( stderr, "            \tthis sets the vertical resolution of the whole model, not just the lidar\n"  );
+	fprintf( stderr, "            \tit is the reporting grid only: it does not affect the accuracy of the model\n"  );
+	fprintf( stderr, "-nquad arg  \tmultiply the internal quadrature orders by arg (default 1, minimum 1)\n"  );
+	fprintf( stderr, "            \tthe default is converged; raise it to check that for a given canopy\n"  );
 
 	fprintf( stderr, "\n============ Lidar options:\n" );
 	fprintf( stderr, "-lidar           \tpredict the lidar waveform instead of the BRF, and exit\n"  );

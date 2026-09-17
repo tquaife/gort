@@ -163,15 +163,27 @@ def buttons(key, values, current=""):
     return "".join(out)
 
 
-def overview_block(figdir, outdir):
-    p = os.path.join(figdir, "overview.png")
+def overview_block(figdir, outdir, suffix=""):
+    """
+    The scatter and the per-scene bar chart.
+
+    suffix picks the variant's own pair, the same way scene_records does. It is
+    a parameter and not a constant because it was a constant once: every variant
+    page showed the baseline overview while its own overview-<name>.png sat
+    unreferenced beside it, which is exactly the kind of wrong that looks right.
+    """
+    p = os.path.join(figdir, "overview%s.png" % suffix)
+    if not os.path.exists(p):
+        p = os.path.join(figdir, "overview.png")
     if not os.path.exists(p):
         return ""
     return ("<h2>Overview</h2>"
             "<figure style='margin:0'>"
-            "<figcaption>Every view direction in every scene, gortt against "
+            "<figcaption>Every view direction in every scene, %s against "
             "FLIGHT, and the relative disagreement scene by scene. The 1:1 line "
             "is drawn; points above it are gortt reading high.</figcaption>"
+            % ("gortt" if not suffix else "gortt with <code>%s</code>"
+               % html.escape(suffix.lstrip("-"))) +
             "<img src='%s' alt='overview'></figure>"
             % html.escape(os.path.relpath(p, outdir)))
 
@@ -580,7 +592,7 @@ def build(outdir, figdir, variant=None, name="index.html", extra_head=""):
         "shape": buttons("shape", [(n, n) for n, _ in config.SHAPES]),
         "view": buttons("view", [("all", "all"), ("polar", "polar"),
                                  ("principal plane", "pp"), ("lidar", "lidar")], "all"),
-        "overview": overview_block(figdir, outdir),
+        "overview": overview_block(figdir, outdir, suffix),
         "scenetable": scene_table(records),
         "brdfstats": stats_table(
             brdf_stats,

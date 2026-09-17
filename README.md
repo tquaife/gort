@@ -1,12 +1,11 @@
 # GORT
 
 A C implementation of the Geometric Optic Radiative Transfer model as described in Ni et al. (1999). 
-Models the BRDF of forests at optical wavelengths by
+Models the BRDF and LIDAR returns of forests at optical wavelengths by
 calculating the viewed proportions of illuminated and shaded crown and ground,
 and their reflectance factors, for randomly located ellipsoids.
 
-This version of the model was originally used as the forward operator for data assimilation experiments described by 
-Quaife et al. (2008).
+Version 2.0 of the model is a tidied version of the one that was originally used as the forward operator for data assimilation experiments described by Quaife et al. (2008).
 
 
 ## Main features
@@ -33,6 +32,8 @@ With the exception of the contents of the PROSPECT-D directory all code was writ
 
 Information about PROSPECT authorship can be found at http://teledetection.ipgp.jussieu.fr/prosail/
 
+Since version 2.0 Claude Code has been used for various tasks, the most substantial of which is the addition of LIDAR predictions (see below).
+
 ## Usage
  
 usage: `gortt [options] < angles.dat > output.dat`
@@ -41,6 +42,9 @@ A list of \[options\] and brief description of the format of the angles.dat file
 
 `gortt -u`
 
+By default GORT models the BRFs observed by a sensor viewing at the wavelengths and sun-sensor
+geometry described in `angles.dat`. Scene elements (stand density, crown shape, leaf area index etc) are provided 
+via the command line options.
 
 ## Example
 

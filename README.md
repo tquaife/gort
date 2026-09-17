@@ -65,6 +65,10 @@ and convolves them with the transmitted pulse, which is what an instrument recor
 
 `./gortt -lidar -lidar_waveform -lidar_pulse 1.0 -lidar_binsize 0.15 -nlayers 60 -LAI 4.0`
 
+Each contribution is split linearly between the two range bins it falls between, so the
+binning conserves the total returned energy and its mean height exactly, and the waveform
+does not change shape with `-lidar_binsize`.
+
 The lidar wavelength is set with `-lidar_wl` (default 1064nm) and feeds PROSPECT-D and
 the Price soil model exactly as the reflectance calculation does. `-nlayers` sets the
 number of canopy height layers the profile is reported on. It is a reporting grid only:

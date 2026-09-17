@@ -116,6 +116,17 @@ GORTT_PREC=17 ../gortt -lidar -lidar_waveform -lidar_pulse 2.5 -lidar_binsize 0.
   | awk 'NR==1{db=$6;next}{s+=$2*db} END{printf "%.15g\n", s}'
 ```
 
+They also pin a second invariant, which is why they are a *pair*: **the waveform does not
+depend on the range grid it is binned onto.** The two cases run the same canopy at
+`binsize` 1.557 m with no pulse and at 0.5 m with a 1 m pulse, and the energy-weighted mean
+height of the result agrees between them to 6 decimal places. It used to differ by 0.11 m,
+because each layer's contribution was dropped whole into the nearest bin, which displaces it
+by up to half a bin and aliases outright once the layer spacing exceeds the bin size (a
+staircase instead of a curve, tall canopies first, since gortt spreads `-nlayers` layers over
+`z1..z2`). `gortt_lidar_deposit` now splits each contribution linearly between the two bins
+it falls between, which is exactly conservative in both the total and its first moment --
+hence both invariants in one pair of cases.
+
 `P(z)` used to be not quite monotonic in height on a coarse grid — the default 15 layers gave
 a small negative `dP/dz` around z = 7-9 m — and the profile wobbled from layer to layer by
 about a quarter of the peak `dP/dz`. Both were quadrature artefacts, and both are gone: the

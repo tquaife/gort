@@ -40,6 +40,7 @@ so rho_g = omega_g/2 (eqs 15, 16).
 
 
 static int    gortt_lidar_nbins( const gortt_parameters *, const gortt_lidar_params *, double, double * );
+static void   gortt_lidar_deposit( double *, int, double, double, double, double );
 static void   gortt_lidar_convolve( double *, int, double, double );
 static void   gortt_lidar_print_profile( const gortt_parameters *, const gortt_lidar_params *,
                                          const double *, const double *, double, double, double, char * );
@@ -190,22 +191,19 @@ static void gortt_lidar_print_waveform( const gortt_parameters *p, const gortt_l
 	/*
 	Canopy: the beam intercepted between layers h and h+1 is
 	P[h+1] - P[h], and it is returned from somewhere in between, so put
-	it at the midpoint. k counts down from ztop, so a larger z is a
-	smaller k.
+	it at the midpoint.
 	*/
 	for( h=0; h<p->nlayers-1; h++ ){
 
 		z = 0.5 * ( p->height[ h ] + p->height[ h+1 ] ) ;
-		k = (int)( ( ztop - z ) / db + 0.5 ) ;
 
-		if( k >= 0 && k < nbins )
-			w[ k ] += l->J0 * rho_v * ( P[ h+1 ] - P[ h ] ) ;
+		gortt_lidar_deposit( w, nbins, db, ztop, z,
+		                     l->J0 * rho_v * ( P[ h+1 ] - P[ h ] ) );
 
 	}
 
 	/*ground: a delta at z = 0 until the pulse smears it*/
-	k = (int)( ztop / db + 0.5 ) ;
-	if( k >= 0 && k < nbins ) w[ k ] += Rg ;
+	gortt_lidar_deposit( w, nbins, db, ztop, 0.0, Rg );
 
 	if( l->pulse > 0.0 ) gortt_lidar_convolve( w, nbins, db, l->pulse );
 
@@ -230,6 +228,53 @@ static void gortt_lidar_print_waveform( const gortt_parameters *p, const gortt_l
 	}
 
 	gortt_dealloc_1d( w );
+
+	return ;
+
+}
+
+
+/*
+Put a point source of energy e at height z onto the range grid, split
+between the two bins it falls between in proportion to how close it is
+to each (linear, or "cloud in cell", deposition). Bin k is centred on
+ztop - k db, so a larger z is a smaller k.
+
+Dropping the whole of e into the nearest bin instead is a sampling of
+the waveform rather than a binning of it, and it aliases: the canopy
+sources are the nlayers-1 layer midpoints, evenly spaced by dz, so when
+dz > db the bins alternate between catching one source and catching
+none and the waveform comes out as a staircase. It bites whenever
+-lidar_binsize is set finer than the layer spacing, and gortt spreads
+its layers over z1..z2, so dz depends on how deep the canopy is and
+tall canopies get there first: over 120 layers, b = 5 m crowns give
+dz = 0.12 m, already coarser than a 0.1 m bin, where b = 1 m crowns
+give 0.05 m. Splitting linearly removes it: the result
+is exact for a source at a bin centre and conserves both the total
+energy and its first moment everywhere else, at the cost of convolving
+the waveform with a db-wide triangle, which adds db^2/6 to the variance
+of a feature and is well inside the pulse width whenever the binsize is.
+
+The bounds are checked per bin rather than per source so that a source
+in the outermost half-bin still deposits the share that lands on the
+grid. gortt_lidar_nbins pads by three sigma at both ends, so in practice
+nothing is near an edge.
+*/
+static void gortt_lidar_deposit( double *w, int nbins, double db, double ztop,
+                                 double z, double e )
+{
+
+	int k ;
+
+	double x, f ;
+
+
+	x = ( ztop - z ) / db ;
+	k = (int)floor( x ) ;
+	f = x - (double)k ;
+
+	if( k   >= 0 && k   < nbins ) w[ k   ] += ( 1.0 - f ) * e ;
+	if( k+1 >= 0 && k+1 < nbins ) w[ k+1 ] +=         f   * e ;
 
 	return ;
 

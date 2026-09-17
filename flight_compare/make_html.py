@@ -395,13 +395,26 @@ def build(outdir, figdir, variant=None, name="index.html", extra_head=""):
             key = "polar_" + band.name
             # baseline only -- see the note in plot_brdf.main
             if key in r["figs"]:
+                caption = ("Polar BRDF, %s (%d nm) &mdash; gortt, FLIGHT, and "
+                           "their difference, at three solar zeniths. Hotspot "
+                           "at the top." % (band.name.upper(), band.wl))
+                if suffix:
+                    # the variant figure is the difference pair, not the
+                    # absolute fields -- see plot_brdf.plot_polar_diff
+                    caption = ("Polar BRDF, %s (%d nm) &mdash; how the "
+                               "disagreement with FLIGHT changes, baseline "
+                               "beside <code>%s</code>, at three solar zeniths "
+                               "on one shared scale. Hotspot at the top; blue "
+                               "is gortt reading low. The absolute fields are "
+                               "on the <a href='../index.html'>baseline "
+                               "page</a> and FLIGHT is the same Monte Carlo "
+                               "either way."
+                               % (band.name.upper(), band.wl,
+                                  html.escape(variant or "")))
                 figs.append(
-                    "<figure data-view='polar'><figcaption>Polar BRDF, %s "
-                    "(%d nm) &mdash; gortt, FLIGHT, and their difference, at "
-                    "three solar zeniths. Hotspot at the top.</figcaption>"
+                    "<figure data-view='polar'><figcaption>%s</figcaption>"
                     "<img loading='lazy' src='%s' alt='polar BRDF %s %s'></figure>"
-                    % (band.name.upper(), band.wl, html.escape(r["figs"][key]),
-                       r["name"], band.name))
+                    % (caption, html.escape(r["figs"][key]), r["name"], band.name))
         if "pp" in r["figs"]:
             figs.append(
                 "<figure data-view='pp'><figcaption>Principal plane. Positive "

@@ -207,6 +207,90 @@ def signed_pp(lookup, reduce=None):
     return np.array(x), np.array(y)
 
 
+def save_paletted(fig, path, dpi):
+    """
+    Save a figure and then squeeze it into a 256-colour palette.
+
+    A filled-contour panel holds very few distinct colours -- 21 levels of one
+    colormap, the grid, and the text -- so a paletted PNG is visually identical
+    and about a third of the size (234 kB to 82 kB, measured). That is what
+    makes a polar set per variant affordable: 144 files at 82 kB rather than
+    240. Falls back to the plain save if Pillow is not around, since the figure
+    is correct either way.
+    """
+    fig.savefig(path, dpi=dpi)
+    plt.close(fig)
+    try:
+        from PIL import Image
+    except ImportError:
+        return path
+    im = Image.open(path).convert("RGB")
+    im.quantize(colors=256, method=Image.MEDIANCUT).save(path, optimize=True)
+    return path
+
+
+def plot_polar_diff(scn, band, gortt, flight, outdir, style, variant, suffix):
+    """
+    The polar figure for a variant page: how the disagreement with FLIGHT
+    changes, side by side with the baseline's.
+
+    Two columns rather than the baseline page's three, on one shared symmetric
+    scale, so the eye compares the two difference fields directly -- which is
+    the only question a variant page asks. The absolute fields are on the
+    baseline page and FLIGHT is the same Monte Carlo either way, so neither is
+    worth repeating.
+
+    It is also what makes this affordable. Both panels are on FLIGHT's own
+    coarse direction grid rather than the dense gortt one, which is far fewer
+    contour polygons; the baseline figure's left panel is the expensive part.
+    A full three-column set per variant would add about 52 MB to a repository
+    whose figures are already 26.
+    """
+    vzas, raas = config.POLAR_VZA, config.POLAR_RAA
+
+    fig, axes = plt.subplots(len(config.SZAS), 2,
+                             figsize=(7.0, 3.2 * len(config.SZAS)),
+                             subplot_kw={"projection": "polar"},
+                             layout="constrained")
+    if len(config.SZAS) == 1:
+        axes = np.array([axes])
+
+    drawn = False
+    for row, sza in enumerate(config.SZAS):
+        bk = (config.BASELINE, scn.name, band.name, sza, "flight")
+        vk = (variant, scn.name, band.name, sza, "flight")
+        fk = (scn.name, band.name, sza)
+        if bk not in gortt or vk not in gortt or fk not in flight:
+            continue
+
+        fv, fr, fz = polar_field(flight[fk], vzas, raas)
+        _, _, bz = polar_field(gortt[bk], vzas, raas)
+        _, _, vz = polar_field(gortt[vk], vzas, raas)
+        dbase, dvar = bz - fz, vz - fz
+
+        dmax = max(np.nanmax(np.abs(dbase)), np.nanmax(np.abs(dvar))) or 1e-6
+        levels = np.linspace(-dmax, dmax, 21)
+
+        polar_panel(axes[row][0], fv, fr, dbase, levels, "RdBu_r",
+                    "baseline $-$ FLIGHT   sza %g$^\\circ$" % sza)
+        c = polar_panel(axes[row][1], fv, fr, dvar, levels, "RdBu_r",
+                        "%s $-$ FLIGHT" % variant)
+        add_colorbar(fig, c, axes[row][1], "$\\Delta$BRF")
+        drawn = True
+
+    if not drawn:
+        plt.close(fig)
+        return None
+
+    fig.suptitle("%s   %s (%d nm)   change in the disagreement with FLIGHT\n"
+                 "r=%.1f b=%.1f m, $\\lambda$=%.4f m$^{-2}$, favd=%.2f m$^{-1}$, "
+                 "PCC=%.2f, target LAI=%.1f   |   radius: view zenith 0-70$^\\circ$"
+                 % (scn.name, band.name.upper(), band.wl, scn.r, scn.b, scn.lam,
+                    scn.favd, scn.pcc, scn.target_lai), fontsize=8.5)
+    out = os.path.join(outdir, "%s-polar-%s%s.png" % (scn.name, band.name, suffix))
+    return save_paletted(fig, out, 140)
+
+
 def plot_pp(scn, gortt, flight, outdir, style, variants=None, suffix=""):
     """
     The principal plane, one panel per (band, solar zenith).
@@ -427,18 +511,18 @@ def main():
         pair = ([config.BASELINE] if variant == config.BASELINE
                 else [config.BASELINE, variant])
         for scn in scenes:
-            # Polar contours are baseline only. The layout is a fixed three
-            # columns on one colour scale, so it can show one formulation at a
-            # time anyway, and a full set per variant would be 144 more PNGs
-            # and about 36 MB in a repository that already carries 13. The
-            # principal-plane panels put both curves on the same axes, which is
-            # what a variant page actually wants.
-            if variant == config.BASELINE:
-                for band in config.BRDF_BANDS:
-                    sys.stderr.write("plot_brdf: %s\n"
-                                     % plot_polar(scn, band, gortt, flight,
-                                                  args.outdir, args.style,
-                                                  variant=variant, suffix=suffix))
+            for band in config.BRDF_BANDS:
+                # The baseline gets the three-panel absolute figure; a variant
+                # gets the cheaper two-panel difference pair, which is the
+                # question it is actually asking. See plot_polar_diff.
+                if variant == config.BASELINE:
+                    got = plot_polar(scn, band, gortt, flight, args.outdir,
+                                     args.style, variant=variant, suffix=suffix)
+                else:
+                    got = plot_polar_diff(scn, band, gortt, flight, args.outdir,
+                                          args.style, variant, suffix)
+                if got:
+                    sys.stderr.write("plot_brdf: %s\n" % got)
             sys.stderr.write("plot_brdf: %s\n"
                              % plot_pp(scn, gortt, flight, args.outdir, args.style,
                                        variants=pair, suffix=suffix))

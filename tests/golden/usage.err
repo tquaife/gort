@@ -93,6 +93,26 @@ preferred because it reduces equifinality.
                  	n.b. the last two apply to -lidar_waveform only
                  	n.b. all of the -lidar_* options require -lidar, and are refused without it
 
+============ Experimental scattering options:
+  Ni et al. (1999) section V says the model is validated over dense forests, and
+  defers three things that matter as a canopy opens up. Each of these switches one
+  of them on. All are off by default: with none of them given the model is the
+  paper as published.
+-rt_crown_path 	take the crown path reflectances from a crown rather than from a layer
+               	holding the whole scene's foliage. Eqs (15)-(16) use the latter, so a
+               	stand of widely spaced crowns comes out with black crowns.
+-rt_path arg   	which layer -rt_crown_path means: scene (as published, a control),
+               	squeeze (elai/(1-Kopen)) or crown (the default, chord-averaged)
+-rt_recollision	rescale the crown path reflectances by the crown's recollision
+               	probability, so that they carry every scattering order. Requires
+               	-rt_crown_path: it describes a crown, so it can only rescale a crown.
+-rt_bg_coupling	let the sunlit and shaded background exchange radiation with the canopy,
+               	the 1/(1-rho_s rho'_ff) that eqs (36)-(37) already give the crown
+-rt_crown_crown	add the neighbour-crown term the paper drops just below eq. (39)
+-rt_fd_paper   	direct beam fraction mu/(mu+0.05), which is what section IV gives;
+               	without it gortt uses mu/(mu+0.09). n.b. -diffuse overrides both.
+-rt_all        	all five of the above
+
 ============ Input/output options:
 -prnspec	print the scene component spectra for each wavelength inside {}
 -prnprop	print the viewed proportions of scene components inside []

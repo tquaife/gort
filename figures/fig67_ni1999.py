@@ -219,13 +219,21 @@ def main():
                     help="also write PREFIX-<band>-a.csv and -b.csv")
     ap.add_argument("--q08", action="store_true",
                     help="use -q08_pn_kopen (faster, only strictly valid for h=0)")
+    ap.add_argument("--gortt-arg", action="append", default=[], metavar="OPT",
+                    help="extra gortt option, repeatable. The point of it is the "
+                         "-rt_* family: these two figures are the published "
+                         "component signatures, so they are the second target any "
+                         "change to the scattering has to answer to. Use --suffix "
+                         "to keep the images apart.")
+    ap.add_argument("--suffix", default="",
+                    help="appended to the output filenames, e.g. --suffix -crown-path")
     ap.add_argument("--title", default=None,
                     help="figure title ('' for none)")
     args = ap.parse_args()
 
     gr.check_binary(args.gortt)
 
-    extra = ["-q08_pn_kopen"] if args.q08 else []
+    extra = (["-q08_pn_kopen"] if args.q08 else []) + list(args.gortt_arg)
     szas = np.arange(0.0, 80.1, 2.0)
     bar_szas = np.arange(0.0, 80.1, 5.0)
     vza = np.arange(-args.limit, args.limit + args.step / 2.0, args.step)
@@ -256,7 +264,8 @@ def main():
         fig = plot(band, szas, c_hot, nadir, bar_szas, lo, hi,
                    vza, c_b, args.style, title)
 
-        out = os.path.join(args.outdir, "fig%d_ni1999.png" % band["figure"])
+        out = os.path.join(args.outdir,
+                           "fig%d_ni1999%s.png" % (band["figure"], args.suffix))
         fig.savefig(out, dpi=150)
         plt.close(fig)
         sys.stderr.write("fig%d: wrote %s\n" % (band["figure"], out))

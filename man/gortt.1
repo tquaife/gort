@@ -420,6 +420,61 @@ Use the Lewis functional approximation to the gap probability terms, as used in
 Quaife et al. (2008), in place of the full numerical treatment.  This is much
 faster, but it is only coded for h=0 and should be used with caution when the
 crown centres span a range of heights.
+.SS Experimental scattering options
+Ni et al. (1999) section V states that the model has been validated over dense
+forests, and defers three things that matter as a canopy opens up: the
+bidirectional effect of the background, the background\(encanopy exchange, and
+scattering between neighbouring crowns.  Each option below switches one of them
+on.  All are off by default, so with none of them given the model is the paper
+as published and every regression golden is unchanged.
+.TP
+.B \-rt_crown_path
+Take the crown path reflectances \(*r\(fm_df and \(*r\(fm_ff from a crown rather
+than from a layer holding the whole scene's foliage.  Eqs (15)\(en(16) use the
+latter, which makes the crown reflectance fall with the stand density: thin the
+stand out and the crowns go black although nothing about a crown has changed.
+.TP
+.BI \-rt_path " which"
+Which layer
+.B \-rt_crown_path
+means.
+.I scene
+is the published depth and therefore a control rather than a change;
+.I squeeze
+spreads the foliage over the part of the hemisphere that is not open
+.RI ( elai /(1\-
+.IR K_open ));
+.I crown
+(the default) uses a crown's own depth, averaged over the chord distribution of
+the spheroid.  Requires
+.BR \-rt_crown_path .
+.TP
+.B \-rt_recollision
+Rescale the crown path reflectances by the crown's recollision probability, so
+that they carry every scattering order rather than the two\-stream's.  Requires
+.BR \-rt_crown_path :
+the recollision probability describes a crown, so it can only rescale a crown.
+.TP
+.B \-rt_bg_coupling
+Let the sunlit and shaded background exchange radiation with the canopy above,
+i.e. give
+.I G
+and
+.I Z
+the 1/(1\-\(*r_s\(*r\(fm_ff) that eqs (36)\(en(37) already give the crown.
+.TP
+.B \-rt_crown_crown
+Add the neighbour\-crown term the paper drops just below eq. (39).
+.TP
+.B \-rt_fd_paper
+Use the direct beam fraction \(*m/(\(*m+0.05) that section IV gives.  Without it
+gortt uses \(*m/(\(*m+0.09).
+.B \-diffuse
+overrides both.
+.TP
+.B \-rt_all
+All five of the above.
+.SS Output and mode switches, continued
 .TP
 .BI \-diffuse " frac"
 Set the fraction of incident radiation that is diffuse to
@@ -722,6 +777,14 @@ combination with any of
 .B \-P
 or
 .BR \-q08_pn_kopen .
+Every
+.B \-rt_*
+option has the same hazard from the other direction: they are matched above
+.B \-r
+in the chain because
+.B \-r
+is tested on two characters at the bottom and would otherwise swallow them and
+consume the following word as a crown radius.
 All three deal only with the gap probabilities at the ground: the
 .B \-W
 file format stores that one row, and the Q08 functional approximation is only

@@ -202,3 +202,37 @@ lidar-optorder  -           -lidar_wl 1550 -Cab 60 -nlayers 8 -lidar
 # on two characters further down the if-chain. If it ever is, this case
 # starts setting the PROSPECT structure parameter to 0 instead.
 nlayers-vs-N    spec.in     -nlayers 31 -N 2.1
+
+# ---------------------------------------------------------------------------
+# The experimental scattering options. All of them are off by default, so the
+# first thing these pin is that the other 82 cases did not move: if any of the
+# BRF goldens changes, an option is leaking into the published path.
+#
+# -rt_path scene asks -rt_crown_path for the depth eqs (15)-(16) already use,
+# so rt-path-scene.out must stay byte-identical to rt-crown-path-off.out --
+# that is the control, and it is what catches an algebra slip in the
+# refactored gortt_two_stream.
+rt-crown-path-off   basic.in    -LAI 1.0 -PCC 0.2
+rt-path-scene       basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_path scene
+rt-path-squeeze     basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_path squeeze
+rt-crown-path       basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path
+rt-recollision      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_recollision
+rt-bg-coupling      basic.in    -LAI 1.0 -PCC 0.2 -rt_bg_coupling
+rt-crown-crown      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_crown
+rt-all              basic.in    -LAI 1.0 -PCC 0.2 -rt_all
+# the chord average follows -nquad like every other quadrature in the model;
+# NQ_GL is already converged, so this must agree with rt-crown-path closely
+rt-crown-path-nquad basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -nquad 4
+# -rt_bg_coupling feeds s->ztrans as well as Z, so the energy balance has to
+# stay closed with it on
+rt-energy           basic.in    -LAI 1.0 -PCC 0.2 -rt_all -energy
+# two options that do nothing on their own are refused rather than left inert
+badrtpath           -           -rt_path squeeze
+badrtpatharg        -           -rt_crown_path -rt_path banana
+badrtrecollision    -           -rt_recollision
+# -rt_* must not be swallowed by -r, which is matched on two characters at the
+# bottom of the if-chain and would also eat the next word as a crown radius
+rt-vs-r             basic.in    -rt_crown_path -r 3.0 -LAI 1.0
+# omega = 0 divided by zero in the phase function asymmetry and the NaN came
+# out as the BRF. Perfectly black leaves are a legitimate structure-only run.
+blackleaf           basic.in    -LAI 2.0 -refl_leaf 0 -trans_leaf 0 -alb_soil 0.3

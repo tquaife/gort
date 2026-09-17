@@ -102,13 +102,18 @@ GROUND_TOP = 1.0        # m: everything below this is the ground return.  Safe
 
 
 def read_gortt(path):
+    """(variant, scene) -> (z, return density), plus the per-scene rho_v/rho_g/Rg."""
     out = collections.defaultdict(list)
     meta = {}
     with open(path) as fp:
         for r in csv.DictReader(fp):
-            out[r["scene"]].append((float(r["z"]), float(r["return_density"])))
-            meta[r["scene"]] = (float(r["rho_v"]), float(r["rho_g"]), float(r["Rg"]))
+            key = (r["variant"], r["scene"])
+            out[key].append((float(r["z"]), float(r["return_density"])))
+            meta[key] = (float(r["rho_v"]), float(r["rho_g"]), float(r["Rg"]))
     return {k: np.array(sorted(v)).T for k, v in out.items()}, meta
+
+
+VARIANT_COLOURS = ["#2a78d6", "#1baf7a", "#8e44ad", "#c0392b", "#16a085"]
 
 
 def read_flight(path):
@@ -153,11 +158,18 @@ def partition(z, w):
     return g / tot, 1.0 - g / tot
 
 
-def plot_scene(scn, gortt, gmeta, flight, outdir, style):
+def plot_scene(scn, gortt, gmeta, flight, outdir, style, variants=None, suffix=""):
+    """
+    variants is the list of gortt formulations drawn on the same axes, baseline
+    first.  In practice it is the baseline alone: no -rt_* option reaches the
+    lidar path, which run_lidar.gortt_waveforms explains and checks.  The
+    machinery is here so that one which did would need no changes.
+    """
+    variants = variants or [config.BASELINE]
     cg, cf, cm = ("#2a78d6", "#eb6834", "#1baf7a") if style == "colour" \
         else ("k", "0.35", "0.6")
 
-    gz, gw = gortt[scn.name]
+    gz, gw = gortt[(variants[0], scn.name)]
     gn = normalise(gz, gw)
 
     single = flight.get((scn.name, config.LIDAR_BOUNCE_SINGLE))
@@ -170,8 +182,16 @@ def plot_scene(scn, gortt, gmeta, flight, outdir, style):
             m = z >= GROUND_TOP if canopy_only else np.ones_like(z, dtype=bool)
             return z[m], normalise(z[m], w[m])
 
-        zz, ww = prep(gz, gw)
-        panel.plot(ww, zz, color=cg, lw=1.5, label="gortt")
+        for n, variant in enumerate(variants):
+            if (variant, scn.name) not in gortt:
+                continue
+            vz, vw = gortt[(variant, scn.name)]
+            zz, ww = prep(vz, vw)
+            colour = (VARIANT_COLOURS[n % len(VARIANT_COLOURS)]
+                      if style == "colour" else ("k" if n == 0 else "0.25"))
+            panel.plot(ww, zz, color=colour, lw=1.5,
+                       ls="-" if n == 0 else "--",
+                       label="gortt, %s" % variant)
 
         if single:
             fz, fa = stack(single)
@@ -226,10 +246,14 @@ def plot_scene(scn, gortt, gmeta, flight, outdir, style):
     # (c) where the energy goes
     ax = axes[2]
     labels, ground, canopy = [], [], []
-    labels.append("gortt")
-    g, c = partition(gz, gw)
-    ground.append(g)
-    canopy.append(c)
+    for variant in variants:
+        if (variant, scn.name) not in gortt:
+            continue
+        vz, vw = gortt[(variant, scn.name)]
+        g, c = partition(vz, vw)
+        labels.append("gortt\n%s" % variant)
+        ground.append(g)
+        canopy.append(c)
     if single:
         fz, fa = stack(single)
         parts = np.array([partition(fz, row) for row in fa])
@@ -258,7 +282,7 @@ def plot_scene(scn, gortt, gmeta, flight, outdir, style):
     ax.legend(fontsize=7, frameon=False, loc="lower right")
     ax.tick_params(direction="in", right=True)
 
-    rho_v, rho_g, _ = gmeta[scn.name]
+    rho_v, rho_g, _ = gmeta[(variants[0], scn.name)]
     fig.suptitle("%s   nadir lidar waveform at %d nm\n"
                  "r=%.1f b=%.1f m, $\\lambda$=%.4f m$^{-2}$, favd=%.2f m$^{-1}$, "
                  "PCC=%.2f, target LAI=%.1f   |   gortt $\\rho_v$=%.3f $\\rho_g$=%.3f"
@@ -266,48 +290,57 @@ def plot_scene(scn, gortt, gmeta, flight, outdir, style):
                     scn.favd, scn.pcc, scn.target_lai, rho_v, rho_g),
                  fontsize=9)
     fig.tight_layout()
-    out = os.path.join(outdir, "%s-lidar.png" % scn.name)
+    out = os.path.join(outdir, "%s-lidar%s.png" % (scn.name, suffix))
     fig.savefig(out, dpi=150)
     plt.close(fig)
     return out
 
 
-def statistics(scenes, gortt, flight, path):
+def statistics(scenes, gortt, flight, path, variants=None):
     """
     How close are the normalised shapes?  Compared on the canopy only, where
     the two models are claiming the same thing, and summarised by the mean
     return height as well as by an rms difference.
+
+    One row per (variant, scene).  FLIGHT is the same single-scattering Monte
+    Carlo in every row: the -rt_* options are gortt-side formulations and the
+    reference does not move.
     """
+    variants = variants or [config.BASELINE]
     with open(path, "w", newline="") as fp:
         w = csv.writer(fp)
-        w.writerow(["scene", "ground_frac_gortt", "ground_frac_flight",
+        w.writerow(["variant", "scene", "ground_frac_gortt", "ground_frac_flight",
                     "mean_height_gortt", "mean_height_flight",
                     "canopy_shape_rmsd", "peak_z_gortt", "peak_z_flight"])
-        for scn in scenes:
-            gz, gw = gortt[scn.name]
-            single = flight.get((scn.name, config.LIDAR_BOUNCE_SINGLE))
-            if not single:
-                continue
-            fz, fa = stack(single)
-            fw = fa.mean(axis=0)
+        for variant in variants:
+            for scn in scenes:
+                if (variant, scn.name) not in gortt:
+                    continue
+                gz, gw = gortt[(variant, scn.name)]
+                single = flight.get((scn.name, config.LIDAR_BOUNCE_SINGLE))
+                if not single:
+                    continue
+                fz, fa = stack(single)
+                fw = fa.mean(axis=0)
 
-            gg, _ = partition(gz, gw)
-            fg, _ = partition(fz, fw)
+                gg, _ = partition(gz, gw)
+                fg, _ = partition(fz, fw)
 
-            gm = gz >= GROUND_TOP
-            fm = fz >= GROUND_TOP
-            gc = normalise(gz[gm], gw[gm])
-            fc = normalise(fz[fm], fw[fm])
-            # FLIGHT's grid is a subset of the same 0.1 m bins, so compare by
-            # interpolating gortt's canopy shape onto FLIGHT's heights.
-            gi = np.interp(fz[fm], gz[gm][::-1], gc[::-1], left=0.0, right=0.0)
-            rmsd = float(np.sqrt(np.mean((gi - fc) ** 2)))
+                gm = gz >= GROUND_TOP
+                fm = fz >= GROUND_TOP
+                gc = normalise(gz[gm], gw[gm])
+                fc = normalise(fz[fm], fw[fm])
+                # FLIGHT's grid is a subset of the same 0.1 m bins, so compare
+                # by interpolating gortt's canopy shape onto FLIGHT's heights.
+                gi = np.interp(fz[fm], gz[gm][::-1], gc[::-1], left=0.0, right=0.0)
+                rmsd = float(np.sqrt(np.mean((gi - fc) ** 2)))
 
-            w.writerow([scn.name, "%.4f" % gg, "%.4f" % fg,
-                        "%.3f" % float((gz[gm] * gc).sum()),
-                        "%.3f" % float((fz[fm] * fc).sum()),
-                        "%.5f" % rmsd,
-                        "%.2f" % gz[gm][gc.argmax()], "%.2f" % fz[fm][fc.argmax()]])
+                w.writerow([variant, scn.name, "%.4f" % gg, "%.4f" % fg,
+                            "%.3f" % float((gz[gm] * gc).sum()),
+                            "%.3f" % float((fz[fm] * fc).sum()),
+                            "%.5f" % rmsd,
+                            "%.2f" % gz[gm][gc.argmax()],
+                            "%.2f" % fz[fm][fc.argmax()]])
     sys.stderr.write("plot_lidar: wrote %s\n" % path)
 
 
@@ -319,6 +352,11 @@ def main():
     ap.add_argument("--outdir", default=config.FIGS_DIR)
     ap.add_argument("--style", choices=("colour", "paper"), default="colour")
     ap.add_argument("--scenes", nargs="*")
+    ap.add_argument("--variants", nargs="+", metavar="NAME",
+                    default=[config.BASELINE],
+                    help="gortt variants to draw (default: just the baseline, "
+                         "since no -rt_* option reaches the lidar path). Any "
+                         "name not present in the CSV is skipped.")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -328,15 +366,24 @@ def main():
     scenes = config.scenes()
     if args.scenes:
         scenes = [config.scene_by_name(n) for n in args.scenes]
-    scenes = [s for s in scenes if s.name in gortt]
+    have = {k[1] for k in gortt}
+    scenes = [s for s in scenes if s.name in have]
     if not scenes:
         sys.exit("plot_lidar: no results found -- run run_lidar.py first")
 
-    for scn in scenes:
-        sys.stderr.write("plot_lidar: %s\n"
-                         % plot_scene(scn, gortt, gmeta, flight, args.outdir, args.style))
+    args.variants = [v for v in args.variants if any(v == k[0] for k in gortt)]
+    for variant in args.variants:
+        suffix = "" if variant == config.BASELINE else "-" + variant
+        pair = ([config.BASELINE] if variant == config.BASELINE
+                else [config.BASELINE, variant])
+        for scn in scenes:
+            sys.stderr.write("plot_lidar: %s\n"
+                             % plot_scene(scn, gortt, gmeta, flight, args.outdir,
+                                          args.style, variants=pair, suffix=suffix))
+
     statistics(scenes, gortt, flight,
-               os.path.join(args.results, "lidar_stats.csv"))
+               os.path.join(args.results, "lidar_stats.csv"),
+               variants=args.variants)
 
 
 if __name__ == "__main__":

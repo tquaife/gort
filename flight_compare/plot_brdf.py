@@ -44,13 +44,20 @@ import config
 
 
 def read_gortt(path):
-    """(scene, band, sza, grid) -> {(vza, raa): brf}"""
+    """(variant, scene, band, sza, grid) -> {(vza, raa): brf}"""
     out = collections.defaultdict(dict)
     with open(path) as fp:
         for r in csv.DictReader(fp):
-            key = (r["scene"], r["band"], float(r["sza"]), r["grid"])
+            key = (r["variant"], r["scene"], r["band"], float(r["sza"]), r["grid"])
             out[key][(float(r["vza"]), float(r["raa"]))] = float(r["brf"])
     return out
+
+
+# Colours for the gortt curves when more than one variant is drawn. The
+# baseline keeps the blue it has always had and FLIGHT keeps its orange, so a
+# variant page reads the same way as the main one with an extra line on it.
+VARIANT_COLOURS = ["#2a78d6", "#1baf7a", "#8e44ad", "#c0392b", "#16a085"]
+FLIGHT_COLOUR = "#eb6834"
 
 
 def read_flight(path):
@@ -120,7 +127,16 @@ def add_colorbar(fig, cs, ax, label):
     return cb
 
 
-def plot_polar(scn, band, gortt, flight, outdir, style):
+def plot_polar(scn, band, gortt, flight, outdir, style, variant=None, suffix=""):
+    """
+    Three polar panels per solar zenith: gortt, FLIGHT, and the difference.
+
+    Only one gortt variant fits here -- the layout is a fixed three columns on a
+    shared colour scale, and a fourth field would need its own scale to be
+    readable. A variant page gets its own file via `suffix` instead, and the
+    difference panel is the one to read: it is the same FLIGHT either way.
+    """
+    variant = variant or config.BASELINE
     cmap = "viridis" if style == "colour" else "Greys"
     vzas, raas = config.POLAR_VZA, config.POLAR_RAA
 
@@ -132,7 +148,7 @@ def plot_polar(scn, band, gortt, flight, outdir, style):
         axes = np.array([axes])
 
     for row, sza in enumerate(config.SZAS):
-        gk = (scn.name, band.name, sza, "dense")
+        gk = (variant, scn.name, band.name, sza, "dense")
         fk = (scn.name, band.name, sza)
         if gk not in gortt or fk not in flight:
             continue
@@ -140,7 +156,8 @@ def plot_polar(scn, band, gortt, flight, outdir, style):
         gv, gr, gz = polar_field(gortt[gk], config.GORTT_DENSE_VZA, config.GORTT_DENSE_RAA)
         fv, fr, fz = polar_field(flight[fk], vzas, raas)
         # gortt sampled on FLIGHT's own directions, so the difference is like for like
-        dv, dr, dz = polar_field(gortt[(scn.name, band.name, sza, "flight")], vzas, raas)
+        dv, dr, dz = polar_field(gortt[(variant, scn.name, band.name, sza, "flight")],
+                                 vzas, raas)
         diff = dz - fz
 
         lo = np.nanmin([np.nanmin(gz), np.nanmin(fz)])
@@ -190,8 +207,18 @@ def signed_pp(lookup, reduce=None):
     return np.array(x), np.array(y)
 
 
-def plot_pp(scn, gortt, flight, outdir, style):
-    colours = ["#2a78d6", "#eb6834"] if style == "colour" else ["k", "0.45"]
+def plot_pp(scn, gortt, flight, outdir, style, variants=None, suffix=""):
+    """
+    The principal plane, one panel per (band, solar zenith).
+
+    variants is a list of gortt variant names drawn on the same axes; the
+    default is the baseline alone, which is what the main page uses. A variant
+    page passes [baseline, <one option>] so that the change has something to be
+    a change from -- FLIGHT is the same Monte Carlo in both cases and is never
+    re-run.
+    """
+    variants = variants or [config.BASELINE]
+    fcolour = FLIGHT_COLOUR if style == "colour" else "0.45"
     fig, axes = plt.subplots(len(config.BRDF_BANDS), len(config.SZAS),
                              figsize=(3.6 * len(config.SZAS), 3.1 * len(config.BRDF_BANDS)),
                              squeeze=False)
@@ -199,18 +226,24 @@ def plot_pp(scn, gortt, flight, outdir, style):
     for i, band in enumerate(config.BRDF_BANDS):
         for j, sza in enumerate(config.SZAS):
             ax = axes[i][j]
-            gk = (scn.name, band.name, sza, "dense")
             fk = (scn.name, band.name, sza)
-            if gk in gortt:
+            for n, variant in enumerate(variants):
+                gk = (variant, scn.name, band.name, sza, "dense")
+                if gk not in gortt:
+                    continue
                 x, y = signed_pp(gortt[gk])
-                ax.plot(x, y, color=colours[0], lw=1.4, label="gortt")
+                colour = (VARIANT_COLOURS[n % len(VARIANT_COLOURS)]
+                          if style == "colour" else ("k" if n == 0 else "0.25"))
+                ax.plot(x, y, color=colour, lw=1.4,
+                        ls="-" if n == 0 else "--",
+                        label="gortt, %s" % variant)
             if fk in flight:
                 x, y = signed_pp(flight[fk], reduce=np.mean)
                 _, e = signed_pp(flight[fk],
                                  reduce=lambda v: np.std(v, ddof=1) / np.sqrt(len(v))
                                  if len(v) > 1 else 0.0)
                 ax.errorbar(x, y, yerr=e, fmt="o", ms=3.0, lw=0.8, capsize=2,
-                            color=colours[1], label="FLIGHT")
+                            color=fcolour, label="FLIGHT")
             ax.axvline(sza, color="0.7", lw=0.6, ls=":")
             ax.annotate("hotspot", xy=(sza, 0.97), xycoords=("data", "axes fraction"),
                         fontsize=6, color="0.45", ha="left", va="top", rotation=90)
@@ -229,13 +262,13 @@ def plot_pp(scn, gortt, flight, outdir, style):
                  % (scn.name, scn.r, scn.b, scn.lam, scn.favd, scn.pcc, scn.target_lai),
                  fontsize=9)
     fig.tight_layout()
-    out = os.path.join(outdir, "%s-pp.png" % scn.name)
+    out = os.path.join(outdir, "%s-pp%s.png" % (scn.name, suffix))
     fig.savefig(out, dpi=150)
     plt.close(fig)
     return out
 
 
-def plot_overview(scenes, gortt, flight, outdir, style):
+def plot_overview(scenes, gortt, flight, outdir, style, variant=None, suffix=""):
     """
     One picture of the whole comparison: every direction in every scene, gortt
     against FLIGHT, and the relative RMSD broken down by scene.
@@ -246,6 +279,8 @@ def plot_overview(scenes, gortt, flight, outdir, style):
     cols = {"red": "#c1443c", "nir": "#1baf7a"} if style == "colour" \
         else {"red": "0.2", "nir": "0.6"}
 
+    variant = variant or config.BASELINE
+
     fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.8),
                              gridspec_kw={"width_ratios": [1.0, 1.45]})
 
@@ -255,7 +290,7 @@ def plot_overview(scenes, gortt, flight, outdir, style):
         gx, fy = [], []
         for scn in scenes:
             for sza in config.SZAS:
-                gk = (scn.name, band.name, sza, "flight")
+                gk = (variant, scn.name, band.name, sza, "flight")
                 fk = (scn.name, band.name, sza)
                 if gk not in gortt or fk not in flight:
                     continue
@@ -289,7 +324,7 @@ def plot_overview(scenes, gortt, flight, outdir, style):
         for scn in scenes:
             d, f = [], []
             for sza in config.SZAS:
-                gk = (scn.name, band.name, sza, "flight")
+                gk = (variant, scn.name, band.name, sza, "flight")
                 fk = (scn.name, band.name, sza)
                 if gk not in gortt or fk not in flight:
                     continue
@@ -313,35 +348,44 @@ def plot_overview(scenes, gortt, flight, outdir, style):
                  "solar zeniths %s$^\\circ$"
                  % ", ".join("%g" % s for s in config.SZAS), fontsize=10)
     fig.tight_layout()
-    out = os.path.join(outdir, "overview.png")
+    out = os.path.join(outdir, "overview%s.png" % suffix)
     fig.savefig(out, dpi=150)
     plt.close(fig)
     return out
 
 
-def statistics(scenes, gortt, flight, path):
-    """Agreement between the two models on FLIGHT's own directions."""
+def statistics(scenes, gortt, flight, path, variants=None):
+    """
+    Agreement between the two models on FLIGHT's own directions, per variant.
+
+    FLIGHT is averaged over its realisations and is identical for every variant,
+    so a row is a fair comparison of one gortt formulation against one fixed
+    reference. The variant column is what the comparison pages rank on.
+    """
+    variants = variants or [v[0] for v in config.GORTT_VARIANTS]
     with open(path, "w", newline="") as fp:
         w = csv.writer(fp)
-        w.writerow(["scene", "band", "sza", "n", "mean_flight", "mean_gortt",
-                    "bias", "rmsd", "rel_rmsd", "r"])
-        for scn in scenes:
-            for band in config.BRDF_BANDS:
-                for sza in config.SZAS:
-                    gk = (scn.name, band.name, sza, "flight")
-                    fk = (scn.name, band.name, sza)
-                    if gk not in gortt or fk not in flight:
-                        continue
-                    keys = sorted(set(gortt[gk]) & set(flight[fk]))
-                    g = np.array([gortt[gk][k] for k in keys])
-                    f = np.array([np.mean(flight[fk][k]) for k in keys])
-                    d = g - f
-                    rms = float(np.sqrt(np.mean(d ** 2)))
-                    r = float(np.corrcoef(g, f)[0, 1]) if len(g) > 2 else float("nan")
-                    w.writerow([scn.name, band.name, "%g" % sza, len(keys),
-                                "%.5f" % f.mean(), "%.5f" % g.mean(),
-                                "%.5f" % d.mean(), "%.5f" % rms,
-                                "%.4f" % (rms / f.mean()), "%.4f" % r])
+        w.writerow(["variant", "scene", "band", "sza", "n", "mean_flight",
+                    "mean_gortt", "bias", "rmsd", "rel_rmsd", "r"])
+        for variant in variants:
+            for scn in scenes:
+                for band in config.BRDF_BANDS:
+                    for sza in config.SZAS:
+                        gk = (variant, scn.name, band.name, sza, "flight")
+                        fk = (scn.name, band.name, sza)
+                        if gk not in gortt or fk not in flight:
+                            continue
+                        keys = sorted(set(gortt[gk]) & set(flight[fk]))
+                        g = np.array([gortt[gk][k] for k in keys])
+                        f = np.array([np.mean(flight[fk][k]) for k in keys])
+                        d = g - f
+                        rms = float(np.sqrt(np.mean(d ** 2)))
+                        r = (float(np.corrcoef(g, f)[0, 1]) if len(g) > 2
+                             else float("nan"))
+                        w.writerow([variant, scn.name, band.name, "%g" % sza,
+                                    len(keys), "%.5f" % f.mean(), "%.5f" % g.mean(),
+                                    "%.5f" % d.mean(), "%.5f" % rms,
+                                    "%.4f" % (rms / f.mean()), "%.4f" % r])
     sys.stderr.write("plot_brdf: wrote %s\n" % path)
 
 
@@ -355,6 +399,12 @@ def main():
     ap.add_argument("--style", choices=("colour", "paper"), default="colour",
                     help="colour: viridis polar panels (default: %(default)s)")
     ap.add_argument("--scenes", nargs="*", help="limit to these scenes")
+    ap.add_argument("--variants", nargs="+", metavar="NAME",
+                    default=[v[0] for v in config.GORTT_VARIANTS],
+                    help="gortt variants to draw (default: all of them). The "
+                         "baseline keeps the unsuffixed filenames; every other "
+                         "variant gets its own -<name> set, drawn against the "
+                         "baseline.")
     args = ap.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -369,17 +419,36 @@ def main():
     if not scenes:
         sys.exit("plot_brdf: no FLIGHT results found -- run run_brdf.py first")
 
-    for scn in scenes:
-        for band in config.BRDF_BANDS:
-            sys.stderr.write("plot_brdf: %s\n" % plot_polar(scn, band, gortt, flight,
-                                                            args.outdir, args.style))
-        sys.stderr.write("plot_brdf: %s\n" % plot_pp(scn, gortt, flight,
-                                                     args.outdir, args.style))
+    # The baseline figures keep their unsuffixed names, so the main page does
+    # not move. Each variant adds its own -<name> set beside them and is drawn
+    # against the baseline, since the interesting thing is the change.
+    for variant in args.variants:
+        suffix = "" if variant == config.BASELINE else "-" + variant
+        pair = ([config.BASELINE] if variant == config.BASELINE
+                else [config.BASELINE, variant])
+        for scn in scenes:
+            # Polar contours are baseline only. The layout is a fixed three
+            # columns on one colour scale, so it can show one formulation at a
+            # time anyway, and a full set per variant would be 144 more PNGs
+            # and about 36 MB in a repository that already carries 13. The
+            # principal-plane panels put both curves on the same axes, which is
+            # what a variant page actually wants.
+            if variant == config.BASELINE:
+                for band in config.BRDF_BANDS:
+                    sys.stderr.write("plot_brdf: %s\n"
+                                     % plot_polar(scn, band, gortt, flight,
+                                                  args.outdir, args.style,
+                                                  variant=variant, suffix=suffix))
+            sys.stderr.write("plot_brdf: %s\n"
+                             % plot_pp(scn, gortt, flight, args.outdir, args.style,
+                                       variants=pair, suffix=suffix))
+        sys.stderr.write("plot_brdf: %s\n"
+                         % plot_overview(scenes, gortt, flight, args.outdir,
+                                         args.style, variant=variant, suffix=suffix))
 
-    sys.stderr.write("plot_brdf: %s\n"
-                     % plot_overview(scenes, gortt, flight, args.outdir, args.style))
     statistics(scenes, gortt, flight,
-               os.path.join(args.results, "brdf_stats.csv"))
+               os.path.join(args.results, "brdf_stats.csv"),
+               variants=args.variants)
 
 
 if __name__ == "__main__":

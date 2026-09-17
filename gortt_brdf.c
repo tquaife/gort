@@ -320,11 +320,235 @@ They are filled here instead, once, in dependency order -- which is the
 order Ni et al. (1999) derive them in, so the block still reads against
 the paper.
 */
+/*
+The two-stream path scattering parameters of a horizontally homogeneous
+layer: Ni et al. (1999) eqs (8)-(11) and the four semi-infinite quantities
+underneath them, for a layer of one-sided leaf area index L viewed at
+incident zenith theta.
+
+This used to be written out inline in gortt_rt_init at the single depth
+k*elai. It is a function so that -rt_crown_path can ask for a second depth
+-- the paper's eqs (15)-(16) set the crown path reflectances equal to the
+homogeneous ones, and which homogeneous layer that means is exactly the
+question those options exist to test. Called with L = p->elai and
+theta = sza_prime it reproduces the published model bit for bit, which is
+what the golden files pin.
+
+The expressions are kept in the exact form they had inline -- SEC(theta)
+rather than 1/mu, the pow() calls, the order of the products -- because at
+-O0 there is no reassociation and the goldens are a byte comparison.
+*/
+static void gortt_two_stream( double w, double gamma, double k, double L, double theta,
+                              gortt_slab *sl )
+{
+
+	sl->t_0 = exp( -( k*L*SEC( theta ) ) ) ;
+
+	/*hemispherical-hemispherical reflectance*/
+	sl->R_inf_ff = ( 1.0 - gamma )/( 1.0 + gamma ) ;
+
+	/*directional-hemispherical reflectance*/
+	sl->R_inf_df = ( 1.0 - gamma )/( 1.0 + 2.0 *cos( theta )*gamma ) ;
+
+	/*hemispherical-hemispherical transmittance*/
+	sl->T_inf_ff = exp(-( 2.0*gamma*k*L )) ;
+
+	/*directional-hemispherical transmittance*/
+	sl->T_inf_df  = ( w / 2.0 ) ;
+	sl->T_inf_df *= ( 1. + 2. * cos( theta ) ) / ( 1. - pow( ( 2.*gamma*cos( theta ) ), 2 ) )  ;
+	sl->T_inf_df *= ( sl->T_inf_ff - sl->t_0 ) ;
+
+	/*hemispherical hemispherical transmittance*/
+	sl->t_ff  = sl->T_inf_ff ;
+	sl->t_ff *= ( 1. - pow( sl->R_inf_ff, 2 ) ) ;
+	sl->t_ff /= ( 1. - pow( sl->R_inf_ff*sl->T_inf_ff, 2 ) );
+
+	/*hemispherical-hemispherical reflectance*/
+	sl->p_ff  = sl->R_inf_ff ;
+	sl->p_ff *= ( 1. - pow( sl->T_inf_ff, 2 ) ) ;
+	sl->p_ff /= ( 1. - pow( sl->T_inf_ff*sl->R_inf_ff, 2 ) )  ;
+
+	/*directional hemispherical transmittance*/
+	sl->t_df = sl->T_inf_df - sl->p_ff \
+			* ( sl->t_0 * sl->R_inf_df + sl->T_inf_df * sl->R_inf_ff ) ;
+
+	/*direction hemispherical reflectance*/
+	sl->p_df = sl->R_inf_df - sl->t_ff * \
+		 	(  sl->t_0     * sl->R_inf_df + \
+				 sl->T_inf_df * sl->R_inf_ff ) ;
+
+	return ;
+
+}
+
+
+/*
+The recollision-probability rescaling, for -rt_recollision.
+
+Spectral invariants (the "p-theory" of Knyazikhin and of Stenberg): of the
+radiation a scattering body intercepts, a fraction omega is scattered, of
+which a fraction p_c strikes the body again rather than escaping. Summing
+that series, the fraction of intercepted radiation that eventually leaves is
+
+	omega_c = omega ( 1 - p_c ) / ( 1 - omega p_c )
+
+and the fraction of INCIDENT radiation that leaves is i0_c omega_c with i0_c
+the interceptance. Both are angular-distribution-free, which is the point:
+they say how much a crown scatters without saying where it goes.
+
+p_c comes from GORT's own geometry rather than from a fitted formula. For a
+convex body of mean chord l and extinction sigma, the first-flight escape
+probability of a uniformly distributed isotropic source is 1/(1 + sigma l)
+-- the Wigner rational approximation, exact in both limits -- so
+
+	p_c = sigma l / ( 1 + sigma l ),	sigma l = k * p->crown_lai
+
+since crown_lai is favd times the mean chord 4b/3. p_c -> 0 for an optically
+thin crown and -> 1 for a thick one, as it must.
+
+The two-stream is kept for the one thing p-theory cannot give, the split
+between the upward and downward hemispheres: the slab's total escaping
+scattered flux p_df + t_df is rescaled to i0_c omega_c and its up/down ratio
+is left alone. For a closed canopy the factor is close to one, so the option
+is near-inert where Ni et al. (1999) was validated -- worth checking whenever
+this is touched.
+
+n.b. the SCENE-level estimator p = 1 - (1 - K_open)/elai was tried and is not
+used: it lowers the effective albedo and makes the sparse-canopy near
+infrared worse, because a scene-level p describes absorption by the stand,
+not the brightness of a crown.
+*/
+static double gortt_recollision_scale( const gortt_parameters *p, double w, double k,
+                                       const gortt_slab *sl )
+{
+
+	double sigma_l, p_c, w_c, i0_c, escaping ;
+
+
+	escaping = sl->p_df + sl->t_df ;
+
+	/*black leaves scatter nothing and there is nothing to rescale*/
+	if( w <= 0.0 || escaping <= 0.0 ) return( 1.0 );
+
+	sigma_l = k * p->crown_lai ;
+	p_c     = sigma_l / ( 1.0 + sigma_l ) ;
+	w_c     = w * ( 1.0 - p_c ) / ( 1.0 - w * p_c ) ;
+	i0_c    = 1.0 - sl->t_0 ;
+
+	return( i0_c * w_c / escaping );
+
+}
+
+
+/*
+The path reflectances of the discontinuous canopy, rho'_df and rho'_ff.
+
+Ni et al. (1999) eqs (15)-(16) set them equal to those of the equivalent
+homogeneous layer, i.e. to the layer holding all the foliage spread over the
+whole ground area (optical depth k*elai). That is the "squeezing all the
+plants together" of its section III-C, done vertically.
+
+It is also the approximation that fails as the canopy opens up. rho_df falls
+to zero with elai, so a stand of widely spaced crowns is predicted to have
+black crowns -- although nothing about a crown has changed. Compared against
+FLIGHT with a fixed crown and a thinning stand, the effective sunlit-crown
+reflectance in the near infrared should be flat at about 0.32 and gortt runs
+0.06 to 0.37 across covers of 5 to 65 per cent.
+
+-rt_crown_path picks a different layer. -rt_path selects which:
+
+	scene	 p->elai, the published choice; a control, not a change
+	squeeze	 p->squeeze_lai = elai/(1-K_open), the same foliage spread
+		 over the part of the hemisphere that is not open, which is
+		 the reading of section III-C that keeps its own eq. (14)
+		 self-consistent
+	crown	 the crown's own depth, averaged over the chord distribution
+		 of the spheroid (the default)
+
+The chord average, not rho_df at the mean chord: the chord at impact
+parameter s is 2b sqrt(1-(s/r)^2) with area weight 2s ds/r^2 over the
+projected disc, and rho_df is concave in L, so averaging rho_df over chords
+is smaller than rho_df at the mean chord -- 0.398 against 0.417 for the
+sparse sphere. It reuses the Gauss-Legendre rule gortt_init_params already
+built for the gap probabilities, so it adds no new quadrature and follows
+-nquad like everything else.
+*/
+static void gortt_crown_reflectance( const gortt_parameters *p, const gortt_geometry *g,
+                                     const gortt_rt *rt, double k,
+                                     double *p_df, double *p_ff )
+{
+
+	int i ;
+
+	double u, wgt, chord, f, L ;
+	gortt_slab sl ;
+
+
+	if( p->rt_crown_path == FALSE ){
+
+		/*eqs (15)-(16) as published. -rt_recollision cannot get here:
+		the parser refuses it without -rt_crown_path, because p_c is a
+		property of a crown and rescaling a stand-sized layer by it
+		would divide a crown quantity by a scene one.*/
+		*p_df = rt->p_df ;
+		*p_ff = rt->p_ff ;
+
+		return ;
+
+	}
+
+	if( p->rt_crown_path_mode != RT_PATH_CROWN ){
+
+		L = ( p->rt_crown_path_mode == RT_PATH_SQUEEZE ) ? p->squeeze_lai : p->elai ;
+
+		gortt_two_stream( rt->w, rt->gamma, k, L, g->sza_prime, &sl ) ;
+
+		f = ( p->rt_recollision == TRUE )
+		    ? gortt_recollision_scale( p, rt->w, k, &sl ) : 1.0 ;
+
+		*p_df = f * sl.p_df ;
+		*p_ff = f * sl.p_ff ;
+
+		return ;
+
+	}
+
+	/*
+	chord average. u = s/r runs over [0,1] with weight 2u du, which
+	integrates to one; the Gauss-Legendre rule is on [-1,1], so
+	u = (x+1)/2 and the weight becomes w_i u_i.
+	*/
+	*p_df = 0.0 ;
+	*p_ff = 0.0 ;
+
+	for( i=0; i<p->nq_gl; i++ ){
+
+		u     = 0.5 * ( p->xq_gl[ i ] + 1.0 ) ;
+		wgt   = p->wq_gl[ i ] * u ;
+		chord = 2.0 * p->b * sqrt( MAX( 0.0, 1.0 - u*u ) ) ;
+
+		gortt_two_stream( rt->w, rt->gamma, k, p->favd * chord, g->sza_prime, &sl ) ;
+
+		f = ( p->rt_recollision == TRUE )
+		    ? gortt_recollision_scale( p, rt->w, k, &sl ) : 1.0 ;
+
+		*p_df += wgt * f * sl.p_df ;
+		*p_ff += wgt * f * sl.p_ff ;
+
+	}
+
+	return ;
+
+}
+
+
 void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
                     const gortt_spectra *s, int iw, gortt_rt *rt )
 {
 
 	double k, k_open ;
+
+	gortt_slab slab ;
 
 
 	/*
@@ -334,12 +558,32 @@ void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
 
 	rt->w = *( s->rleaf + iw ) + *( s->tleaf + iw ) ;
 	rt->gamma = sqrt( 1 - rt->w ) ;
-	rt->g_asym = -(4.0/9.0)*( *(s->rleaf+iw) - *(s->tleaf+iw) )/( rt->w ) ;
+
+	/*
+	The phase function asymmetry, Li & Strahler's g = -(4/9)(rL - tL)/omega.
+
+	A perfectly black leaf makes that 0/0, and the NaN propagates straight
+	into CdC and out as the BRF: "gortt -refl_leaf 0 -trans_leaf 0" used to
+	print -nan, where omega = 1e-6 prints 0.1521. Nothing is being asked for
+	there -- with no scattered radiation the asymmetry of the scattering is
+	undefined -- and the term it feeds is multiplied by omega anyway, so
+	zero is both finite and right.
+	*/
+	rt->g_asym = ( rt->w > 0.0 )
+	             ? -(4.0/9.0)*( *(s->rleaf+iw) - *(s->tleaf+iw) )/( rt->w )
+	             : 0.0 ;
 
 	k = gortt_leaf_angle_distribution( p, g->sza );
 
 
-	/*direct unscattered transmittance*/
+	/*
+	direct unscattered transmittance.
+
+	n.b. the primed solar zenith, where the paper writes theta_i -- the
+	05/06/06 change, which applies to every angle in this function. It is
+	a no-op for spherical crowns and a deliberate deviation otherwise;
+	OPEN-QUESTIONS.md records it.
+	*/
 
 	/*rt->t_0 = exp( -( k*p->favd*SEC(g->sza) ) ) ;*/
 	/*05/06/06*/
@@ -355,64 +599,26 @@ void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
 
 
 	/*
-	------------------------------
-	semi-infinite homogeneous layer
-	------------------------------
+	-----------------------------------------------
+	semi-infinite and finite homogeneous layer
+	-----------------------------------------------
+
+	Ni et al. (1999) eqs (8)-(11) and the semi-infinite quantities under
+	them, at the published optical depth k*elai. The algebra now lives in
+	gortt_two_stream so that -rt_crown_path can evaluate it at a second
+	depth; with L = p->elai it is bit-for-bit what was written out here.
 	*/
 
-	/*hemispherical-hemispherical reflectance*/
+	gortt_two_stream( rt->w, rt->gamma, k, p->elai, g->sza_prime, &slab ) ;
 
-	rt->R_inf_ff = ( 1.0 - rt->gamma )/( 1.0 + rt->gamma ) ;
-
-	/*directional-hemispherical reflectance*/
-
-	/*rt->R_inf_df = ( 1.0 - rt->gamma )/( 1.0 + 2.0 *cos( g->sza )*rt->gamma ) ;*/
-	/*05/06/06*/
-	rt->R_inf_df = ( 1.0 - rt->gamma )/( 1.0 + 2.0 *cos( g->sza_prime )*rt->gamma ) ;
-
-	/*hemispherical-hemispherical transmittance*/
-
-	/*rt->T_inf_ff = exp(-( 2.0*rt->gamma*k*p->favd )) ;*/
-	/*05/06/06*/
-	rt->T_inf_ff = exp(-( 2.0*rt->gamma*k*p->elai )) ;
-
-	/*directional-hemispherical transmittance*/
-
-	rt->T_inf_df  = ( rt->w / 2.0 ) ;
-	/*rt->T_inf_df *= ( 1. + 2. * cos( g->sza ) ) / ( 1. - pow( ( 2.*rt->gamma*cos( g->sza ) ), 2 ) )  ;*/
-	/*05/06/06*/
-	rt->T_inf_df *= ( 1. + 2. * cos( g->sza_prime ) ) / ( 1. - pow( ( 2.*rt->gamma*cos( g->sza_prime ) ), 2 ) )  ;
-	rt->T_inf_df *= ( rt->T_inf_ff - rt->t_0 ) ;
-
-
-	/*
-	------------------------
-	finite homogeneous layer
-	------------------------
-	*/
-
-	/*hemispherical hemispherical transmittance*/
-
-	rt->t_ff  = rt->T_inf_ff ;
-	rt->t_ff *= ( 1. - pow( rt->R_inf_ff, 2 ) ) ;
-	rt->t_ff /= ( 1. - pow( rt->R_inf_ff*rt->T_inf_ff, 2 ) );
-
-	/*hemispherical-hemispherical reflectance*/
-
-	rt->p_ff  = rt->R_inf_ff ;
-	rt->p_ff *= ( 1. - pow( rt->T_inf_ff, 2 ) ) ;
-	rt->p_ff /= ( 1. - pow( rt->T_inf_ff*rt->R_inf_ff, 2 ) )  ;
-
-	/*directional hemispherical transmittance*/
-
-	rt->t_df = rt->T_inf_df - rt->p_ff \
-			* ( rt->t_0 * rt->R_inf_df + rt->T_inf_df * rt->R_inf_ff ) ;
-
-	/*direction hemispherical reflectance*/
-
-	rt->p_df = rt->R_inf_df - rt->t_ff * \
-		 	(  rt->t_0     * rt->R_inf_df + \
-				 rt->T_inf_df * rt->R_inf_ff ) ;
+	rt->R_inf_ff = slab.R_inf_ff ;
+	rt->R_inf_df = slab.R_inf_df ;
+	rt->T_inf_ff = slab.T_inf_ff ;
+	rt->T_inf_df = slab.T_inf_df ;
+	rt->t_ff     = slab.t_ff ;
+	rt->p_ff     = slab.p_ff ;
+	rt->t_df     = slab.t_df ;
+	rt->p_df     = slab.p_df ;
 
 
 	/*
@@ -439,12 +645,12 @@ void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
 	rt->t_prime_ff = rt->t_ff * ( 1.0 - k_open ) + k_open ;
 
 	/*
-	the path reflectances of a discontinuous canopy are taken
-	to be those of the equivalent homogeneous one
+	the path reflectances of a discontinuous canopy are taken to be those
+	of the equivalent homogeneous one (eqs 15-16), unless -rt_crown_path
+	or -rt_recollision says otherwise -- see gortt_crown_reflectance
 	*/
 
-	rt->p_prime_df = rt->p_df ;
-	rt->p_prime_ff = rt->p_ff ;
+	gortt_crown_reflectance( p, g, rt, k, &rt->p_prime_df, &rt->p_prime_ff ) ;
 
 
 	rt->kuusk = gortt_kuusk( p, g ) ;

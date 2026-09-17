@@ -15,6 +15,15 @@
 
 #define LAD_05 100
 
+/*
+Which optical depth -rt_crown_path gives the crown path reflectances rho'_df
+and rho'_ff. SCENE is what Ni et al. (1999) uses and is the default in every
+sense -- with -rt_crown_path absent the code does not go near any of this.
+*/
+#define RT_PATH_SCENE   0	/*p->elai, eqs (15)-(16) as published*/
+#define RT_PATH_SQUEEZE 1	/*p->elai/(1-K_open), the lateral squeeze*/
+#define RT_PATH_CROWN   2	/*a crown's own depth, chord-averaged*/
+
 #ifndef FALSE
 #define FALSE 0
 #endif
@@ -235,6 +244,22 @@ typedef struct  {
 		int use_user_beta ;
 		double beta ;
 
+		/*
+		Experimental scattering formulations, all off by default, all
+		selected by a -rt_* option. Ni et al. (1999) defers three things
+		that its own section V says matter for sparse canopies, and these
+		switch each of them on so that it can be measured rather than
+		argued about. They live in p rather than gortt_control because
+		gortt_rt_init and gortt_rsurf never see a gortt_control; see the
+		comment on gortt_rt_init in gortt_brdf.c for what each one does.
+		*/
+		unsigned short rt_crown_path ;	/*crown optical depth in rho'*/
+		int rt_crown_path_mode ;		/*RT_PATH_*, which depth to use*/
+		unsigned short rt_recollision ;	/*crown recollision probability*/
+		unsigned short rt_bg_coupling ;	/*background<->canopy in G and Z*/
+		unsigned short rt_crown_crown ;	/*neighbour-crown term in T and C*/
+		unsigned short rt_fd_paper ;	/*fd = mu/(mu+0.05), the paper's*/
+
 		/*gap probability file i/o (-W and -P)*/
 		int read_prob_file ;
 		int write_prob_file ;
@@ -272,6 +297,22 @@ typedef struct  {
 		double **pn0q ;
 		double k ;				/*leaf projection G at the solar zenith*/
 		double elai ;			/*effective LAI*/
+		/*
+		Two alternative optical depths for the crown path reflectances,
+		used only by -rt_crown_path. elai squeezes the foliage down onto
+		the whole ground area (thickness lambda*V); these squeeze it
+		sideways instead, onto the crowns' own footprint.
+
+		crown_lai is favd times the mean vertical chord of a spheroid,
+		4b/3 -- the same constant gortt_get_es returns at h=0 -- and is
+		identically elai/PCC. squeeze_lai spreads the same foliage over
+		the fraction of the hemisphere that is not open, which is the
+		reading of the paper's section III-C that keeps its own eq. (14)
+		self-consistent. It is filled after the gap probabilities, since
+		it needs K_open; crown_lai is pure geometry.
+		*/
+		double crown_lai ;
+		double squeeze_lai ;
 		double tau ;
 		double tau_p ;
 		double z1 ;				/*lowest height with any foliage*/
@@ -365,6 +406,27 @@ typedef struct  {
 		double kuusk ;
 
 		} gortt_rt ;
+
+
+/*
+The two-stream parameters of one horizontally homogeneous layer, at one
+optical depth and one incident zenith: the subset of gortt_rt that
+gortt_two_stream fills. It exists because -rt_crown_path needs the same
+algebra at a second depth, so it cannot write straight into gortt_rt.
+*/
+typedef struct  {
+
+		double R_inf_df ;
+		double R_inf_ff ;
+		double T_inf_df ;
+		double T_inf_ff ;
+		double t_0 ;
+		double t_df ;
+		double t_ff ;
+		double p_df ;
+		double p_ff ;
+
+		} gortt_slab ;
 
 
 

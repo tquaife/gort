@@ -68,24 +68,43 @@ def _worker(payload):
     return name, realisation, bounce, z, w, diag, time.time() - t0
 
 
-def gortt_waveforms(scenes, out_path):
+def gortt_waveforms(scenes, out_path, variants=None):
     """
     gortt -lidar -lidar_waveform on the same height grid and pulse width as
     FLIGHT, plus the per-layer profile, whose P(z) column is the pure geometry.
+    The variant column exists for symmetry with brdf_gortt.csv, but the default
+    is the baseline alone and that is not laziness: **no -rt_* option can change
+    this output**.  gortt_lidar takes rho_v and rho_g straight from the leaf
+    transmittance and the soil albedo (gortt_lidar.c:93) and never calls
+    gortt_rt_init, and -lidar short-circuits main() before the per-angle loop
+    that would reach gortt_rsurf.  Checked rather than assumed:
+
+        diff <(gortt -lidar -lidar_waveform ... -LAI 1 -PCC 0.2) \
+             <(gortt -lidar -lidar_waveform ... -LAI 1 -PCC 0.2 -rt_all)
+
+    is empty.  Running seven identical copies would cost twenty minutes and
+    prove nothing, so the variant pages point at the baseline lidar figure and
+    say why.  Pass --variants explicitly if a future option does reach the
+    waveform.
     """
+    variants = variants or [config.BASELINE]
     with open(out_path, "w", newline="") as fp:
         w = csv.writer(fp)
-        w.writerow(["scene", "z", "return_density", "rho_v", "rho_g", "Rg"])
-        for scn in scenes:
-            head, rows = sc.gortt_lidar(scn, config.LIDAR_BAND, waveform=True)
-            _, rho_v, rho_g = head[0], head[2], head[3]
-            # the profile run carries the ground return on its header line
-            phead, _ = sc.gortt_lidar(scn, config.LIDAR_BAND, waveform=False)
-            Rg = phead[5]
-            for z, d in rows:
-                w.writerow([scn.name, "%.6g" % z, "%.8g" % d,
-                            "%.8g" % rho_v, "%.8g" % rho_g, "%.8g" % Rg])
-            sys.stderr.write("run_lidar: gortt %s done\n" % scn.name)
+        w.writerow(["variant", "scene", "z", "return_density", "rho_v", "rho_g", "Rg"])
+        for variant in variants:
+            extra = config.variant_args(variant)
+            for scn in scenes:
+                head, rows = sc.gortt_lidar(scn, config.LIDAR_BAND, waveform=True,
+                                            extra=extra)
+                _, rho_v, rho_g = head[0], head[2], head[3]
+                # the profile run carries the ground return on its header line
+                phead, _ = sc.gortt_lidar(scn, config.LIDAR_BAND, waveform=False,
+                                          extra=extra)
+                Rg = phead[5]
+                for z, d in rows:
+                    w.writerow([variant, scn.name, "%.6g" % z, "%.8g" % d,
+                                "%.8g" % rho_v, "%.8g" % rho_g, "%.8g" % Rg])
+            sys.stderr.write("run_lidar: gortt %s done\n" % variant)
 
 
 def main():
@@ -104,6 +123,11 @@ def main():
     ap.add_argument("--scenes", nargs="*")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--variants", nargs="+", metavar="NAME",
+                    default=[config.BASELINE],
+                    help="which gortt variants to run (default: just the "
+                         "baseline, because no -rt_* option reaches the lidar "
+                         "path -- see gortt_waveforms)")
     ap.add_argument("--gortt-only", action="store_true")
     args = ap.parse_args()
 
@@ -133,7 +157,8 @@ def main():
         return
 
     sys.stderr.write("run_lidar: gortt ...\n")
-    gortt_waveforms(scenes, os.path.join(config.RESULTS_DIR, "lidar_gortt.csv"))
+    gortt_waveforms(scenes, os.path.join(config.RESULTS_DIR, "lidar_gortt.csv"),
+                    variants=args.variants)
     if args.gortt_only:
         return
 

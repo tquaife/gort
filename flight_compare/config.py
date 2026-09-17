@@ -289,3 +289,52 @@ LIDAR_NBINS = 500           # bins across the window (0.1 m of height each)
 LIDAR_DZ = 0.02             # m, target gortt layer thickness
 
 SEED = 20260916             # our own RNG; FLIGHT's is fixed and cannot be set
+
+
+# ---------------------------------------------------------------------------
+# gortt variants
+#
+# Ni et al. (1999) section V says the model is validated over dense forests and
+# defers three things that matter as a canopy opens up; gort's -rt_* options
+# switch them on one at a time.  This comparison is how they get judged, so the
+# list lives here beside the scene matrix rather than being spelled out in each
+# script.
+#
+# "baseline" must stay first and must stay empty: it is the published model, and
+# every page plots it so that the variant has something to be a change *from*.
+# FLIGHT is never re-run for any of these -- the Monte Carlo results on disk are
+# the reference for all of them.
+# ---------------------------------------------------------------------------
+
+GORTT_VARIANTS = [
+    ("baseline",     [],
+     "Ni et al. (1999) as published"),
+    ("crown-path",   ["-rt_crown_path"],
+     "crown path reflectance from a crown, not from a scene-sized layer"),
+    ("squeeze-path", ["-rt_crown_path", "-rt_path", "squeeze"],
+     "same, with the foliage squeezed sideways into 1 - K_open instead"),
+    ("recollision",  ["-rt_crown_path", "-rt_recollision"],
+     "crown path reflectance rescaled by the crown recollision probability"),
+    ("bg-coupling",  ["-rt_bg_coupling"],
+     "background and canopy exchange radiation"),
+    ("crown-crown",  ["-rt_crown_crown"],
+     "the neighbour-crown term the paper drops"),
+    ("all",          ["-rt_all"],
+     "every -rt_* option at once"),
+]
+
+BASELINE = GORTT_VARIANTS[0][0]
+
+
+def variant_args(name):
+    for n, args, _ in GORTT_VARIANTS:
+        if n == name:
+            return args
+    raise KeyError(name)
+
+
+def variant_blurb(name):
+    for n, _, blurb in GORTT_VARIANTS:
+        if n == name:
+            return blurb
+    raise KeyError(name)

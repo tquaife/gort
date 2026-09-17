@@ -270,6 +270,59 @@ so the delta rarely falls on a bin centre, but the linear deposition added in
 gort commit `0ce47c1` — which this comparison prompted — splits it between the
 two bins either side in proportion and so preserves the centroid.
 
+## Experimental scattering variants
+
+The near-infrared bias above is the paper's approximation reaching the edge of
+its range, not a bug: `gortt` was checked equation by equation against
+`../papers/Ni_etal_1999.pdf` and reproduces the Fig. 7 component signatures of
+the paper's own SOBS canopy. Section V says the model has been validated over
+dense forests and defers three things that matter as a canopy opens up, and
+`gort`'s `-rt_*` options switch them on one at a time. **All are off by default**
+— with none of them given the model is the paper as published, and the original
+82 regression goldens are byte-identical.
+
+`variants/index.html` is the contents page; one page per option, each showing
+the baseline, that option, and the same FLIGHT Monte Carlo. **FLIGHT was not
+re-run for any of it.** Bias and RMSD against FLIGHT, as a percentage of
+FLIGHT's mean:
+
+| variant | red bias | red RMSD | NIR bias | NIR RMSD | NIR bias, sparse | NIR RMSD, sparse |
+|---|---|---|---|---|---|---|
+| baseline | +0.2% | 14.9% | −7.4% | 18.6% | −9.5% | 18.4% |
+| **crown-path** | +1.0% | 15.2% | **+1.7%** | **16.7%** | **+2.5%** | 13.9% |
+| squeeze-path | +1.5% | 15.9% | +6.6% | 19.3% | +1.6% | **13.3%** |
+| recollision | +1.1% | 16.5% | +6.4% | 20.3% | +4.2% | 14.8% |
+| bg-coupling | +0.5% | 14.8% | −4.0% | 18.0% | −4.3% | 17.4% |
+| crown-crown | +0.5% | 14.9% | +13.7% | 37.4% | −0.9% | 22.1% |
+| all | +1.7% | 16.6% | +43.4% | 63.5% | +25.5% | 31.9% |
+
+**`-rt_crown_path` is the one that works.** NIR bias −7.4% → +1.7% with the RMSD
+down as well, which a rescaling could not do — it is correcting a shape error.
+In the sparse scenes, −9.5% → +2.5% and the RMSD 18.4% → 13.9%. Red moves by
+0.8 points. And it is near-inert where the paper *was* validated: on SOBS it
+moves the Fig. 7b sunlit-crown signature from 0.470 to 0.474.
+
+**The recollision probability does not earn its place, and `run_flight_single.py
+--black-soil` says why.** With a black soil the canopy alone satisfies
+`BRF(all)/BRF(single) = 1/(1-omega*p)`, so p can be measured rather than
+assumed. Against gortt's Wigner estimate `p = sigma*l/(1+sigma*l)` on the
+crown's mean chord: 0.435 against a measured 0.37–0.46 for the thin crowns, but
+0.909 against 0.53–0.57 for the thick ones. The first-flight escape probability
+assumes scattering is spread uniformly through the crown; in a thick crown it
+happens near the lit surface where escape is easier. Right in the thin limit,
+wrong where it matters.
+
+**`-rt_crown_crown` is not supported** (NIR RMSD 18.6% → 37.4%) and the options
+do not compose — `-rt_all` overshoots by +43%, because `crown-path` and
+`recollision` are two answers to the same question and `crown-crown` counts the
+same photons a third time.
+
+**The lidar is untouched by all of it.** `gortt_lidar` takes its backscatter
+coefficients straight from the leaf transmittance and the soil albedo and never
+calls `gortt_rt_init`, so no `-rt_*` option can reach it; `gortt -lidar -rt_all`
+is byte-identical to `gortt -lidar`. The variant pages show the baseline lidar
+figure and say so, and `run_lidar.py` defaults to the baseline alone.
+
 ### What this does not say
 
 FLIGHT is a reference, not truth. It has its own approximations — leaves as a
@@ -319,6 +372,8 @@ half a second of the 4.5. Avoiding it would mean editing FLIGHT.
 | `run_brdf.py`, `run_lidar.py` | the sweeps; write `results/*.csv` |
 | `plot_brdf.py`, `plot_lidar.py` | the figures; write `figs/*.png` and the stats CSVs |
 | `make_html.py` | `index.html` |
+| `run_flight_single.py` | single-scattering and black-soil FLIGHT diagnostics for the `-rt_*` options |
+| `variants/` | one comparison page per `-rt_*` option, plus an index |
 | `results/` | tidy CSVs — **not tracked**, see below |
 | `figs/` | the figures |
 | `work/` | per-run scratch and the sweep checkpoints — not tracked |

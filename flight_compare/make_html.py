@@ -28,19 +28,34 @@ def read_csv(path):
         return list(csv.DictReader(fp))
 
 
-def scene_records(figdir, outdir):
+def scene_records(figdir, outdir, suffix=""):
+    """
+    One record per scene, with whichever of its four figures exist.
+
+    suffix picks a variant's set: plot_brdf.py and plot_lidar.py give the
+    baseline the unsuffixed names and every other variant a -<name> set beside
+    them, so a variant page is the same builder pointed at different files.
+    """
     out = []
     for s in config.scenes():
         figs = {}
         for band in config.BRDF_BANDS:
-            p = os.path.join(figdir, "%s-polar-%s.png" % (s.name, band.name))
+            p = os.path.join(figdir, "%s-polar-%s%s.png" % (s.name, band.name, suffix))
             if os.path.exists(p):
                 figs["polar_" + band.name] = os.path.relpath(p, outdir)
-        for key, fname in (("pp", "%s-pp.png" % s.name),
-                           ("lidar", "%s-lidar.png" % s.name)):
+        for key, fname in (("pp", "%s-pp%s.png" % (s.name, suffix)),
+                           ("lidar", "%s-lidar%s.png" % (s.name, suffix))):
             p = os.path.join(figdir, fname)
             if os.path.exists(p):
                 figs[key] = os.path.relpath(p, outdir)
+        # No -rt_* option reaches the lidar path, so a variant has no lidar
+        # figure of its own; fall back to the baseline one and say so in the
+        # caption rather than leaving a gap where a panel should be.
+        if "lidar" not in figs:
+            p = os.path.join(figdir, "%s-lidar.png" % s.name)
+            if os.path.exists(p):
+                figs["lidar"] = os.path.relpath(p, outdir)
+                figs["lidar_is_baseline"] = True
         out.append({
             "name": s.name,
             "cover": s.cover_name, "lai": s.lai_name, "shape": s.shape_name,
@@ -92,6 +107,9 @@ img { max-width: 100%; height: auto; display: block; border: 1px solid #ececE6;
       border-radius: 4px; }
 .note { background: #fff; border-left: 3px solid #1f6feb; padding: 10px 14px;
         margin: 14px 0; max-width: 90ch; font-size: 13px; }
+.variant { background: #fff8e6; border-left: 3px solid #c7911f; padding: 10px 14px;
+        margin: 12px 0 4px; max-width: 90ch; font-size: 13px; }
+.variant p { margin: 4px 0; }
 .warn { border-left-color: #d98014; background: #fffaf2; }
 .hidden { display: none; }
 .finding { background: #fff; border: 1px solid #e2e2dd; border-radius: 8px;
@@ -202,16 +220,168 @@ def stats_table(rows, columns, lookup):
     return "<div class='scroll'><table>%s%s</table></div>" % (head, "".join(body))
 
 
-def build(outdir, figdir):
-    records = scene_records(figdir, outdir)
-    brdf_stats = read_csv(os.path.join(config.RESULTS_DIR, "brdf_stats.csv"))
-    lidar_stats = read_csv(os.path.join(config.RESULTS_DIR, "lidar_stats.csv"))
+
+# The block at the top of a variant page. Kept out of the main template so that
+# the baseline page -- the one published at tquaife.github.io -- renders exactly
+# as it did before any of this.
+VARIANT_BANNER = """
+  <div class="variant">
+    <p><strong>Experimental variant: <code>%(name)s</code></strong>
+    &mdash; %(blurb)s.</p>
+    <p class="sub">Every gortt curve labelled <code>%(name)s</code> was produced
+    with <code>%(flags)s</code>; every curve labelled <code>baseline</code> is
+    Ni et al. (1999) as published, which is what <code>gortt</code> does with no
+    <code>-rt_*</code> option. <strong>FLIGHT was not re-run</strong>: it is the
+    same Monte Carlo on both pages, so any change here is entirely gortt's.
+    The polar panels show one formulation at a time &mdash; the third column,
+    the difference against FLIGHT, is the one to read against the baseline
+    page. The principal-plane and lidar panels show both at once.</p>
+    <p class="sub"><a href="index.html">&larr; all variants</a> &nbsp;
+    <a href="../index.html">baseline comparison</a></p>
+  </div>
+"""
+
+
+def variant_index(outdir, written):
+    """A contents page for variants/, linking each page with what it changes."""
+    rows = "".join(
+        "<tr><td><a href='%s'>%s</a></td><td><code>%s</code></td><td>%s</td></tr>"
+        % (html.escape(fname), html.escape(name),
+           html.escape(" ".join(flags)), html.escape(blurb))
+        for name, flags, blurb, fname in written)
+    page = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GORT vs FLIGHT &mdash; variants</title>
+<style>%(css)s</style></head>
+<body>
+<header>
+  <h1>Experimental scattering variants</h1>
+  <p class="sub">Ni et al. (1999) section V states that the model has been
+  validated over dense forests, and defers three things that matter as a canopy
+  opens up: the bidirectional effect of the background, the exchange of
+  radiation between background and canopy, and scattering between neighbouring
+  crowns. The <code>-rt_*</code> options switch them on one at a time, and each
+  page below is that option measured against the same FLIGHT Monte Carlo.</p>
+  <p class="sub"><strong>None of them is on by default.</strong> With no
+  <code>-rt_*</code> option gortt is the paper as published, and all 82 original
+  regression goldens are byte-identical &mdash; that is the guard. FLIGHT was
+  not re-run for any of this.</p>
+  <p class="sub"><a href="../index.html">&larr; baseline comparison</a></p>
+</header>
+<main>
+  <table><thead><tr><th>variant</th><th>options</th><th>what it changes</th>
+  </tr></thead><tbody>%(rows)s</tbody></table>
+
+  <div class="finding">
+  <h2>What they are worth</h2>
+  <p>Bias and RMSD against FLIGHT as a percentage of FLIGHT's own mean, over all
+  12 scenes &times; 3 solar zeniths &times; 64 directions. The red band is the
+  guard: it already agrees, and a formulation that improves the near infrared at
+  its expense is not an improvement.</p>
+  <table><thead><tr><th>variant</th><th>red bias</th><th>red RMSD</th>
+  <th>NIR bias</th><th>NIR RMSD</th><th>NIR bias, sparse only</th>
+  <th>NIR RMSD, sparse only</th></tr></thead><tbody>
+  <tr><td>baseline</td><td>+0.2%%</td><td>14.9%%</td><td>&minus;7.4%%</td><td>18.6%%</td><td>&minus;9.5%%</td><td>18.4%%</td></tr>
+  <tr><td><strong>crown-path</strong></td><td>+1.0%%</td><td>15.2%%</td><td><strong>+1.7%%</strong></td><td><strong>16.7%%</strong></td><td><strong>+2.5%%</strong></td><td>13.9%%</td></tr>
+  <tr><td>squeeze-path</td><td>+1.5%%</td><td>15.9%%</td><td>+6.6%%</td><td>19.3%%</td><td>+1.6%%</td><td><strong>13.3%%</strong></td></tr>
+  <tr><td>recollision</td><td>+1.1%%</td><td>16.5%%</td><td>+6.4%%</td><td>20.3%%</td><td>+4.2%%</td><td>14.8%%</td></tr>
+  <tr><td>bg-coupling</td><td>+0.5%%</td><td>14.8%%</td><td>&minus;4.0%%</td><td>18.0%%</td><td>&minus;4.3%%</td><td>17.4%%</td></tr>
+  <tr><td>crown-crown</td><td>+0.5%%</td><td>14.9%%</td><td>+13.7%%</td><td>37.4%%</td><td>&minus;0.9%%</td><td>22.1%%</td></tr>
+  <tr><td>all</td><td>+1.7%%</td><td>16.6%%</td><td>+43.4%%</td><td>63.5%%</td><td>+25.5%%</td><td>31.9%%</td></tr>
+  </tbody></table>
+
+  <ul>
+  <li><strong><code>crown-path</code> is the one that works.</strong> It takes
+  the near-infrared bias from &minus;7.4%% to +1.7%% and lowers the RMSD as well,
+  which a pure rescaling would not do &mdash; it is fixing a shape error, not
+  adding a constant. In the sparse scenes, where the published approximation is
+  furthest outside the range section&nbsp;V claims, it goes from &minus;9.5%% to
+  +2.5%% and the RMSD falls from 18.4%% to 13.9%%. The red band moves by
+  0.8&nbsp;points, i.e. not at all.</li>
+
+  <li><strong>It is also near-inert where the paper was validated.</strong> On
+  the paper's own SOBS canopy it moves the Fig.&nbsp;7b sunlit-crown signature
+  from 0.470 to 0.474. That is the property to want: it should change the sparse
+  canopies and leave the dense ones alone.</li>
+
+  <li><strong><code>squeeze-path</code> is the better answer for sparse canopies
+  and the worse one overall</strong> (sparse RMSD 13.3%% against 13.9%%, but
+  +6.6%% bias overall against +1.7%%). The two bracket the truth rather than
+  settling it, which is honest: one spreads the foliage over the crowns' own
+  footprint, the other over the part of the hemisphere that is not open, and
+  nothing here says which a crown really is.</li>
+
+  <li><strong>The recollision probability does not earn its place, and the
+  reason is measurable.</strong> <code>run_flight_single.py --black-soil</code>
+  measures p from FLIGHT directly: with a black soil the canopy alone satisfies
+  BRF(all&nbsp;orders)/BRF(single) = 1/(1&minus;&omega;p). Against gortt's
+  Wigner estimate p = &sigma;l/(1+&sigma;l) on the crown's mean chord:
+  0.435 against 0.37&ndash;0.46 for the thin crowns (good), but 0.909 against
+  0.53&ndash;0.57 for the thick ones. The first-flight escape probability
+  assumes the scattering is uniformly distributed through the crown; in an
+  optically thick crown it happens near the lit surface, where escape is easier,
+  so p comes out too high. Correct in the thin limit, wrong where it matters.</li>
+
+  <li><strong><code>bg-coupling</code> is small, safe and in the right
+  direction</strong> &mdash; &minus;7.4%% to &minus;4.0%% with the RMSD very
+  slightly better in both bands. It is the least arguable of the five: as it
+  stands the sunlit background cannot see the canopy at all.</li>
+
+  <li><strong><code>crown-crown</code> is not supported.</strong> It improves the
+  sparse bias and wrecks the RMSD (18.6%% to 37.4%% overall), i.e. it adds
+  brightness in the wrong places. The paper calls it "usually small and very
+  complicated to model"; on this evidence the first-order form here is not the
+  way to put it back.</li>
+
+  <li><strong>They do not compose.</strong> <code>all</code> overshoots by
+  +43.4%%. <code>crown-path</code> and <code>recollision</code> are two answers
+  to the same question, and adding <code>crown-crown</code> on top counts the
+  same photons a third time.</li>
+  </ul>
+
+  <p class="sub"><strong>The lidar is untouched by all of this</strong> and is
+  not repeated per variant: <code>gortt_lidar</code> takes its backscatter
+  coefficients straight from the leaf transmittance and the soil albedo and
+  never calls <code>gortt_rt_init</code>. Checked, not assumed &mdash;
+  <code>gortt -lidar -rt_all</code> is byte-identical to
+  <code>gortt -lidar</code>.</p>
+  </div>
+</main>
+</body></html>
+""" % {"css": CSS, "rows": rows}
+    out = os.path.join(outdir, "index.html")
+    with open(out, "w") as fp:
+        fp.write(page)
+    return out
+
+
+def build(outdir, figdir, variant=None, name="index.html", extra_head=""):
+    """
+    Assemble one page.
+
+    variant is the gortt formulation this page is about; None means the
+    baseline, which is the main page and keeps every filename it had. For a
+    variant the statistics tables are filtered to the baseline and that variant
+    so the two can be read against each other, and the figures come from the
+    suffixed set.
+    """
+    baseline = config.BASELINE
+    suffix = "" if variant in (None, baseline) else "-" + variant
+    keep = [baseline] if variant in (None, baseline) else [baseline, variant]
+
+    records = scene_records(figdir, outdir, suffix)
+    brdf_stats = [r for r in read_csv(os.path.join(config.RESULTS_DIR, "brdf_stats.csv"))
+                  if r.get("variant", baseline) in keep]
+    lidar_stats = [r for r in read_csv(os.path.join(config.RESULTS_DIR, "lidar_stats.csv"))
+                   if r.get("variant", baseline) in keep]
 
     blocks = []
     for r in records:
         figs = []
         for band in config.BRDF_BANDS:
             key = "polar_" + band.name
+            # baseline only -- see the note in plot_brdf.main
             if key in r["figs"]:
                 figs.append(
                     "<figure data-view='polar'><figcaption>Polar BRDF, %s "
@@ -234,9 +404,17 @@ def build(outdir, figdir):
                 "partition. <em>Orders 1&ndash;8</em> is FLIGHT's cumulative "
                 "waveform over scattering orders 1 to 8, single scattering "
                 "included; its effect is the tail below the ground, where late "
-                "arrivals are recorded as negative heights.</figcaption>"
+                "arrivals are recorded as negative heights.%s</figcaption>"
                 "<img loading='lazy' src='%s' alt='lidar waveform %s'></figure>"
-                % (config.LIDAR_BAND.wl, html.escape(r["figs"]["lidar"]), r["name"]))
+                % (config.LIDAR_BAND.wl,
+                   (" <strong>Unchanged by this variant</strong> &mdash; "
+                    "<code>gortt_lidar</code> takes its backscatter "
+                    "coefficients straight from the leaf transmittance and the "
+                    "soil albedo and never calls <code>gortt_rt_init</code>, so "
+                    "no <code>-rt_*</code> option can reach it. This is the "
+                    "baseline figure."
+                    if r["figs"].get("lidar_is_baseline") else ""),
+                   html.escape(r["figs"]["lidar"]), r["name"]))
         if not figs:
             figs.append("<p class='sub'>No figures for this scene yet.</p>")
 
@@ -254,11 +432,12 @@ def build(outdir, figdir):
     page = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GORT vs FLIGHT</title>
+<title>%(title)s</title>
 <style>%(css)s</style></head>
 <body>
 <header>
-  <h1>GORT vs FLIGHT</h1>
+  <h1>%(title)s</h1>
+  %(banner)s
   <p class="sub">The analytic GORT model (<code>gortt</code>) against the FLIGHT
   Monte Carlo photon-tracing model, over matched canopies: the same spheroidal
   crowns at the same positions, the same in-crown foliage density, the same
@@ -419,9 +598,16 @@ def build(outdir, figdir):
              ("peak_z_flight", "peak z FLIGHT (m)"),
              ("canopy_shape_rmsd", "shape RMSD")], None),
         "blocks": "".join(blocks),
+        "title": ("GORT vs FLIGHT" if variant in (None, baseline)
+                  else "GORT vs FLIGHT &mdash; %s" % html.escape(variant)),
+        "banner": ("" if variant in (None, baseline) else VARIANT_BANNER % {
+            "name": html.escape(variant),
+            "flags": html.escape(" ".join(config.variant_args(variant))),
+            "blurb": html.escape(config.variant_blurb(variant)),
+        }),
     }
 
-    out = os.path.join(outdir, "index.html")
+    out = os.path.join(outdir, name)
     with open(out, "w") as fp:
         fp.write(page)
     return out
@@ -432,8 +618,26 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--outdir", default=config.HERE)
     ap.add_argument("--figs", default=config.FIGS_DIR)
+    ap.add_argument("--variants", action="store_true",
+                    help="also write one page per gortt variant into "
+                         "variants/, plus an index linking them. The main "
+                         "index.html is rebuilt either way and is always the "
+                         "baseline -- it is the published page.")
     args = ap.parse_args()
     sys.stderr.write("make_html: wrote %s\n" % build(args.outdir, args.figs))
+
+    if args.variants:
+        vdir = os.path.join(args.outdir, "variants")
+        os.makedirs(vdir, exist_ok=True)
+        written = []
+        for name, flags, blurb in config.GORTT_VARIANTS:
+            if name == config.BASELINE:
+                continue
+            page = build(vdir, args.figs, variant=name, name="%s.html" % name)
+            written.append((name, flags, blurb, os.path.basename(page)))
+            sys.stderr.write("make_html: wrote %s\n" % page)
+        idx = variant_index(vdir, written)
+        sys.stderr.write("make_html: wrote %s\n" % idx)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GORT vs FLIGHT &mdash; variants</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
+       Roboto, Helvetica, Arial, sans-serif; color: #1a1a1a; background: #fafaf8; }
+header { padding: 24px 28px 16px; border-bottom: 1px solid #e2e2dd; background: #fff; }
+h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+h2 { font-size: 15px; font-weight: 600; margin: 28px 0 10px; }
+.sub { color: #5a5a55; max-width: 80ch; margin: 0; }
+main { padding: 20px 28px 60px; }
+.controls { display: flex; flex-wrap: wrap; gap: 18px; padding: 14px 28px;
+            background: #fff; border-bottom: 1px solid #e2e2dd;
+            position: sticky; top: 0; z-index: 5; }
+.group { display: flex; align-items: center; gap: 6px; }
+.group .label { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+                color: #77776f; margin-right: 2px; }
+button { font: inherit; font-size: 13px; padding: 3px 11px; border-radius: 999px;
+         border: 1px solid #d3d3cc; background: #fff; color: #333; cursor: pointer; }
+button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+table { border-collapse: collapse; font-size: 12.5px; background: #fff; }
+th, td { padding: 4px 9px; border-bottom: 1px solid #ececE6; text-align: right;
+         white-space: nowrap; }
+th { font-weight: 600; text-align: right; color: #55554f; border-bottom: 1px solid #d3d3cc; }
+td.name, th.name { text-align: left; font-family: ui-monospace, Menlo, Consolas, monospace; }
+tr.flag td { background: #fff8e6; }
+.scene { background: #fff; border: 1px solid #e2e2dd; border-radius: 8px;
+         margin: 0 0 22px; overflow: hidden; }
+.scene > .head { padding: 10px 16px; border-bottom: 1px solid #ececE6;
+                 display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.scene > .head .n { font-family: ui-monospace, Menlo, Consolas, monospace;
+                    font-weight: 600; font-size: 14px; }
+.scene > .head .meta { color: #6a6a63; font-size: 12.5px; }
+.figs { padding: 8px 16px 16px; }
+.figs figure { margin: 12px 0 0; }
+.figs figcaption { font-size: 12px; color: #6a6a63; margin-bottom: 4px; }
+img { max-width: 100%; height: auto; display: block; border: 1px solid #ececE6;
+      border-radius: 4px; }
+.note { background: #fff; border-left: 3px solid #1f6feb; padding: 10px 14px;
+        margin: 14px 0; max-width: 90ch; font-size: 13px; }
+.variant { background: #fff8e6; border-left: 3px solid #c7911f; padding: 10px 14px;
+        margin: 12px 0 4px; max-width: 90ch; font-size: 13px; }
+.variant p { margin: 4px 0; }
+.warn { border-left-color: #d98014; background: #fffaf2; }
+.hidden { display: none; }
+.finding { background: #fff; border: 1px solid #e2e2dd; border-radius: 8px;
+           padding: 4px 20px 12px; max-width: 95ch; }
+.finding ul { padding-left: 20px; }
+.finding li { margin: 7px 0; }
+.scroll { overflow-x: auto; max-width: 100%; }
+code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px;
+       background: #f1f1ec; padding: 1px 4px; border-radius: 3px; }
+</style></head>
+<body>
+<header>
+  <h1>Experimental scattering variants</h1>
+  <p class="sub">Ni et al. (1999) section V states that the model has been
+  validated over dense forests, and defers three things that matter as a canopy
+  opens up: the bidirectional effect of the background, the exchange of
+  radiation between background and canopy, and scattering between neighbouring
+  crowns. The <code>-rt_*</code> options switch them on one at a time, and each
+  page below is that option measured against the same FLIGHT Monte Carlo.</p>
+  <p class="sub"><strong>None of them is on by default.</strong> With no
+  <code>-rt_*</code> option gortt is the paper as published, and all 82 original
+  regression goldens are byte-identical &mdash; that is the guard. FLIGHT was
+  not re-run for any of this.</p>
+  <p class="sub"><a href="../index.html">&larr; baseline comparison</a></p>
+</header>
+<main>
+  <table><thead><tr><th>variant</th><th>options</th><th>what it changes</th>
+  </tr></thead><tbody><tr><td><a href='crown-path.html'>crown-path</a></td><td><code>-rt_crown_path</code></td><td>crown path reflectance from a crown, not from a scene-sized layer</td></tr><tr><td><a href='squeeze-path.html'>squeeze-path</a></td><td><code>-rt_crown_path -rt_path squeeze</code></td><td>same, with the foliage squeezed sideways into 1 - K_open instead</td></tr><tr><td><a href='recollision.html'>recollision</a></td><td><code>-rt_crown_path -rt_recollision</code></td><td>crown path reflectance rescaled by the crown recollision probability</td></tr><tr><td><a href='bg-coupling.html'>bg-coupling</a></td><td><code>-rt_bg_coupling</code></td><td>background and canopy exchange radiation</td></tr><tr><td><a href='crown-crown.html'>crown-crown</a></td><td><code>-rt_crown_crown</code></td><td>the neighbour-crown term the paper drops</td></tr><tr><td><a href='all.html'>all</a></td><td><code>-rt_all</code></td><td>every -rt_* option at once</td></tr></tbody></table>
+
+  <div class="finding">
+  <h2>What they are worth</h2>
+  <p>Bias and RMSD against FLIGHT as a percentage of FLIGHT's own mean, over all
+  12 scenes &times; 3 solar zeniths &times; 64 directions. The red band is the
+  guard: it already agrees, and a formulation that improves the near infrared at
+  its expense is not an improvement.</p>
+  <table><thead><tr><th>variant</th><th>red bias</th><th>red RMSD</th>
+  <th>NIR bias</th><th>NIR RMSD</th><th>NIR bias, sparse only</th>
+  <th>NIR RMSD, sparse only</th></tr></thead><tbody>
+  <tr><td>baseline</td><td>+0.2%</td><td>14.9%</td><td>&minus;7.4%</td><td>18.6%</td><td>&minus;9.5%</td><td>18.4%</td></tr>
+  <tr><td><strong>crown-path</strong></td><td>+1.0%</td><td>15.2%</td><td><strong>+1.7%</strong></td><td><strong>16.7%</strong></td><td><strong>+2.5%</strong></td><td>13.9%</td></tr>
+  <tr><td>squeeze-path</td><td>+1.5%</td><td>15.9%</td><td>+6.6%</td><td>19.3%</td><td>+1.6%</td><td><strong>13.3%</strong></td></tr>
+  <tr><td>recollision</td><td>+1.1%</td><td>16.5%</td><td>+6.4%</td><td>20.3%</td><td>+4.2%</td><td>14.8%</td></tr>
+  <tr><td>bg-coupling</td><td>+0.5%</td><td>14.8%</td><td>&minus;4.0%</td><td>18.0%</td><td>&minus;4.3%</td><td>17.4%</td></tr>
+  <tr><td>crown-crown</td><td>+0.5%</td><td>14.9%</td><td>+13.7%</td><td>37.4%</td><td>&minus;0.9%</td><td>22.1%</td></tr>
+  <tr><td>all</td><td>+1.7%</td><td>16.6%</td><td>+43.4%</td><td>63.5%</td><td>+25.5%</td><td>31.9%</td></tr>
+  </tbody></table>
+
+  <ul>
+  <li><strong><code>crown-path</code> is the one that works.</strong> It takes
+  the near-infrared bias from &minus;7.4% to +1.7% and lowers the RMSD as well,
+  which a pure rescaling would not do &mdash; it is fixing a shape error, not
+  adding a constant. In the sparse scenes, where the published approximation is
+  furthest outside the range section&nbsp;V claims, it goes from &minus;9.5% to
+  +2.5% and the RMSD falls from 18.4% to 13.9%. The red band moves by
+  0.8&nbsp;points, i.e. not at all.</li>
+
+  <li><strong>It is also near-inert where the paper was validated.</strong> On
+  the paper's own SOBS canopy it moves the Fig.&nbsp;7b sunlit-crown signature
+  from 0.470 to 0.474. That is the property to want: it should change the sparse
+  canopies and leave the dense ones alone.</li>
+
+  <li><strong><code>squeeze-path</code> is the better answer for sparse canopies
+  and the worse one overall</strong> (sparse RMSD 13.3% against 13.9%, but
+  +6.6% bias overall against +1.7%). The two bracket the truth rather than
+  settling it, which is honest: one spreads the foliage over the crowns' own
+  footprint, the other over the part of the hemisphere that is not open, and
+  nothing here says which a crown really is.</li>
+
+  <li><strong>The recollision probability does not earn its place, and the
+  reason is measurable.</strong> <code>run_flight_single.py --black-soil</code>
+  measures p from FLIGHT directly: with a black soil the canopy alone satisfies
+  BRF(all&nbsp;orders)/BRF(single) = 1/(1&minus;&omega;p). Against gortt's
+  Wigner estimate p = &sigma;l/(1+&sigma;l) on the crown's mean chord:
+  0.435 against 0.37&ndash;0.46 for the thin crowns (good), but 0.909 against
+  0.53&ndash;0.57 for the thick ones. The first-flight escape probability
+  assumes the scattering is uniformly distributed through the crown; in an
+  optically thick crown it happens near the lit surface, where escape is easier,
+  so p comes out too high. Correct in the thin limit, wrong where it matters.</li>
+
+  <li><strong><code>bg-coupling</code> is small, safe and in the right
+  direction</strong> &mdash; &minus;7.4% to &minus;4.0% with the RMSD very
+  slightly better in both bands. It is the least arguable of the five: as it
+  stands the sunlit background cannot see the canopy at all.</li>
+
+  <li><strong><code>crown-crown</code> is not supported.</strong> It improves the
+  sparse bias and wrecks the RMSD (18.6% to 37.4% overall), i.e. it adds
+  brightness in the wrong places. The paper calls it "usually small and very
+  complicated to model"; on this evidence the first-order form here is not the
+  way to put it back.</li>
+
+  <li><strong>They do not compose.</strong> <code>all</code> overshoots by
+  +43.4%. <code>crown-path</code> and <code>recollision</code> are two answers
+  to the same question, and adding <code>crown-crown</code> on top counts the
+  same photons a third time.</li>
+  </ul>
+
+  <p class="sub"><strong>The lidar is untouched by all of this</strong> and is
+  not repeated per variant: <code>gortt_lidar</code> takes its backscatter
+  coefficients straight from the leaf transmittance and the soil albedo and
+  never calls <code>gortt_rt_init</code>. Checked, not assumed &mdash;
+  <code>gortt -lidar -rt_all</code> is byte-identical to
+  <code>gortt -lidar</code>.</p>
+  </div>
+</main>
+</body></html>

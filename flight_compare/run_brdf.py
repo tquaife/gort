@@ -81,26 +81,35 @@ def _worker(payload):
     return name, realisation, len(rows), time.time() - t0, diag
 
 
-def run_gortt(scenes, szas, flight_dirs, out_path):
+def run_gortt(scenes, szas, flight_dirs, out_path, variants=None):
     """
-    gortt on both grids.  One process per (scene, band, solar zenith), because
-    the leaf and soil overrides are spectrally flat so a band is a separate run,
-    and because gortt takes a whole angle list at once.
+    gortt on both grids, once per variant.  One process per (variant, scene,
+    band, solar zenith), because the leaf and soil overrides are spectrally flat
+    so a band is a separate run, and because gortt takes a whole angle list at
+    once.
+
+    The variant column is what lets a comparison page put the published model
+    and one -rt_* option on the same axes.  It is gortt-only by construction:
+    FLIGHT has no counterpart and is never re-run for any of this.
     """
+    variants = variants or [v[0] for v in config.GORTT_VARIANTS]
     dense = [(v, r) for v in config.GORTT_DENSE_VZA for r in config.GORTT_DENSE_RAA]
     with open(out_path, "w", newline="") as fp:
         w = csv.writer(fp)
-        w.writerow(["scene", "sza", "vza", "raa", "band", "grid", "brf"])
-        for scn in scenes:
-            for band in config.BRDF_BANDS:
-                for sza in szas:
-                    for grid_name, grid in (("flight", flight_dirs), ("dense", dense)):
-                        dirs = [(v, sza, r) for v, r in grid]
-                        brf = sc.gortt_brdf(scn, band, dirs)
-                        for (v, r), value in zip(grid, brf):
-                            w.writerow([scn.name, "%g" % sza, "%g" % v, "%g" % r,
-                                        band.name, grid_name, "%.8g" % value])
-            sys.stderr.write("run_brdf: gortt %s done\n" % scn.name)
+        w.writerow(["variant", "scene", "sza", "vza", "raa", "band", "grid", "brf"])
+        for variant in variants:
+            extra = config.variant_args(variant)
+            for scn in scenes:
+                for band in config.BRDF_BANDS:
+                    for sza in szas:
+                        for grid_name, grid in (("flight", flight_dirs), ("dense", dense)):
+                            dirs = [(v, sza, r) for v, r in grid]
+                            brf = sc.gortt_brdf(scn, band, dirs, extra=extra)
+                            for (v, r), value in zip(grid, brf):
+                                w.writerow([variant, scn.name, "%g" % sza, "%g" % v,
+                                            "%g" % r, band.name, grid_name,
+                                            "%.8g" % value])
+            sys.stderr.write("run_brdf: gortt %s done\n" % variant)
 
 
 def main():
@@ -119,6 +128,10 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="print the run count and time estimate, then stop")
     ap.add_argument("--force", action="store_true", help="ignore checkpoints")
+    ap.add_argument("--variants", nargs="+", metavar="NAME",
+                    default=[v[0] for v in config.GORTT_VARIANTS],
+                    help="which gortt variants to run (default: all of them). "
+                         "Names come from config.GORTT_VARIANTS.")
     ap.add_argument("--gortt-only", action="store_true",
                     help="redo just the gortt side, which takes seconds")
     args = ap.parse_args()
@@ -154,7 +167,9 @@ def main():
         return
 
     sys.stderr.write("run_brdf: gortt ...\n")
-    run_gortt(scenes, szas, directions, os.path.join(config.RESULTS_DIR, "brdf_gortt.csv"))
+    run_gortt(scenes, szas, directions,
+              os.path.join(config.RESULTS_DIR, "brdf_gortt.csv"),
+              variants=args.variants)
     if args.gortt_only:
         return
 

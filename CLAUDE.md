@@ -319,6 +319,15 @@ the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
 evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in. Read it
 before starting the lidar work.
 
+**`CROWN-BRDF-NEXT.md` is a handover, and is the one to read before touching
+`gortt_rt_init` or `gortt_crown_reflectance`.** `-rt_crown_path` (v3.1) fixed the crown's
+optical *depth*; what is left is that `rho'_df` is a directional-hemispherical reflectance
+from a plane-parallel slab being used where a bidirectional one is needed. That file has the
+physics, the measurement to make before writing any model code, the recommended route (keep it
+a volume problem, do not put a BRDF on the crown envelope), and the things already tried and
+ruled out. `KC-INVESTIGATION.md` is the precedent for what the record should look like
+afterwards.
+
 ## Reference
 
 Ni, W. et al. (1999), *An analytical hybrid GORT model for bidirectional reflectance over

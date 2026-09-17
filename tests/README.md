@@ -127,6 +127,31 @@ staircase instead of a curve, tall canopies first, since gortt spreads `-nlayers
 it falls between, which is exactly conservative in both the total and its first moment --
 hence both invariants in one pair of cases.
 
+### The `rt-*` cases
+
+The `-rt_*` options are experimental scattering formulations and are all off by
+default, so the first thing these cases pin is a **negative**: adding them moved
+none of the 41 BRF goldens. If one of those ever changes alongside an `-rt_*`
+edit, an option is leaking into the published path.
+
+`rt-path-scene` is the control. `-rt_crown_path -rt_path scene` asks for the
+optical depth eqs (15)-(16) already use, so `rt-path-scene.out` must stay
+byte-identical to `rt-crown-path-off.out`. That is what catches an algebra slip
+in `gortt_two_stream`, which was pulled out of `gortt_rt_init` so that the crown
+path could be evaluated at a second depth.
+
+`rt-crown-path-nquad` is the same case at `-nquad 4`: the chord average uses the
+Gauss-Legendre rule the gap probabilities already built, so it follows `-nquad`
+like every other quadrature in the model, and `NQ_GL` is converged — the two
+differ by 1.7e-4 relative. `rt-energy` runs `-rt_all -energy`, because
+`-rt_bg_coupling` feeds `s->ztrans` as well as `Z` and the energy balance has to
+stay closed with it on.
+
+`blackleaf` is a bug fix, not an option. The phase function asymmetry
+`g = -(4/9)(rL - tL)/omega` divided by zero for a perfectly black leaf and the
+NaN came out as the BRF; `validate.py` in `flight_compare/` never caught it
+because its black-leaf check uses `-W`, which does not reach `gortt_rt_init`.
+
 `P(z)` used to be not quite monotonic in height on a coarse grid — the default 15 layers gave
 a small negative `dP/dz` around z = 7-9 m — and the profile wobbled from layer to layer by
 about a quarter of the peak `dP/dz`. Both were quadrature artefacts, and both are gone: the

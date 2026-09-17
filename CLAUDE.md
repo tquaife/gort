@@ -27,7 +27,7 @@ should be its own commit (with `-ffp-contract=off`).
 ## Testing
 
 ```bash
-make test       # 82 golden-file cases, ~20 s; or: cd tests && ./run.sh
+make test       # 97 golden-file cases, ~20 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -252,6 +252,31 @@ There are **three sources of soil reflectance**, selected in `gortt_price_soil` 
 exclusive in the parser: `-alb_soil` (a constant), `-soil_spectra <file>` (resampled onto a 1 nm
 grid by `gortt_read_soil_lut`, then interpolated), and otherwise the Price EOFs with the `-rsl*`
 weights.
+
+**The `-rt_*` options are experimental and all default to off.** Ni et al. (1999)
+section V says the model is validated over dense forests and defers three things
+that matter as a canopy opens up; each option switches one on. They live in `p`
+(group 1, beside `use_user_beta`), not in `c`, because `gortt_rt_init` and
+`gortt_rsurf` never see a `gortt_control` and threading one through would touch
+five signatures in the documented `const` chain. In the argv if-chain they sit
+above `-r`, which is matched at two characters at the bottom and would otherwise
+swallow them *and* eat the next word as a crown radius.
+
+The invariant that matters: **with no `-rt_*` option the model is the paper as
+published**, and `rt-path-scene` pins it — `-rt_crown_path -rt_path scene` asks
+for the depth eqs (15)-(16) already use, so its golden must stay byte-identical
+to `rt-crown-path-off`. `gortt_two_stream` was pulled out of `gortt_rt_init` so
+the crown path could be evaluated at a second depth; that case is what catches an
+algebra slip in the extraction. See `flight_compare/variants/` for what each one
+is worth against FLIGHT.
+
+`p->elai` is the *scene* LAI, `favd * lambda * V`, and that is correct: it is the
+paper's `tau*h` with `h = lambda*V`, the vertical squeeze section III-C describes.
+Verified equation by equation against `papers/Ni_etal_1999.pdf`, and gortt
+reproduces the published Fig. 7 component signatures with it. Do not "fix" it.
+`p->crown_lai` (`favd * 4b/3`, identically `elai/PCC`) and `p->squeeze_lai`
+(`elai/(1-K_open)`) are the alternatives `-rt_crown_path` can select, and exist
+only for that.
 
 **Known broken/incomplete paths:**
 * `-diffuse <frac>` sets `p->user_fd = 1 - frac` and is undocumented in `-u`. Without it,

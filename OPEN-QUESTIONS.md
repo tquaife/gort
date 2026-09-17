@@ -387,6 +387,29 @@ exactly, by construction, whatever `maxcrowns` is.
 
 ---
 
+## The RT terms use the primed zenith where the paper writes the real one
+
+`gortt_rt_init` evaluates `t_0`, `R_inf_df` and `T_inf_df` at `g->sza_prime`, the
+zenith after the ellipsoid-to-sphere transform, where Ni et al. (1999) eqs (8)-(11)
+write `mu_i` — the actual solar zenith. Three `05/06/06` comments in
+`gortt_brdf.c` mark the change and keep the original lines beside it, so it was
+deliberate.
+
+It is a no-op for spherical crowns (`b = r` makes the transform the identity) and
+grows with how far from spherical they are: the prolate scenes in
+`flight_compare/` have `b/r = 2.5`, where a 30 degree solar zenith becomes 13.5
+degrees primed. The prime transform exists so that the *geometric* derivation can
+be done for spheres; whether the radiative transfer through the foliage should
+follow it into that space is a different question, and not obviously yes — the
+foliage is not transformed, only the crown envelope is.
+
+Left alone because changing it moves every non-spherical BRF and there is nothing
+here to say which way is right. The `-rt_*` options added on the
+`rt-scattering-experiments` branch would be the place to test it, since they
+already provide the machinery for running a variant against FLIGHT.
+
+---
+
 ## What is *not* on this list
 
 The four bugs fixed in Phase 3 (`-P` round trip, the `epgap` grid, the Q08 seeding,

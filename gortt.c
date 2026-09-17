@@ -15,6 +15,8 @@ static void gortt_set_output_format( char *, int, char * );
 static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spectra *, gortt_control *,
                                 gortt_lidar_params * );
 static void gortt_compute_probabilities( gortt_parameters *, gortt_control * );
+static void gortt_init_squeeze_lai( gortt_parameters * );
+static double gortt_bg_coupling( const gortt_parameters *, const gortt_rt *, double );
 static void gortt_write_prob_file( gortt_parameters * );
 static void gortt_read_prob_file( gortt_parameters *, char * );
 static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
@@ -79,6 +81,13 @@ int main( int argc, char **argv )
 	/*3) read existing probability file*/
 	if( params.read_prob_file == TRUE )
 		gortt_read_prob_file( &params, *argv );
+
+	/*
+	Both of those settle K_open, which is the last thing -rt_crown_path's
+	RT_PATH_SQUEEZE depth needs. It sits here rather than in either branch
+	so that -P and a fresh run cannot disagree about it.
+	*/
+	gortt_init_squeeze_lai( &params ) ;
 
 
 	/**
@@ -281,6 +290,15 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->use_user_fd=FALSE ;
 	p->user_fd=1.0 ;
 
+	/*the experimental scattering formulations are all off: with none of
+	the -rt_* options given the model is Ni et al. (1999) as published*/
+	p->rt_crown_path=FALSE ;
+	p->rt_crown_path_mode=RT_PATH_CROWN ;
+	p->rt_recollision=FALSE ;
+	p->rt_bg_coupling=FALSE ;
+	p->rt_crown_crown=FALSE ;
+	p->rt_fd_paper=FALSE ;
+
 	/*the lidar instrument. 1064nm is the VCL/LVIS/SLICER line, and the
 	one Ni-Meister et al. (2001) quote their rho_v = omega/5 at. J0 is
 	a pure scale factor on both returns, so the default of one makes the
@@ -304,6 +322,34 @@ static void gortt_compute_probabilities( gortt_parameters *p, gortt_control *c )
 		gortt_gap_probabilities_Q08( p ) ;
 	else
 		gortt_gap_probabilities( p ) ;
+
+	return ;
+
+}
+
+
+/*
+The third of the optical depths -rt_crown_path can pick (RT_PATH_SQUEEZE):
+all the foliage spread over the part of the hemisphere that is not open,
+rather than over everything (elai) or over the crowns' nadir footprint
+(crown_lai). It needs K_open, so it cannot be done in gortt_init_params
+with the other derived constants.
+
+K_open -> 1 is an empty canopy and the quotient runs away; there is no
+foliage to put anywhere in that limit, so fall back on elai.
+*/
+static void gortt_init_squeeze_lai( gortt_parameters *p )
+{
+
+	double k_open ;
+
+
+	k_open = p->k_open[ 0 ] + p->k_openep[ 0 ] ;
+
+	if( k_open < 1.0 - 1.0e-9 )
+		p->squeeze_lai = p->elai / ( 1.0 - k_open ) ;
+	else
+		p->squeeze_lai = p->elai ;
 
 	return ;
 
@@ -599,6 +645,8 @@ static void gortt_run_geometry( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	/*From Ni et al. '99*/
 	if( p->use_user_fd )
 		g->fd = p->user_fd ;
+	else if( p->rt_fd_paper )
+		g->fd = cos( g->sza ) / ( cos( g->sza ) + 0.05 );
 	else
 		g->fd = cos( g->sza ) / ( cos( g->sza ) + 0.09 );
 
@@ -679,6 +727,29 @@ G = signature of sunlit soil
 Z = signature of shaded soil
 
 */
+/*
+The background-canopy coupling factor 1/(1 - rho_s rho'_ff), or one when
+-rt_bg_coupling is off. See the comment beside G in gortt_rsurf.
+
+rho_s rho'_ff is a product of two reflectances and so is below one for any
+physical pair, but clamp anyway: a user-supplied soil albedo is not checked
+against one anywhere, and a runaway here would be silent.
+*/
+static double gortt_bg_coupling( const gortt_parameters *p, const gortt_rt *rt, double rsoil )
+{
+
+	double x ;
+
+
+	if( p->rt_bg_coupling == FALSE ) return( 1.0 );
+
+	x = rsoil * rt->p_prime_ff ;
+
+	return( ( x < 1.0 ) ? 1.0 / ( 1.0 - x ) : 1.0 );
+
+}
+
+
 void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s )
 {
 
@@ -690,6 +761,7 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 	double CfC, CfG, CfCG ;
 
 	double Kprime_g, Kprime_z ;
+	double bg, cc ;
 
 	gortt_rt rt ;
 
@@ -757,8 +829,24 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 		 to change to accomadate this correctly.
 		*/
 
-		Gd = *( s->rsoil + i ) ;
-		Gf = *( s->rsoil + i ) ;
+		/*
+		coupling: the background does not just reflect what reaches it,
+		it reflects it back and forth against the canopy above. The
+		series sums to 1/(1 - rho_s rho'_ff), which is exactly the factor
+		eqs (36)-(37) already give the crown-background term -- the
+		background components are the only ones without it.
+
+		Ni et al. (1999) section III-B says so: the background is "simply
+		assumed to be Lambertian", which is "not a problem for denser
+		vegetation", with anything better left to future studies. That
+		is what -rt_bg_coupling turns on. It matters most where the
+		background dominates, i.e. exactly the sparse canopies the paper
+		says it has not validated.
+		*/
+		bg = gortt_bg_coupling( p, &rt, *( s->rsoil + i ) ) ;
+
+		Gd = *( s->rsoil + i ) * bg ;
+		Gf = *( s->rsoil + i ) * bg ;
 
 		G = g->fd*Gd + (1-g->fd)*Gf ;
 
@@ -767,8 +855,8 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 		/*shaded ground*/
 
 		/*Zd = ( rt.t_prime_df + g->p_neq0_heq0_sza ) * *( s->rsoil + i ) ;*/
-		Zd = ( rt.t_prime_df + g->p_ngt0_heq0_sza ) * *( s->rsoil + i ) ;
-		Zf = ( rt.t_prime_ff - p->k_openep[ 0 ] ) * *( s->rsoil + i ) ;
+		Zd = ( rt.t_prime_df + g->p_ngt0_heq0_sza ) * *( s->rsoil + i ) * bg ;
+		Zf = ( rt.t_prime_ff - p->k_openep[ 0 ] ) * *( s->rsoil + i ) * bg ;
 
 		Z = g->fd*Zd + (1-g->fd)*Zf ;
 
@@ -777,8 +865,8 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 		linear in rsoil, so this is Z/rsoil -- but it stays finite for
 		a black soil, where that division is 0/0. gortt_energy uses it.
 		*/
-		*( s->ztrans + i ) = g->fd * ( rt.t_prime_df + g->p_ngt0_heq0_sza )
-		                   + (1-g->fd) * ( rt.t_prime_ff - p->k_openep[ 0 ] ) ;
+		*( s->ztrans + i ) = ( g->fd * ( rt.t_prime_df + g->p_ngt0_heq0_sza )
+		                     + (1-g->fd) * ( rt.t_prime_ff - p->k_openep[ 0 ] ) ) * bg ;
 
 
 		/*Sunlit Crown*/
@@ -829,6 +917,33 @@ void gortt_rsurf( const gortt_parameters *p, gortt_geometry *g, gortt_spectra *s
 		*/
 
 		T = g->fd*CdCG + (1-g->fd)*CfCG ;
+
+
+		/*
+		Neighbour crowns. Ni et al. (1999), just under eq. (39): "Notice
+		that the component terms C and T are also affected by the
+		neighboring crowns. This factor is usually small and very
+		complicated to model, so we ignore it here."
+
+		-rt_crown_crown puts a first-order version back. A crown radiates
+		rho'_ff of what falls on it; a fraction (1 - K_open) of that meets
+		another crown rather than the sky or the ground, and the exchange
+		repeats, so the geometric series adds
+
+			rho'_ff (1-K_open) / ( 1 - rho'_ff (1-K_open) )
+
+		of the crown's own brightness. It goes on both crown components:
+		a shaded crown is lit by its neighbours as much as a sunlit one
+		is, which is why T -- black in the near infrared today -- is
+		where it shows up most. This is the most speculative of the -rt_*
+		options and the one to drop first if it does not earn its place.
+		*/
+		if( p->rt_crown_crown == TRUE ){
+			cc = rt.p_prime_ff * ( 1.0 - ( p->k_open[ 0 ] + p->k_openep[ 0 ] ) ) ;
+			cc = ( cc < 1.0 ) ? cc / ( 1.0 - cc ) : 0.0 ;
+			T += cc * rt.p_prime_ff ;
+			C += cc * rt.p_prime_ff ;
+		}
 
 
 		/*
@@ -948,6 +1063,21 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 	/*p->elai = p->favd * ( ( 4.0/3.0 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ; */
 	p->elai = p->favd * ( ( 1.333333 ) * p->lambda * M_PI * p->ellipticity * p->rrr ) ;
 	p->tau  =  p->k * p->favd ;
+
+	/*
+	The crown's own optical depth, for -rt_crown_path. 4b/3 is the mean
+	vertical chord of a spheroid of semi-axes (r,r,b): the chord at impact
+	parameter s is 2b sqrt(1-(s/r)^2) and the area weight over the projected
+	disc is 2s ds/r^2, which integrates to 4b/3. For a sphere that is the
+	4r/3 gortt_get_es returns at h=0, so the two agree by construction.
+
+	Equivalently this is elai/PCC with PCC = lambda pi r^2, i.e. the same
+	foliage spread over the crowns' footprint instead of over everything.
+	squeeze_lai is filled later, in gortt_compute_probabilities, because it
+	needs K_open.
+	*/
+	p->crown_lai   = p->favd * ( 4.0 / 3.0 ) * p->b ;
+	p->squeeze_lai = p->elai ;
 
 
 	/*
@@ -1270,8 +1400,9 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 	int i, use_true_p=FALSE, use_lai=FALSE;
 	int got_refl_leaf=FALSE, got_trans_leaf=FALSE;
-	int got_lidar_opt=FALSE;
+	int got_lidar_opt=FALSE, got_rt_path=FALSE;
 	float hb=2.0, br=1.0, pcc=0.5, lai=2.0;
+	char *arg;
 
 	p->read_prob_file=FALSE ;
 	p->write_prob_file=FALSE;
@@ -1342,6 +1473,45 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			else if( !strncmp( argv[ i ], "-prnprop", 7 ) ) c->print_comp_proport=TRUE;
 			else if( !strncmp( argv[ i ], "-energy", 7 ) ) c->calc_integrals=TRUE;
 			else if( !strncmp( argv[ i ], "-q08_pn_kopen", 7 ) ) c->use_q08_pn_kopen=TRUE;
+
+			/*
+			The experimental scattering formulations. n.b. all of these
+			must stay above the "-r" test at the bottom, which is matched
+			on two characters and would otherwise swallow every one of
+			them AND eat the following argv word as a crown radius --
+			the same trap -refl_leaf is commented for above. They are
+			matched on strlen+1, i.e. including the terminator, so that
+			-rt_crown_pathologically is an error rather than a synonym.
+			*/
+			else if( !strncmp( argv[ i ], "-rt_crown_crown", 16 ) ) p->rt_crown_crown=TRUE;
+			else if( !strncmp( argv[ i ], "-rt_crown_path", 15 ) )  p->rt_crown_path=TRUE;
+			else if( !strncmp( argv[ i ], "-rt_recollision", 16 ) ) p->rt_recollision=TRUE;
+			else if( !strncmp( argv[ i ], "-rt_bg_coupling", 16 ) ) p->rt_bg_coupling=TRUE;
+			else if( !strncmp( argv[ i ], "-rt_fd_paper", 13 ) )    p->rt_fd_paper=TRUE;
+
+			else if( !strncmp( argv[ i ], "-rt_path", 9 ) ){
+
+				got_rt_path = TRUE ;
+				arg = gortt_next_arg( argc, argv, &i ) ;
+
+				if( !strcasecmp( arg, "scene" ) )        p->rt_crown_path_mode = RT_PATH_SCENE ;
+				else if( !strcasecmp( arg, "squeeze" ) ) p->rt_crown_path_mode = RT_PATH_SQUEEZE ;
+				else if( !strcasecmp( arg, "crown" ) )   p->rt_crown_path_mode = RT_PATH_CROWN ;
+				else{
+					fprintf( stderr, "%s: -rt_path must be scene, squeeze or crown (got %s)\n",
+					         argv[ 0 ], arg );
+					exit( EXIT_FAILURE );
+				}
+
+			}
+
+			else if( !strncmp( argv[ i ], "-rt_all", 8 ) ){
+				p->rt_crown_path=TRUE;
+				p->rt_recollision=TRUE;
+				p->rt_bg_coupling=TRUE;
+				p->rt_crown_crown=TRUE;
+				p->rt_fd_paper=TRUE;
+			}
 
 			/*the lidar options. n.b. every one of these must stay ABOVE
 			the "-lidar" test below, which is matched on six characters
@@ -1449,6 +1619,28 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 	*/
 	if( got_lidar_opt == TRUE && c->lidar_mode == FALSE ){
 		fprintf( stderr, "%s: the -lidar_* options require -lidar\n", argv[ 0 ] );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	-rt_path only says which optical depth -rt_crown_path should use, so on
+	its own it does nothing at all. Refuse it rather than let it be inert:
+	the run would otherwise produce the published numbers while looking
+	like it had been asked for something else.
+	*/
+	if( got_rt_path == TRUE && p->rt_crown_path == FALSE ){
+		fprintf( stderr, "%s: -rt_path requires -rt_crown_path\n", argv[ 0 ] );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	The recollision probability describes a crown, so it can only rescale
+	a crown: applied to the stand-sized layer of eqs (15)-(16) it divides
+	a crown quantity by a scene one and the result means nothing. Refuse
+	the combination rather than let it look like it worked.
+	*/
+	if( p->rt_recollision == TRUE && p->rt_crown_path == FALSE ){
+		fprintf( stderr, "%s: -rt_recollision requires -rt_crown_path\n", argv[ 0 ] );
 		exit( EXIT_FAILURE );
 	}
 
@@ -1633,6 +1825,28 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-lidar_binsize arg\tset the range bin size (m) to arg (default: the canopy layer thickness)\n"  );
 	fprintf( stderr, "                 \tn.b. the last two apply to -lidar_waveform only\n"  );
 	fprintf( stderr, "                 \tn.b. all of the -lidar_* options require -lidar, and are refused without it\n"  );
+
+	fprintf( stderr, "\n============ Experimental scattering options:\n" );
+
+  fprintf( stderr, "  Ni et al. (1999) section V says the model is validated over dense forests, and\n"  );
+  fprintf( stderr, "  defers three things that matter as a canopy opens up. Each of these switches one\n"  );
+  fprintf( stderr, "  of them on. All are off by default: with none of them given the model is the\n"  );
+  fprintf( stderr, "  paper as published.\n"  );
+
+	fprintf( stderr, "-rt_crown_path \ttake the crown path reflectances from a crown rather than from a layer\n"  );
+	fprintf( stderr, "               \tholding the whole scene's foliage. Eqs (15)-(16) use the latter, so a\n"  );
+	fprintf( stderr, "               \tstand of widely spaced crowns comes out with black crowns.\n"  );
+	fprintf( stderr, "-rt_path arg   \twhich layer -rt_crown_path means: scene (as published, a control),\n"  );
+	fprintf( stderr, "               \tsqueeze (elai/(1-Kopen)) or crown (the default, chord-averaged)\n"  );
+	fprintf( stderr, "-rt_recollision\trescale the crown path reflectances by the crown's recollision\n"  );
+	fprintf( stderr, "               \tprobability, so that they carry every scattering order. Requires\n"  );
+	fprintf( stderr, "               \t-rt_crown_path: it describes a crown, so it can only rescale a crown.\n"  );
+	fprintf( stderr, "-rt_bg_coupling\tlet the sunlit and shaded background exchange radiation with the canopy,\n"  );
+	fprintf( stderr, "               \tthe 1/(1-rho_s rho'_ff) that eqs (36)-(37) already give the crown\n"  );
+	fprintf( stderr, "-rt_crown_crown\tadd the neighbour-crown term the paper drops just below eq. (39)\n"  );
+	fprintf( stderr, "-rt_fd_paper   \tdirect beam fraction mu/(mu+0.05), which is what section IV gives;\n"  );
+	fprintf( stderr, "               \twithout it gortt uses mu/(mu+0.09). n.b. -diffuse overrides both.\n"  );
+	fprintf( stderr, "-rt_all        \tall five of the above\n"  );
 
 	fprintf( stderr, "\n============ Input/output options:\n" );
 

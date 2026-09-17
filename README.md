@@ -1,12 +1,13 @@
 # GORT
 
-A C implementation of the Geometric Optic Radiative Transfer model as described in Ni et al. (1999). 
+A C implementation of the Geometric Optic Radiative Transfer model as described by Ni et al. (1999). 
 Models the BRDF and LIDAR returns of forests at optical wavelengths by
 calculating the viewed proportions of illuminated and shaded crown and ground,
 and their reflectance factors, for randomly located ellipsoids.
 
-Version 2.0 of the model is a tidied version of the one that was originally used as the forward operator for data assimilation experiments described by Quaife et al. (2008).
+Version 2.0 of the model is a tidied version of the one that was originally used as the forward operator for data assimilation experiments described by Quaife et al. (2008). It is a broadly faithful implementation of the model described by Ni et al. (1999), but coupled to models for the leaf and soil optical properties.
 
+Version 3.0 introduces the LIDAR routines following Ni-Meister et al. (2001). These changes have been made by Claude Opus 5.
 
 ## Main features
 
@@ -17,7 +18,7 @@ Version 2.0 of the model is a tidied version of the one that was originally used
 * Reads/writes LUTs of key intermediate variables to speed up some applications.
 * Predicts full waveform lidar returns at nadir, following Ni-Meister et al. (2001).
 
-## Example ouputs
+## Example outputs
 
 The following figure is a reproduction of Figure 5 from Ni et al. (1999) using the most recent version of the code.
 
@@ -32,7 +33,7 @@ With the exception of the contents of the PROSPECT-D directory all code was writ
 
 Information about PROSPECT authorship can be found at http://teledetection.ipgp.jussieu.fr/prosail/
 
-Since version 2.0 Claude Code has been used for various tasks, the most substantial of which is the addition of LIDAR predictions (see below).
+From version 2.0 onward, Claude Code has been used for various tasks, the most substantial of which is the addition of LIDAR predictions (see below).
 
 ## Usage
  

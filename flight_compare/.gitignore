@@ -1,0 +1,23 @@
+# Nothing either model produced is tracked: the figures and index.html carry
+# every number this comparison reports, and the raw output is large and
+# regenerable.  Re-create it with
+#
+#     ./build_flight.py && ./validate.py && ./run_brdf.py && ./run_lidar.py
+#
+# then ./plot_brdf.py, ./plot_lidar.py and ./make_html.py to redraw.  The BRDF
+# sweep is the expensive part at about three hours; run_lidar.py is ten minutes
+# and run_brdf.py --gortt-only is seconds.
+
+# model output and the summary tables derived from it.  run_brdf.py alone
+# writes 4.2 MB of dense-grid gortt BRFs here.
+results/
+
+# per-run FLIGHT working directories and the sweep checkpoints that make
+# run_brdf.py resumable
+work/
+
+# path to the patched, lidar-enabled FLIGHT build, which lives outside both
+# repos and differs per machine (build_flight.py writes it)
+.flight_binary
+
+__pycache__/

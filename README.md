@@ -16,7 +16,7 @@ Version 3.0 introduces the LIDAR routines following Ni-Meister et al. (2001). Th
 * Coupled to PROSPECT-D to (optionally) provide leaf optical properties.
 * Soil reflectance using EOFs from Price (1990).
 * Reads/writes LUTs of key intermediate variables to speed up some applications.
-* Predicts full waveform lidar returns at nadir, following Ni-Meister et al. (2001).
+* Predicts full waveform lidar returns at nadir, following Ni-Meister et al. (2001), with the backscattering coefficients of Ni-Meister et al. (2018).
 
 ## Example outputs
 
@@ -107,6 +107,8 @@ Ni, W., Li, X., Woodcock, C. E., Roujean, J.-L., & Davis, R. E. (1997). Transmis
 Ni, W., Li, X., Woodcock, C. E., Caetano, M. R., & Strahler, A. H. (1999). An analytical hybrid GORT model for bidirectional reflectance over discontinuous plant canopies. IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987-999.
 
 Ni-Meister, W., Jupp, D. L. B., & Dubayah, R. (2001). Modeling lidar waveforms in heterogeneous and discrete canopies. IEEE Transactions on Geoscience and Remote Sensing, 39(9), 1943-1958.
+
+Ni-Meister, W., Yang, W., Lee, S., Strahler, A. H., & Zhao, F. (2018). Validating modeled lidar waveforms in forest canopies with airborne laser scanning data. Remote Sensing of Environment, 204, 229-243.
 
 Price, J. C. (1990). On the information content of soil reflectance spectra. Remote Sensing of Environment, 33(2), 113-121.
 

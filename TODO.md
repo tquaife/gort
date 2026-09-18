@@ -24,7 +24,10 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
 * ~~lidar routines~~ — **done for the nadir, single-layer case.** `gortt_lidar` implements
   Ni-Meister et al. (2001): total nadir gap probability `P(z)` from `p_n0+ epgap`, the canopy
   return `J0 rho_v dP/dz`, the ground return `J0 rho_g P(0)`, and the apparent foliage profile
-  `dlogP/dz`, with an optional binned and pulse-convolved waveform. `-nlayers` went in with it
+  `dlogP/dz`, with an optional binned and pulse-convolved waveform. The two backscattering
+  coefficients are those of Ni-Meister et al. (2018), `rho_v = 2*rleaf/3` and `rho_g = rsoil`,
+  not the `2*tleaf/3` and `rsoil/2` of the 2001 paper — see the comment at the top of
+  `gortt_lidar.c`. `-nlayers` went in with it
   and sets the reporting resolution of the whole model. Still open:
   * off-nadir. `gortt_set_zenith_dependant_probabilities` is hardwired to `[0]` in four places
     and would need a height-resolved variant; and the one-way attenuation of eq. 1 is only

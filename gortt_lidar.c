@@ -7,15 +7,17 @@
 /*
 The canopy lidar waveform of Ni-Meister, Jupp and Dubayah (2001), IEEE
 TGRS 39(9), 1943-1958, built on the gap probabilities GORT has already
-computed.
+computed. The two backscattering coefficients are taken from the later
+statement of the same model in Ni-Meister et al. (2018), RSE 204,
+229-243, which corrects both of them -- see below.
 
 The whole model is three equations. With P(z) the probability of a gap
 above height z at nadir, J0 the emitted pulse energy, rho_v the volume
 backscattering coefficient of the foliage and rho_g that of the ground:
 
-	-dRv(z)/dz = J0 rho_v dP(z)/dz          the canopy return   (eq 1)
-	Rg         = J0 rho_g P(0)              the ground return   (eq 2)
-	Fapp(z)    = dlogP(z)/dz                apparent foliage    (eq 4)
+	-dRv(z)/dz = J0 rho_v dP(z)/dz          the canopy return   (2001 eq 1, 2018 eq 3)
+	Rg         = J0 rho_g P(0)              the ground return   (2001 eq 2, 2018 eq 4)
+	Fapp(z)    = dlogP(z)/dz                apparent foliage    (2001 eq 4)
 
 This is a one-way attenuation model, and that is only right at the
 hotspot -- every shadow in the direction of the outgoing pulse is
@@ -24,18 +26,44 @@ receiver can see. Nadir viewing guarantees it, which is why gortt_lidar
 does not take a gortt_geometry: the device points straight down, nadir
 is theta[0] == 0 exactly, and nothing has to be interpolated.
 
-The two backscattering coefficients come from the phase function at zero
-scattering angle. For randomly oriented Lambertian leaves (eq 9), which
-is the G = 0.5 case the rest of gortt is hardwired to, p(xi) at xi = 0
-is 8t/(3 omega) (eq 12), so from eq 6
+Both backscattering coefficients come from the volume scattering phase
+function evaluated in the backscatter direction. For randomly oriented
+Lambertian leaves -- the G = 0.5 case the rest of gortt is hardwired to
+-- that phase function is 2001 eq 9, identically 2018 eq 9,
 
-	rho_v = omega p(0) / 4 = 2t/3
+	B(xi) = (8/omega) [ (omega/3pi)(sin xi - xi cos xi) + (t/3) cos xi ]
 
-with t the leaf transmittance. The paper quotes rho_v = omega/5, which
-is this under its own assumption that t = 0.3 omega at 1.064um; taking
-t straight from PROSPECT-D instead is the same expression without the
-assumption. For a Lambertian ground p(xi) = 2 in backscatter (eq 14),
-so rho_g = omega_g/2 (eqs 15, 16).
+and rho_v = omega B(xi) / 4 (2001 eq 6, 2018 eq 8). Backscatter is
+xi = pi, not xi = 0: the (sin xi - xi cos xi) term is the reflection
+lobe and it vanishes at xi = 0 and peaks at xi = pi, while (t/3) cos xi
+is the transmission lobe and does the opposite. So B(pi) = 8r/(3 omega)
+and
+
+	rho_v = 2r/3                             (2018 eq 10)
+
+with r the leaf reflectance. The 2001 paper evaluates the hotspot at
+xi = 0 instead (its eq 12), which picks up the transmission lobe and
+gives rho_v = 2t/3 -- and then rho_v = omega/5 under its own assumption
+that t = 0.3 omega at 1.064um (its eq 13). That is the mistake the 2018
+paper corrects; gortt followed it until it was found.
+
+For the ground, assumed Lambertian, 2018 has rho_g equal to the soil
+albedo outright:
+
+	rho_g = omega_g                          (2018, text above eq 11)
+
+which is what the rho = pi * BRDF convention of eq 6/eq 8 requires, a
+Lambertian surface having BRDF = omega_g/pi exactly. The 2001 paper's
+eqs 14-16 give rho_g = omega_g/2, from p(xi) = 2 -- the normalisation
+for a volume, where the phase function integrates to one over 4pi with
+no cosine weighting, applied to a surface whose albedo already carries
+that weighting.
+
+The two corrections compound, and the quantity they compound in is the
+one the paper measures independently: 2018 Fig. 6 recovers rho_v/rho_g
+from LVIS and centres it on 1 across all six stands, and its Table 3
+gives 0.77-0.84 from RAMI-IV field data. At gortt's defaults the 2001
+pair gives 3.4 and the 2018 pair 1.2.
 */
 
 
@@ -89,8 +117,8 @@ void gortt_lidar( const gortt_parameters *p, const gortt_spectra *s,
 	dPdz[ 0 ]            = ( P[ 1 ] - P[ 0 ] ) / p->dz ;
 	dPdz[ p->nlayers-1 ] = ( P[ p->nlayers-1 ] - P[ p->nlayers-2 ] ) / p->dz ;
 
-	rho_v = 2.0 * s->tleaf[ 0 ] / 3.0 ;
-	rho_g = 0.5 * s->rsoil[ 0 ] ;
+	rho_v = 2.0 * s->rleaf[ 0 ] / 3.0 ;
+	rho_g = s->rsoil[ 0 ] ;
 
 	/*
 	P[0] is the gap probability at z1 = h1 - b, the lowest height at

@@ -157,7 +157,15 @@ quantities in one expression is almost always a bug.
 * `gortt_albedo.c` — `gortt_albedo` (Gauss-Legendre hemispherical integral of the BRF, calls
   `gortt_rsurf` at each quadrature point) and `gortt_energy` (SW energy balance → albedo,
   fraction absorbed by vegetation, fraction absorbed by soil). `gauleg` lives here too.
-* `gortt_lidar.c` — the lidar waveform of Ni-Meister et al. (2001). `gortt_lidar` is *not*
+* `gortt_lidar.c` — the lidar waveform of Ni-Meister et al. (2001), with the two
+  backscattering coefficients taken from Ni-Meister et al. (2018), which corrects both:
+  the hotspot is at scattering angle `xi = pi`, not `xi = 0`, so `rho_v = 2*rleaf/3`
+  (the reflection lobe of the phase function) and not the `2*tleaf/3` of the 2001 paper;
+  and `rho_g` is the soil albedo outright, not half of it. Together they are a factor of
+  2.8 in `rho_v/rho_g`, the one quantity the 2018 paper measures independently — it gets
+  ~1 from LVIS and 0.77–0.84 from RAMI-IV, against 3.4 for the 2001 pair and 1.2 for the
+  2018 pair at gortt's defaults. The derivation is in the comment at the top of the file
+  and in `latex_notes/lidar_notes.tex` §2.2. `gortt_lidar` is *not*
   called from the per-angle loop: `-lidar` short-circuits `main()` the way `-W` does, because
   the device is at nadir and no input geometry is meaningful, so stdin is never read. It takes
   no `gortt_geometry` — nadir is `theta[0] == 0` exactly, so nothing is interpolated. Two
@@ -392,5 +400,10 @@ Ni, W. et al. (1997), *Transmission of solar radiation in boreal conifer forests
 and models*, JGR 102(D24), 29555-29566 — the source of the default direct beam fraction
 `mu/(mu+0.09)` (its eq. 5, fitted to BOREAS clear-day measurements); `-rt_fd_paper` selects the
 `mu/(mu+0.05)` of Ni et al. (1999) §IV instead, and `-diffuse` overrides both.
+Ni-Meister, W. et al. (2001), *Modeling lidar waveforms in heterogeneous and discrete
+canopies*, IEEE TGRS 39(9), 1943-1958 — the lidar waveform equations; and Ni-Meister, W.
+et al. (2018), *Validating modeled lidar waveforms in forest canopies with airborne laser
+scanning data*, RSE 204, 229-243 — the same model restated, and the source of the two
+backscattering coefficients, both of which it corrects.
 Quaife, T. et al. (2008), RSE 112(4), 1347-1364 — the "new style" parameterisation (HB/BR/PCC)
 and the Q08 probability approximation. Price, J.C. (1990) — the soil EOFs.

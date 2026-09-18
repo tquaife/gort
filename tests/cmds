@@ -125,13 +125,17 @@ badsoilstart    soilwl.in   -soil_spectra cases/soilstart.spec
 badsoilend      soilwl.in   -soil_spectra cases/soilend.spec
 
 # ---- lidar waveforms ------------------------------------------------------
-# Ni-Meister et al. (2001). -lidar is ~11x slower than a BRF run because it
-# needs the gap probabilities at every layer rather than at the ground only,
-# so the cases that are not about vertical resolution use a coarse -nlayers.
+# Ni-Meister et al. (2001), with the backscattering coefficients of (2018).
+# -lidar is ~11x slower than a BRF run because it needs the gap probabilities
+# at every layer rather than at the ground only, so the cases that are not
+# about vertical resolution use a coarse -nlayers.
 #
 # the spectral options must reach the waveform the same way they reach the
-# BRF: rho_v is 2/3 of the PROSPECT-D leaf transmittance at -lidar_wl, and
-# rho_g half the Price soil reflectance there.
+# BRF: rho_v is 2/3 of the PROSPECT-D leaf REFLECTANCE at -lidar_wl, and
+# rho_g the Price soil reflectance there. Both were the 2001 forms -- 2/3
+# of the transmittance, and half the soil -- until the 2018 paper was read;
+# lidar-leaf has -refl_leaf and -trans_leaf deliberately unequal so that a
+# slip back to the transmittance shows up as a golden change.
 lidar-wl        -           -lidar -lidar_wl 1550 -Cab 60 -nlayers 8
 lidar-soil      -           -lidar -alb_soil 0.25 -nlayers 8
 lidar-leaf      -           -lidar -refl_leaf 0.5 -trans_leaf 0.45 -nlayers 8

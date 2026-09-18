@@ -302,9 +302,9 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->rt_upscatter=FALSE ;
 
 	/*the lidar instrument. 1064nm is the VCL/LVIS/SLICER line, and the
-	one Ni-Meister et al. (2001) quote their rho_v = omega/5 at. J0 is
-	a pure scale factor on both returns, so the default of one makes the
-	output a fraction of the emitted pulse energy. binsize <= 0 means
+	one both Ni-Meister et al. (2001) and (2018) evaluate their rho_v at.
+	J0 is a pure scale factor on both returns, so the default of one makes
+	the output a fraction of the emitted pulse energy. binsize <= 0 means
 	"use p->dz", which is not known until gortt_init_params has run.*/
 	l->wl=1064.0 ;
 	l->J0=1.0 ;

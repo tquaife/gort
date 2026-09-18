@@ -376,10 +376,6 @@ static void gortt_two_stream( double w, double gamma, double k, double L, double
 		sbeam  = k*SEC( theta ) ;
 		det    = lambda*lambda - sbeam*sbeam ;
 
-		/*the particular solution for the beam source*/
-		P = w*sbeam*( ( 1.0 - beta_up )*( a + sbeam ) + b*beta_up ) / det ;
-		Q = w*sbeam*( beta_up*( a - sbeam ) + b*( 1.0 - beta_up ) ) / det ;
-
 		/*
 		b/(a+lambda), not the (a-lambda)/b the eigenvector gives
 		directly: they are equal because lambda^2 = a^2 - b^2, and this
@@ -389,15 +385,53 @@ static void gortt_two_stream( double w, double gamma, double k, double L, double
 		sl->R_inf_ff = b / ( a + lambda ) ;
 		sl->T_inf_ff = exp( -lambda*L ) ;
 
-		/*
-		top-of-medium upward flux, and the internal downward diffuse
-		flux at depth L, of the semi-infinite medium -- which is what
-		these two are, notwithstanding their names
-		*/
-		sl->R_inf_df = Q - P*sl->R_inf_ff ;
-		sl->T_inf_df = -P*( sl->T_inf_ff - sl->t_0 ) ;
+		if( det == 0.0 ){
+
+			/*
+			The beam decays at exactly the rate of the diffuse
+			eigenmode, so the particular solution below is 0/0.
+			This is the same removable singularity as the one in
+			the published branch -- of which this branch is the
+			beta_up != 1/2 generalisation -- and the limits are
+
+			  R_inf_df -> w[ beta + (1-beta) R_inf_ff ] / 2
+			  T_inf_df -> w L t_0 [ (1-beta)(a+s) + b beta ] / 2
+
+			the first by l'Hopital in sbeam, the numerator of
+			Q - P R_inf_ff vanishing on the same line because
+			lambda^2 = a^2 - b^2; the second from
+			T_inf_ff - t_0 -> -L (lambda - sbeam) t_0. At
+			beta_up = 1/2 both reduce to the published limits.
+			*/
+			sl->R_inf_df = w*( beta_up + ( 1.0 - beta_up )*sl->R_inf_ff ) / 2.0 ;
+			sl->T_inf_df = w*L*sl->t_0*( ( 1.0 - beta_up )*( a + sbeam ) + b*beta_up ) / 2.0 ;
+
+		}else{
+
+			/*the particular solution for the beam source*/
+			P = w*sbeam*( ( 1.0 - beta_up )*( a + sbeam ) + b*beta_up ) / det ;
+			Q = w*sbeam*( beta_up*( a - sbeam ) + b*( 1.0 - beta_up ) ) / det ;
+
+			/*
+			top-of-medium upward flux, and the internal downward
+			diffuse flux at depth L, of the semi-infinite medium
+			-- which is what these two are, notwithstanding their
+			names
+			*/
+			sl->R_inf_df = Q - P*sl->R_inf_ff ;
+			sl->T_inf_df = -P*( sl->T_inf_ff - sl->t_0 ) ;
+
+		}
 
 	}else{
+
+	/*
+	the closure's a, at the beta = 1/2 that gamma encodes:
+	a = 2k[1 - w(1-beta)] = k(2-w). Not used by the expressions below --
+	they are written in gamma -- but the conservative-scattering limit in
+	the adding section is common to both branches and is written in a.
+	*/
+	a = k*( 2.0 - w ) ;
 
 	/*hemispherical-hemispherical reflectance*/
 	sl->R_inf_ff = ( 1.0 - gamma )/( 1.0 + gamma ) ;
@@ -409,21 +443,67 @@ static void gortt_two_stream( double w, double gamma, double k, double L, double
 	sl->T_inf_ff = exp(-( 2.0*gamma*k*L )) ;
 
 	/*directional-hemispherical transmittance*/
-	sl->T_inf_df  = ( w / 2.0 ) ;
-	sl->T_inf_df *= ( 1. + 2. * cos( theta ) ) / ( 1. - pow( ( 2.*gamma*cos( theta ) ), 2 ) )  ;
-	sl->T_inf_df *= ( sl->T_inf_ff - sl->t_0 ) ;
+	if( ( 1. - pow( ( 2.*gamma*cos( theta ) ), 2 ) ) == 0.0 ){
+
+		/*
+		2 gamma mu == 1. The diffuse eigenvalue 2 gamma k and the beam
+		extinction k sec(theta) are then the same number, so T_inf_ff
+		and t_0 are equal and the quotient is 0/0. It is removable:
+
+		  ( T_inf_ff - t_0 ) / ( 1 - (2 gamma mu)^2 ) -> k L sec(theta) t_0 / 2
+
+		by expanding exp(-x u) - exp(-u) about x = 1 with u = k L sec(theta).
+		Only the exact hit needs this -- a part in 1e11 off the line the
+		quotient is already right to nine figures -- but omega = 0.75 with
+		an overhead sun lands on it exactly.
+		*/
+		sl->T_inf_df  = ( w / 2.0 ) ;
+		sl->T_inf_df *= ( 1. + 2. * cos( theta ) ) ;
+		sl->T_inf_df *= k*L*SEC( theta )*sl->t_0 / 2.0 ;
+
+	}else{
+
+		sl->T_inf_df  = ( w / 2.0 ) ;
+		sl->T_inf_df *= ( 1. + 2. * cos( theta ) ) / ( 1. - pow( ( 2.*gamma*cos( theta ) ), 2 ) )  ;
+		sl->T_inf_df *= ( sl->T_inf_ff - sl->t_0 ) ;
 
 	}
 
-	/*hemispherical hemispherical transmittance*/
-	sl->t_ff  = sl->T_inf_ff ;
-	sl->t_ff *= ( 1. - pow( sl->R_inf_ff, 2 ) ) ;
-	sl->t_ff /= ( 1. - pow( sl->R_inf_ff*sl->T_inf_ff, 2 ) );
+	}
 
-	/*hemispherical-hemispherical reflectance*/
-	sl->p_ff  = sl->R_inf_ff ;
-	sl->p_ff *= ( 1. - pow( sl->T_inf_ff, 2 ) ) ;
-	sl->p_ff /= ( 1. - pow( sl->T_inf_ff*sl->R_inf_ff, 2 ) )  ;
+	if( ( 1. - pow( sl->R_inf_ff*sl->T_inf_ff, 2 ) ) == 0.0 ){
+
+		/*
+		Conservative scattering, omega == 1. gamma is zero, and with it
+		the eigenvalue lambda = 2 k gamma, so R_inf_ff and T_inf_ff are
+		both exactly 1 and the adding denominator vanishes in both of
+		the expressions below. The limits are the classical conservative
+		two-stream pair, reached by expanding R_inf_ff -> 1 - lambda/a
+		and T_inf_ff -> 1 - lambda L in the eigenvalue:
+
+		  t_ff -> 1/(1 + a L),    p_ff -> a L/(1 + a L)
+
+		i.e. 1/(1+kL) and kL/(1+kL) in the published branch, where
+		a = k(2-w) is k at omega = 1. They satisfy t_ff + p_ff = 1, as
+		a non-absorbing layer must, and with the T_inf_df and R_inf_df
+		above they give p_df + t_df + t_0 = 1 to the last bit.
+		*/
+		sl->t_ff = 1.0 / ( 1.0 + a*L ) ;
+		sl->p_ff = a*L / ( 1.0 + a*L ) ;
+
+	}else{
+
+		/*hemispherical hemispherical transmittance*/
+		sl->t_ff  = sl->T_inf_ff ;
+		sl->t_ff *= ( 1. - pow( sl->R_inf_ff, 2 ) ) ;
+		sl->t_ff /= ( 1. - pow( sl->R_inf_ff*sl->T_inf_ff, 2 ) );
+
+		/*hemispherical-hemispherical reflectance*/
+		sl->p_ff  = sl->R_inf_ff ;
+		sl->p_ff *= ( 1. - pow( sl->T_inf_ff, 2 ) ) ;
+		sl->p_ff /= ( 1. - pow( sl->T_inf_ff*sl->R_inf_ff, 2 ) )  ;
+
+	}
 
 	/*directional hemispherical transmittance*/
 	sl->t_df = sl->T_inf_df - sl->p_ff \

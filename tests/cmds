@@ -299,11 +299,20 @@ rt-vs-r             basic.in    -rt_crown_path -r 3.0 -LAI 1.0
 # omega = 0 divided by zero in the phase function asymmetry and the NaN came
 # out as the BRF. Perfectly black leaves are a legitimate structure-only run.
 blackleaf           basic.in    -LAI 2.0 -refl_leaf 0 -trans_leaf 0 -alb_soil 0.3
-# The other end of the same axis, and still broken: two removable singularities
-# in gortt_two_stream that are not removed, so both of these print -nan. They
-# are pinned the way badanth is -- as KNOWN-BAD behaviour, so that fixing them
-# shows up as a reviewable change to these goldens rather than passing
-# silently. OPEN-QUESTIONS.md #13 has the limits. nadirsun.in is basic.in's
-# geometry with the sun overhead, which is what puts 2*gamma*mu_i on 1.
-badtwostream-gamma  nadirsun.in -LAI 3.0 -refl_leaf 0.45 -trans_leaf 0.30
-badtwostream-omega1 nadirsun.in -LAI 3.0 -refl_leaf 0.5 -trans_leaf 0.5
+# The other end of the same axis: the three removable singularities in
+# gortt_two_stream, which used to print -nan and are now evaluated at their
+# limits.  nadirsun.in is basic.in's geometry with the sun overhead, which is
+# what puts 2*gamma*mu_i on 1.  The first two were pinned as KNOWN-BAD until
+# 2026-09; see OPEN-QUESTIONS.md #13 for the limits and the derivations.
+#
+#   -gamma      2*gamma*mu_i == 1 in T_inf_df; omega = 0.75 does it
+#   -omega1     omega == 1, conservative scattering: R_inf_ff = T_inf_ff = 1
+#   -upscatter  the same line as -gamma, reached through the general-beta
+#               branch instead (det == 0).  rl == tl makes -rt_upscatter
+#               inert, so this one must equal twostream-upscatter-off, which
+#               is the published branch at the same canopy -- two limits
+#               derived separately, agreeing to the last bit.
+twostream-gamma     nadirsun.in -LAI 3.0 -refl_leaf 0.45 -trans_leaf 0.30
+twostream-omega1    nadirsun.in -LAI 3.0 -refl_leaf 0.5 -trans_leaf 0.5
+twostream-upscatter-off nadirsun.in -LAI 3.0 -refl_leaf 0.375 -trans_leaf 0.375
+twostream-upscatter nadirsun.in -LAI 3.0 -refl_leaf 0.375 -trans_leaf 0.375 -rt_upscatter

@@ -94,16 +94,20 @@ def tile_ghosts(scene, crowns):
     return all_crowns
 
 
-def write_crowns(path, scene, crowns):
+def write_crowns(path, scene, crowns, half_width=None):
     """
     crowns.data: "X_DIM Y_DIM NOSTANDS" then one row per crown,
     "type x y z Exy Ez density LAD leaf_size DBH" (read_canopy_data,
     flight.c:3562).  type 1 is an ellipsoid with semi-axes (Exy, Exy, Ez).
     The LAD and leaf_size columns are read and then discarded by FLIGHT --
     the global values win -- so they are written as zeros.
+
+    half_width overrides the scene's own box, which run_crown_image.py needs:
+    a single crown in the full 46 m box would be a handful of pixels across.
     """
+    hw = scene.half_width if half_width is None else half_width
     with open(path, "w") as fp:
-        fp.write("%.6f %.6f %d\n" % (scene.half_width, scene.half_width, len(crowns)))
+        fp.write("%.6f %.6f %d\n" % (hw, hw, len(crowns)))
         for x, y, z in crowns:
             fp.write("1 %.6f %.6f %.6f %.6f %.6f %.6f 0 %.4f 0.0\n"
                      % (x, y, z, scene.r, scene.b, scene.favd, config.LEAF_SIZE))
@@ -114,7 +118,8 @@ def write_crowns(path, scene, crowns):
 # ---------------------------------------------------------------------------
 
 def write_in_flight(path, scene, mode, sza, vza, raa, nbands,
-                    nphotons=10000, outname="out", leaf_size=None):
+                    nphotons=10000, outname="out", leaf_size=None,
+                    output_mode=0):
     """
     The 23 positional lines of in_flight.data (read_struct_data, flight.c:3777).
     Line order *is* the schema, so this is written out in full rather than
@@ -124,6 +129,11 @@ def write_in_flight(path, scene, mode, sza, vza, raa, nbands,
     TOTAL_LAI is negative so the per-crown density column of crowns.data is
     used.  AER_OPT is negative, which makes diffuse_est() return exactly zero
     (flight.c:2180) and the illumination purely direct -- gortt's -diffuse 0.
+
+    output_mode is FLIGHT's OUTPUT_MODE: 0 writes no image, 1 an ENVI BIP
+    binary and 2 that plus a floating-point text image (flight.c:7262).  It is
+    0 for every run that only wants the scene-average spectrum; 2 is what
+    run_crown_image.py uses to get the per-pixel crown brightness.
     """
     lad = " ".join("%.6f" % v for v in config.SPHERICAL_LAD)
     lines = [
@@ -149,7 +159,7 @@ def write_in_flight(path, scene, mode, sza, vza, raa, nbands,
         "0",                                            # 20 UNDERSTORY_HT
         "0.05",                                         # 21 UNDERSTORY_LF_SIZE
         outname,                                        # 22 OUTPUT_FILENAME
-        "0",                                            # 23 OUTPUT_MODE (no image)
+        "%d" % output_mode,                             # 23 OUTPUT_MODE
     ]
     with open(path, "w") as fp:
         fp.write("\n".join(lines) + "\n")

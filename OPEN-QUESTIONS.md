@@ -387,6 +387,45 @@ exactly, by construction, whatever `maxcrowns` is.
 
 ---
 
+## 13. Two removable singularities in `gortt_two_stream` print `-nan`
+
+Both are in the published path, both are reachable from the command line, and both
+have a closed-form limit. Found while reconstructing the derivation of eqs (8)-(11)
+(`latex_notes/two_stream_derivation.tex`), not by fuzzing.
+
+**`2*gamma*mu_i == 1` in `T_inf_df`.** The factor `1/(1-(2 gamma mu_i)^2)` is a
+removable singularity of the full expression — `T_inf_ff - t_0` vanishes on the same
+line — but it is not removed:
+
+```sh
+echo -en "1 1 800\n0 0 0 0\n" | ./gortt -LAI 3.0 -refl_leaf 0.45 -trans_leaf 0.30
+# -nan;  omega = 0.75, nadir sun, so 2 gamma mu_i = 1 to the last bit
+echo -en "1 1 800\n0 0 0 0\n" | ./gortt -LAI 3.0 -refl_leaf 0.45 -trans_leaf 0.3000000000001
+# 0.210923
+```
+
+It is a knife edge rather than a bad region: 1e-11 off the line the value is right to
+nine significant figures, so the conditioning is fine and only the exact hit fails.
+But `omega = 0.75` with an overhead sun is an unremarkable thing to ask for.
+
+**`omega == 1` in eqs (8)-(9).** `gamma = 0` makes `R_inf_ff = 1`, `T_inf_ff = 1` and
+the denominator `1 - (T_inf_ff R_inf_ff)^2` exactly zero:
+
+```sh
+echo -en "1 1 800\n0 0 0 0\n" | ./gortt -LAI 3.0 -refl_leaf 0.5 -trans_leaf 0.5
+# -nan
+```
+
+The conservative-scattering limit is `rho_ff -> kL/(1+kL)` and `t_ff -> 1/(1+kL)`, and
+in it `rho_df + t_df + t_0 = 1` exactly.
+
+Left alone deliberately: both are one-line guards, but they move the published path,
+so they want their own commit with its own `make bless` rather than riding along with
+the crown BRDF work. `blackleaf` is the precedent for the opposite end of the same
+axis — `omega = 0` used to produce a NaN too, and was fixed and pinned.
+
+---
+
 ## The RT terms use the primed zenith where the paper writes the real one
 
 `gortt_rt_init` evaluates `t_0`, `R_inf_df` and `T_inf_df` at `g->sza_prime`, the

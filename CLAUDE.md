@@ -319,8 +319,19 @@ the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
 evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in. Read it
 before starting the lidar work.
 
-**`CROWN-BRDF-NEXT.md` is a handover, and is the one to read before touching
-`gortt_rt_init` or `gortt_crown_reflectance`.** `-rt_crown_path` (v3.1) fixed the crown's
+**`CROWN-BRDF-INVESTIGATION.md` is the record of the crown BRDF work and is the one to
+read before touching `gortt_rt_init`, `gortt_crown_reflectance` or `gortt_kuusk`.** It
+supersedes `CROWN-BRDF-NEXT.md`, which was the handover that set the work up. Section 3
+of that handover — measure a single crown against FLIGHT before writing model code — was
+done (`flight_compare/run_crown_image.py`) and is decisive: crowns are strongly
+limb-darkened when optically thin and uniform when thick, which rules out putting a BRDF
+on the crown envelope; and the sunlit crown is close to Lambertian *except* for a hotspot
+spike GORT under-predicts by up to 1.8x and a forward-scatter limb it does not have at
+all. Its recommended fix, `-rt_crown_brdf`, was implemented and **makes the FLIGHT
+agreement worse** — it is kept off by default for the negative result, as
+`-rt_recollision` is. The next target is the hotspot, not the phase function.
+
+The superseded handover: `-rt_crown_path` (v3.1) fixed the crown's
 optical *depth*; what is left is that `rho'_df` is a directional-hemispherical reflectance
 from a plane-parallel slab being used where a bidirectional one is needed. That file has the
 physics, the measurement to make before writing any model code, the recommended route (keep it
@@ -332,5 +343,9 @@ afterwards.
 
 Ni, W. et al. (1999), *An analytical hybrid GORT model for bidirectional reflectance over
 discontinuous plant canopies*, IEEE TGRS 37(2), 987-999 — the equations the C code implements.
+Ni, W. et al. (1997), *Transmission of solar radiation in boreal conifer forests: measurements
+and models*, JGR 102(D24), 29555-29566 — the source of the default direct beam fraction
+`mu/(mu+0.09)` (its eq. 5, fitted to BOREAS clear-day measurements); `-rt_fd_paper` selects the
+`mu/(mu+0.05)` of Ni et al. (1999) §IV instead, and `-diffuse` overrides both.
 Quaife, T. et al. (2008), RSE 112(4), 1347-1364 — the "new style" parameterisation (HB/BR/PCC)
 and the Q08 probability approximation. Price, J.C. (1990) — the soil EOFs.

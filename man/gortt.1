@@ -455,6 +455,31 @@ that they carry every scattering order rather than the two\-stream's.  Requires
 .BR \-rt_crown_path :
 the recollision probability describes a crown, so it can only rescale a crown.
 .TP
+.B \-rt_upscatter
+Use the two-stream upscatter parameter
+.I beta
+= 1/2 + (rl\-tl)/(8w) instead of the 1/2 that eqs (8)\-(11) assume implicitly.
+Identically 1/2 when the leaf reflects and transmits equally, so it does nothing
+in the near infrared and is in practice a red\-band option.  Not to be confused
+with
+.BR \-beta ,
+which is the geometric\-optical mutual shadowing weight and a different quantity
+entirely.
+.TP
+.B \-rt_crown_brdf
+Give
+.I rho'_df
+a direction: single scattering exactly, multiple scattering isotropically, and
+the isotropic part chosen so that the hemispherical integral is still
+.IR rho_df ,
+so that no energy is created.  Requires
+.BR \-rt_crown_path .
+Measured against FLIGHT it is worse than
+.B \-rt_crown_path
+alone; it is kept for that negative result.  See
+.I CROWN\-BRDF\-INVESTIGATION.md
+in the source distribution.
+.TP
 .B \-rt_bg_coupling
 Let the sunlit and shaded background exchange radiation with the canopy above,
 i.e. give
@@ -473,7 +498,7 @@ gortt uses \(*m/(\(*m+0.09).
 overrides both.
 .TP
 .B \-rt_all
-All five of the above.
+All seven of the above.
 .SS Output and mode switches, continued
 .TP
 .BI \-diffuse " frac"
@@ -833,6 +858,14 @@ in the source distribution.
 and
 .I tests/README.md
 in the source distribution.
+.
+.PP
+Ni, W., Li, X., Woodcock, C. E., Roujean, J.\-L. and Davis, R. E. (1997).
+.I "Transmission of solar radiation in boreal conifer forests: measurements
+.I "and models."
+Journal of Geophysical Research, 102(D24), 29555\-29566.
+Equation 5 is the default direct beam fraction, see
+.BR \-rt_fd_paper .
 .
 .PP
 Ni, W., Li, X., Woodcock, C. E., Caetano, M. R. and Strahler, A. H. (1999).

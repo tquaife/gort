@@ -290,14 +290,90 @@ FLIGHT's mean:
 |---|---|---|---|---|---|---|
 | baseline | +0.2% | 14.9% | −7.4% | 18.6% | −9.5% | 18.4% |
 | **crown-path** | +1.0% | 15.2% | **+1.7%** | **16.7%** | **+2.5%** | 13.9% |
+| upscatter | +1.2% | 15.1% | −7.4% | 18.6% | −9.5% | 18.4% |
+| crown-path-up | +1.9% | 15.5% | +1.7% | 16.7% | +2.5% | 13.9% |
+| crown-path-bg | +1.2% | 15.2% | +5.9% | 17.8% | +9.4% | 16.4% |
 | squeeze-path | +1.5% | 15.9% | +6.6% | 19.3% | +1.6% | **13.3%** |
 | recollision | +1.1% | 16.5% | +6.4% | 20.3% | +4.2% | 14.8% |
+| crown-brdf | +2.7% | 19.6% | +3.1% | 21.9% | +4.0% | 18.6% |
 | bg-coupling | +0.5% | 14.8% | −4.0% | 18.0% | −4.3% | 17.4% |
 | crown-crown | +0.5% | 14.9% | +13.7% | 37.4% | −0.9% | 22.1% |
-| all | +1.7% | 16.6% | +43.4% | 63.5% | +25.5% | 31.9% |
+| all | +3.2% | 20.8% | +44.8% | 68.0% | +26.9% | 36.4% |
 
 **`-rt_crown_path` is the one that works.** NIR bias −7.4% → +1.7% with the RMSD
 down as well, which a rescaling could not do — it is correcting a shape error.
+
+### The upscatter parameter: right band, right direction, wrong aggregate
+
+`-rt_upscatter` replaces the `beta = 1/2` that eqs (8)-(11) assume implicitly
+with `beta = 1/2 + (rl - tl)/(8w)`, the standard canopy value for the spherical
+leaf angle distribution `gortt` is hardwired to. It is the only option here that
+is aimed at the red, and it is **exactly inert in the near infrared** — `rl = tl`
+there, so `beta` is 1/2 and the near-infrared columns above are identical to the
+rows they sit under, to 4e-16.
+
+On the 12-scene aggregate it is a small net loss, 14.9% to 15.1%. That number is
+misleading, and the breakdown says why:
+
+| red RMSD, subset | baseline | upscatter | crown-path | crown-path-up |
+|---|---|---|---|---|
+| all 12 | 14.87% | 15.12% | 15.23% | 15.55% |
+| less `dense-low-prolate` | 9.66% | 9.63% | 9.85% | 9.90% |
+| less all three `dense-low` | 7.04% | **6.54%** | 6.72% | **6.23%** |
+
+**Nine of the twelve scenes improve** (median −0.26 points). The three that do not
+are exactly the three `dense-low` canopies, and they carry the aggregate because
+they are the darkest scenes in the red and so have the smallest denominator —
+`dense-low-prolate` alone is at 41% RMSD before anything is switched on.
+
+The reason is not obscure, and it joins up with the single-crown measurement in
+`CROWN-BRDF-INVESTIGATION.md`. A larger `beta` sends more of what is scattered
+backwards, so crowns get brighter. Measured against FLIGHT with an isolated crown
+over a black soil, GORT's red sunlit-crown signature is **3.4x too bright** for
+`dense-low-prolate` and 1.2x for `dense-low-sphere`, and **0.35 to 0.46 times too
+dark** for every scene with an optically larger crown. Brightening helps the
+second group and hurts the first, which is precisely the split in the table.
+
+So the upscatter parameter is doing what the derivation says it should — the
+bias moves toward zero nearly everywhere, −4.48% to −3.60% over the nine
+well-behaved scenes, and −3.98% to −3.06% on top of `-rt_crown_path` — and the
+aggregate is being set by a pre-existing red overestimate in optically thin
+crowns that has nothing to do with it. Fixing that is a separate problem, and
+until it is fixed this option cannot show a clean win on this scene matrix.
+
+`crown-path-up` is the two together. They do stack, unlike `crown-path-bg` below:
+they act on different bands, so the near infrared is `crown-path`'s number
+unchanged and the red is `upscatter`'s.
+
+### The two that work do not stack
+
+`crown-path-bg` is `-rt_crown_path -rt_bg_coupling`, the only two options that
+each improve on the baseline, run together. It is **worse than `-rt_crown_path`
+alone** — NIR RMSD 16.7% → 17.8%, and 13.9% → 16.4% in the sparse scenes, which
+is where both of them do their work.
+
+The reason is not an interaction. In near-infrared bias the two corrections are
+very nearly additive:
+
+| subset | baseline | +crown_path | +bg_coupling | both | sum of the two | excess |
+|---|---|---|---|---|---|---|
+| sparse | −9.5 | +2.5 | −4.3 | +9.4 | +7.7 | +1.7 |
+| dense | −5.7 | +1.0 | −3.8 | +3.1 | +2.9 | +0.2 |
+| all | −7.4 | +1.7 | −4.0 | +5.9 | +5.1 | +0.9 |
+
+They add to within 2 points of independence — and that is the problem. The
+sparse deficit is 9.5 points and the two corrections between them supply 17, so
+applying both overshoots by as much as the baseline undershot. They are not two
+complementary fixes; they are two descriptions of the same missing brightness,
+and `-rt_crown_path` is the better of the two accounts of it.
+
+Worth knowing for anything built on `-rt_crown_path`: its success in the sparse
+near infrared is not evidence that the deficit is purely a crown optical depth
+problem, because a background–canopy coupling term with no crown geometry in it
+at all recovers half the same deficit.
+
+The variant is kept for that negative result, as `crown-brdf` and
+`-rt_recollision` are.
 In the sparse scenes, −9.5% → +2.5% and the RMSD 18.4% → 13.9%. Red moves by
 0.8 points. And it is near-inert where the paper *was* validated: on SOBS it
 moves the Fig. 7b sunlit-crown signature from 0.470 to 0.474.
@@ -332,6 +408,29 @@ anisotropic LUT is never read), and Monte Carlo noise of a few tenths of a
 percent on the averaged BRFs here. The scenes are also idealised in both
 models: no trunks, no understory, no senescent foliage, a Lambertian soil and
 direct-beam illumination only.
+
+## Imaging a single crown
+
+`run_crown_image.py` is a different kind of comparison from the rest of this directory: it
+does not compare BRFs at all, it measures what a *crown* looks like so that the crown
+submodel has a target. One crown at the centre of a black scene, FLIGHT in reverse mode
+with `OUTPUT_MODE 2` (the floating-point image), and the per-pixel radiance factor binned
+against the impact parameter `u` of the view ray after the ellipsoid-to-sphere transform —
+the same `u` as the chord average in `gortt_crown_reflectance`. `plot_crown_image.py` draws
+it and `plot_crown_image.py --check` verifies the machinery.
+
+Two traps, both guarded in the script:
+
+* **FLIGHT is periodic**, so a ray that leaves a wall comes back on the opposite one at the
+  same height and can meet the crown a second time, whenever `hw < r + 2b tan(vza)`. In a
+  fixed 12 m box that put a clean second image of the crown out at `u = 2.5` for the prolate
+  crowns at 60 degrees. The box is therefore sized per view zenith, which also keeps the
+  cost down, since it goes as `hw^2`.
+* **The mapping from pixel to `u` is analytic**, so it can be asserted on: every run checks
+  that no lit pixel falls outside the predicted silhouette, with a 0.01 tolerance for rays
+  that graze the limb. That check is what caught the wrapping.
+
+What it found, and what came of it, is in `CROWN-BRDF-INVESTIGATION.md`.
 
 ## Scope
 
@@ -373,6 +472,7 @@ half a second of the 4.5. Avoiding it would mean editing FLIGHT.
 | `plot_brdf.py`, `plot_lidar.py` | the figures; write `figs/*.png` and the stats CSVs |
 | `make_html.py` | `index.html` |
 | `run_flight_single.py` | single-scattering and black-soil FLIGHT diagnostics for the `-rt_*` options |
+| `run_crown_image.py`, `plot_crown_image.py` | the single-crown imaging measurement — see below |
 | `variants/` | one comparison page per `-rt_*` option, plus an index |
 | `results/` | tidy CSVs — **not tracked**, see below |
 | `figs/` | the figures |

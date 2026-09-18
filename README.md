@@ -102,6 +102,8 @@ I have only ever tried installing on Linux platforms. As long as you have the st
 
 ## References
 
+Ni, W., Li, X., Woodcock, C. E., Roujean, J.-L., & Davis, R. E. (1997). Transmission of solar radiation in boreal conifer forests: Measurements and models. Journal of Geophysical Research, 102(D24), 29555-29566.
+
 Ni, W., Li, X., Woodcock, C. E., Caetano, M. R., & Strahler, A. H. (1999). An analytical hybrid GORT model for bidirectional reflectance over discontinuous plant canopies. IEEE Transactions on Geoscience and Remote Sensing, 37(2), 987-999.
 
 Ni-Meister, W., Jupp, D. L. B., & Dubayah, R. (2001). Modeling lidar waveforms in heterogeneous and discrete canopies. IEEE Transactions on Geoscience and Remote Sensing, 39(9), 1943-1958.

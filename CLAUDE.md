@@ -332,5 +332,9 @@ afterwards.
 
 Ni, W. et al. (1999), *An analytical hybrid GORT model for bidirectional reflectance over
 discontinuous plant canopies*, IEEE TGRS 37(2), 987-999 — the equations the C code implements.
+Ni, W. et al. (1997), *Transmission of solar radiation in boreal conifer forests: measurements
+and models*, JGR 102(D24), 29555-29566 — the source of the default direct beam fraction
+`mu/(mu+0.09)` (its eq. 5, fitted to BOREAS clear-day measurements); `-rt_fd_paper` selects the
+`mu/(mu+0.05)` of Ni et al. (1999) §IV instead, and `-diffuse` overrides both.
 Quaife, T. et al. (2008), RSE 112(4), 1347-1364 — the "new style" parameterisation (HB/BR/PCC)
 and the Q08 probability approximation. Price, J.C. (1990) — the soil EOFs.

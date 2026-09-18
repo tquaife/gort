@@ -27,7 +27,7 @@ should be its own commit (with `-ffp-contract=off`).
 ## Testing
 
 ```bash
-make test       # 97 golden-file cases, ~20 s; or: cd tests && ./run.sh
+make test       # 107 golden-file cases, ~20 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -200,7 +200,10 @@ have their own resolution:
 | `es` | `gortt_get_es` | closed form outside `z_h ± r`, `NQ_GL` Gauss-Legendre points between |
 
 All three `NQ_*` are in `include/gortt.h` beside `NH_OVERLAP`, and all are multiplied by
-`p->nquad` (`-nquad`, default 1) so convergence can be shown without a recompile. **The
+`p->nquad` (`-nquad`, default 1) so convergence can be shown without a recompile.
+(`NQ_BRDF_PHI` sits with them but is not one of these: it is the azimuth rule for
+`-rt_crown_brdf`'s hemisphere integral, it follows `-nquad` like the rest, and because it
+never touches the gap probabilities the `-W` output cannot move with it.) **The
 regression suite pins the decoupling**: `nlayers-noop-{a,b,c}` are the same BRF run at 15, 31
 and 120 layers and their goldens must stay byte-identical to each other, and
 `probs-nlayers.out` must stay byte-identical to `probs.out`.
@@ -253,9 +256,12 @@ exclusive in the parser: `-alb_soil` (a constant), `-soil_spectra <file>` (resam
 grid by `gortt_read_soil_lut`, then interpolated), and otherwise the Price EOFs with the `-rsl*`
 weights.
 
-**The `-rt_*` options are experimental and all default to off.** Ni et al. (1999)
-section V says the model is validated over dense forests and defers three things
-that matter as a canopy opens up; each option switches one on. They live in `p`
+**The `-rt_*` options are experimental and all default to off.** Most of them come
+from Ni et al. (1999) section V, which says the model is validated over dense
+forests and defers three things that matter as a canopy opens up. Two do not:
+`-rt_crown_brdf` comes from the single-crown measurement
+(`CROWN-BRDF-INVESTIGATION.md`) and `-rt_upscatter` from the closure underneath
+eqs (8)-(11) rather than from anything the paper defers. They live in `p`
 (group 1, beside `use_user_beta`), not in `c`, because `gortt_rt_init` and
 `gortt_rsurf` never see a `gortt_control` and threading one through would touch
 five signatures in the documented `const` chain. In the argv if-chain they sit
@@ -278,6 +284,29 @@ reproduces the published Fig. 7 component signatures with it. Do not "fix" it.
 (`elai/(1-K_open)`) are the alternatives `-rt_crown_path` can select, and exist
 only for that.
 
+**`-rt_upscatter` is the only option that moves the red band, and `beta` means two
+different things.** Eqs (8)-(11) fix the two-stream upscatter parameter at 1/2
+implicitly — there is no `beta` in the published algebra, because `rt->gamma =
+sqrt(1-w)` *is* that assumption: the closure has `a = 2k[1-w(1-beta)]` and
+`b = 2k w beta`, whose eigenvalue collapses to `2k sqrt(1-w)` only at `beta = 1/2`.
+`gortt_two_stream` therefore branches: with `-rt_upscatter` it computes `lambda`
+directly from `rt->beta_up = 1/2 + (rl-tl)/(8w)` and takes `R_inf_ff` as
+`b/(a+lambda)` rather than the algebraically equal `(a-lambda)/b`, which is 0/0 for
+a black leaf. **Only the four semi-infinite quantities change** — the adding half of
+the function is generic in them, which is what `latex_notes/two_stream_derivation.tex`
+establishes. The beam upscatter is taken equal to the diffuse one; the proper one is
+direction-dependent (Sellers 1985) and that is a known approximation, not a result.
+
+`rt->beta_up` is **not** `p->beta`, which is Li & Strahler's weight between uniform
+and random crown-centre heights in the geometric-optical mutual shadowing (`-beta`,
+OPEN-QUESTIONS #9). Two different quantities from two different papers with the same
+Greek letter, in two different halves of the model.
+
+The option is identically inert when `rl == tl`, so it does nothing in the near
+infrared of the FLIGHT comparison: `rt-upscatter-rteq{,-off}` pin that pair, which
+agree to 4e-16 against 6e-2 when `rl != tl`. It cannot be a byte-identical control
+because `sqrt((1-w/2)^2-(w/2)^2)` is not `sqrt(1-w)` in floating point.
+
 **Known broken/incomplete paths:**
 * `-diffuse <frac>` sets `p->user_fd = 1 - frac` and is undocumented in `-u`. Without it,
   `g->fd` is derived per-angle from the solar zenith following Ni et al. (1999). TODO.md flags
@@ -286,6 +315,13 @@ only for that.
   spelling is rejected. Pinned by the `badanth` test case.
 * The leaf angle distribution is effectively hardwired: `params.lad = LAD_05` and
   `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else.
+* **Two removable singularities in `gortt_two_stream` print `-nan`**, both in the published
+  path and both reachable from the command line: `2*gamma*mu_i == 1` in `T_inf_df` (e.g.
+  `-refl_leaf 0.45 -trans_leaf 0.30` with an overhead sun) and `omega == 1` in eqs (8)-(9)
+  (`-refl_leaf 0.5 -trans_leaf 0.5`). Both have closed-form limits; OPEN-QUESTIONS #13 has
+  them. Pinned as known-bad by `badtwostream-{gamma,omega1}` the way `badanth` is, so a fix
+  shows up as a reviewable golden change. Not fixed in the crown BRDF work because the fix
+  moves the published path and wants its own `make bless`.
 
 **The geometric-optical kernels were checked against a Monte Carlo** (`KC-INVESTIGATION.md`),
 which led to these changes:
@@ -315,9 +351,10 @@ decision, not a tidy-up.
 
 `TODO.md` tracks the intended direction and what is already done. `OPEN-QUESTIONS.md` collects
 the things found during the tidy-up that were deliberately left alone — β in `gortt_kc`,
-the 90° endpoint, the hardwired leaf angle distribution, and the `p->k`
-evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in. Read it
-before starting the lidar work.
+the 90° endpoint, the hardwired leaf angle distribution, the `p->k`
+evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in, and
+(#13) the two `-nan` singularities in `gortt_two_stream`. Read it before starting the lidar
+work.
 
 **`CROWN-BRDF-INVESTIGATION.md` is the record of the crown BRDF work and is the one to
 read before touching `gortt_rt_init`, `gortt_crown_reflectance` or `gortt_kuusk`.** It
@@ -331,13 +368,21 @@ all. Its recommended fix, `-rt_crown_brdf`, was implemented and **makes the FLIG
 agreement worse** — it is kept off by default for the negative result, as
 `-rt_recollision` is. The next target is the hotspot, not the phase function.
 
-The superseded handover: `-rt_crown_path` (v3.1) fixed the crown's
-optical *depth*; what is left is that `rho'_df` is a directional-hemispherical reflectance
-from a plane-parallel slab being used where a bidirectional one is needed. That file has the
-physics, the measurement to make before writing any model code, the recommended route (keep it
-a volume problem, do not put a BRDF on the crown envelope), and the things already tried and
-ruled out. `KC-INVESTIGATION.md` is the precedent for what the record should look like
-afterwards.
+`CROWN-BRDF-NEXT.md` is still worth reading for how it framed the problem — `-rt_crown_path`
+(v3.1) fixed the crown's optical *depth*, leaving `rho'_df` a directional-hemispherical
+reflectance from a plane-parallel slab where a bidirectional one is needed — and for the
+order it put the work in, which was the right order. Its two candidate routes are both now
+closed: Option B by the measurement, Option A by having been built and scored.
+`KC-INVESTIGATION.md` is the precedent both records follow.
+
+**`latex_notes/` is untracked** (`.gitignore` excludes the whole directory) but is where the
+physics is written up, and a later paper is meant to come out of it:
+`crown_brdf_notes.tex` is this work with the equations and four figures,
+`two_stream_derivation.tex` reconstructs eqs (8)-(11) — which Ni et al. (1999) defers to a
+reference that was never published — and establishes that they are exact adding relations in
+the four semi-infinite quantities, `crown_path_notes.tex` is v3.1, `lidar_notes.tex` the
+lidar. `references.bib` and `paper_summaries.tex` index everything in `papers/`. Each `.tex`
+has a `*_figs.py` beside it that regenerates its figures from the `flight_compare` CSVs.
 
 ## Reference
 

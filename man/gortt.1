@@ -455,6 +455,20 @@ that they carry every scattering order rather than the two\-stream's.  Requires
 .BR \-rt_crown_path :
 the recollision probability describes a crown, so it can only rescale a crown.
 .TP
+.B \-rt_crown_brdf
+Give
+.I rho'_df
+a direction: single scattering exactly, multiple scattering isotropically, and
+the isotropic part chosen so that the hemispherical integral is still
+.IR rho_df ,
+so that no energy is created.  Requires
+.BR \-rt_crown_path .
+Measured against FLIGHT it is worse than
+.B \-rt_crown_path
+alone; it is kept for that negative result.  See
+.I CROWN\-BRDF\-INVESTIGATION.md
+in the source distribution.
+.TP
 .B \-rt_bg_coupling
 Let the sunlit and shaded background exchange radiation with the canopy above,
 i.e. give
@@ -473,7 +487,7 @@ gortt uses \(*m/(\(*m+0.09).
 overrides both.
 .TP
 .B \-rt_all
-All five of the above.
+All six of the above.
 .SS Output and mode switches, continued
 .TP
 .BI \-diffuse " frac"

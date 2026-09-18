@@ -333,6 +333,29 @@ percent on the averaged BRFs here. The scenes are also idealised in both
 models: no trunks, no understory, no senescent foliage, a Lambertian soil and
 direct-beam illumination only.
 
+## Imaging a single crown
+
+`run_crown_image.py` is a different kind of comparison from the rest of this directory: it
+does not compare BRFs at all, it measures what a *crown* looks like so that the crown
+submodel has a target. One crown at the centre of a black scene, FLIGHT in reverse mode
+with `OUTPUT_MODE 2` (the floating-point image), and the per-pixel radiance factor binned
+against the impact parameter `u` of the view ray after the ellipsoid-to-sphere transform —
+the same `u` as the chord average in `gortt_crown_reflectance`. `plot_crown_image.py` draws
+it and `plot_crown_image.py --check` verifies the machinery.
+
+Two traps, both guarded in the script:
+
+* **FLIGHT is periodic**, so a ray that leaves a wall comes back on the opposite one at the
+  same height and can meet the crown a second time, whenever `hw < r + 2b tan(vza)`. In a
+  fixed 12 m box that put a clean second image of the crown out at `u = 2.5` for the prolate
+  crowns at 60 degrees. The box is therefore sized per view zenith, which also keeps the
+  cost down, since it goes as `hw^2`.
+* **The mapping from pixel to `u` is analytic**, so it can be asserted on: every run checks
+  that no lit pixel falls outside the predicted silhouette, with a 0.01 tolerance for rays
+  that graze the limb. That check is what caught the wrapping.
+
+What it found, and what came of it, is in `CROWN-BRDF-INVESTIGATION.md`.
+
 ## Scope
 
 Deliberately **not** compared: the areal proportions of the scene components
@@ -373,6 +396,7 @@ half a second of the 4.5. Avoiding it would mean editing FLIGHT.
 | `plot_brdf.py`, `plot_lidar.py` | the figures; write `figs/*.png` and the stats CSVs |
 | `make_html.py` | `index.html` |
 | `run_flight_single.py` | single-scattering and black-soil FLIGHT diagnostics for the `-rt_*` options |
+| `run_crown_image.py`, `plot_crown_image.py` | the single-crown imaging measurement — see below |
 | `variants/` | one comparison page per `-rt_*` option, plus an index |
 | `results/` | tidy CSVs — **not tracked**, see below |
 | `figs/` | the figures |

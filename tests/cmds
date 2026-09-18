@@ -219,10 +219,23 @@ rt-crown-path       basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path
 rt-recollision      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_recollision
 rt-bg-coupling      basic.in    -LAI 1.0 -PCC 0.2 -rt_bg_coupling
 rt-crown-crown      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_crown
+rt-crown-brdf       basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_crown_brdf
 rt-all              basic.in    -LAI 1.0 -PCC 0.2 -rt_all
+# -rt_crown_brdf only redistributes what omega scatters, so with black leaves
+# there is nothing to redistribute: R_ss is proportional to omega and rho_df is
+# zero, and the option has to be exactly inert. rt-crown-brdf-black.out must
+# therefore stay byte-identical to rt-crown-path-black.out. That is this
+# option's control, the way rt-path-scene is -rt_crown_path's, and it is what
+# would catch the normalisation dividing by a zero rho_ss.
+rt-crown-path-black basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -refl_leaf 0 -trans_leaf 0
+rt-crown-brdf-black basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_crown_brdf -refl_leaf 0 -trans_leaf 0
 # the chord average follows -nquad like every other quadrature in the model;
 # NQ_GL is already converged, so this must agree with rt-crown-path closely
 rt-crown-path-nquad basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -nquad 4
+# the crown BRDF adds a hemisphere quadrature -- NQ_BRDF_PHI in azimuth on top
+# of the existing Gauss-Legendre rule in zenith -- and it follows -nquad too,
+# so this must agree with rt-crown-brdf closely for the same reason
+rt-crown-brdf-nquad basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_crown_brdf -nquad 4
 # -rt_bg_coupling feeds s->ztrans as well as Z, so the energy balance has to
 # stay closed with it on
 rt-energy           basic.in    -LAI 1.0 -PCC 0.2 -rt_all -energy
@@ -230,9 +243,18 @@ rt-energy           basic.in    -LAI 1.0 -PCC 0.2 -rt_all -energy
 badrtpath           -           -rt_path squeeze
 badrtpatharg        -           -rt_crown_path -rt_path banana
 badrtrecollision    -           -rt_recollision
+badrtcrownbrdf      -           -rt_crown_brdf
 # -rt_* must not be swallowed by -r, which is matched on two characters at the
 # bottom of the if-chain and would also eat the next word as a crown radius
 rt-vs-r             basic.in    -rt_crown_path -r 3.0 -LAI 1.0
 # omega = 0 divided by zero in the phase function asymmetry and the NaN came
 # out as the BRF. Perfectly black leaves are a legitimate structure-only run.
 blackleaf           basic.in    -LAI 2.0 -refl_leaf 0 -trans_leaf 0 -alb_soil 0.3
+# The other end of the same axis, and still broken: two removable singularities
+# in gortt_two_stream that are not removed, so both of these print -nan. They
+# are pinned the way badanth is -- as KNOWN-BAD behaviour, so that fixing them
+# shows up as a reviewable change to these goldens rather than passing
+# silently. OPEN-QUESTIONS.md #13 has the limits. nadirsun.in is basic.in's
+# geometry with the sun overhead, which is what puts 2*gamma*mu_i on 1.
+badtwostream-gamma  nadirsun.in -LAI 3.0 -refl_leaf 0.45 -trans_leaf 0.30
+badtwostream-omega1 nadirsun.in -LAI 3.0 -refl_leaf 0.5 -trans_leaf 0.5

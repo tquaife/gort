@@ -1,5 +1,20 @@
 # The crown BRDF: where to pick this up
 
+> **SUPERSEDED, 18 September 2026.** The work this document sets out has been done.
+> Read **`CROWN-BRDF-INVESTIGATION.md`** instead; this file is kept for what it asked
+> for and in what order, which is still the right order, and because the investigation
+> refers back to its section numbers.
+>
+> In short: section 3's measurement was made and is decisive, but it does not say what
+> this document expected. Option B (section 5) is ruled out — crowns look *less* like
+> surfaces as they get thinner, not more. Option A (section 4) was implemented as
+> `-rt_crown_brdf` and makes the FLIGHT agreement worse, because the crown's
+> forward/backward asymmetry is geometric and cannot come from the leaf phase function:
+> in the near infrared `r_L = t_L`, so that phase function is isotropic and `R_ss`
+> reduces to a symmetric Lommel-Seeliger that invents a backscatter limb the crown does
+> not have. The section 4 warning about double-counting the hotspot turned out not to be
+> the problem; the hotspot being too *weak* is.
+
 Written 17 September 2026, at the end of the session that produced v3.1, as a handover
 to a later one. It is instructions, not a record: `KC-INVESTIGATION.md` is the model for
 how the record should look once something has actually been done.

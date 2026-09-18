@@ -50,6 +50,22 @@ exists so that convergence can be demonstrated from the command line.
 #define NQ_GL      24	/*GL points per non-smooth piece (Vgamma, es)*/
 #define NQ_CONTACT 128	/*first-contact height panels over [z1_p, z2_p]*/
 
+/*
+Azimuth quadrature for -rt_crown_brdf, which has to integrate its
+single-scattering reflectance over the exit hemisphere so that the isotropic
+multiple scattering can be set to whatever is left of rho_df. The zenith half
+of that integral reuses the Gauss-Legendre rule in p->xq_gl, exactly as the
+chord average does, so this is the only new resolution: a uniform midpoint
+rule in azimuth, needed because the phase function is the one thing in the
+integrand that depends on it. Scaled by p->nquad like everything else, and it
+is not the binding one: on tests/cases/basic.in, going from -nquad 1 to
+-nquad 8 moves the BRF by 3.2e-4 with this option on against 1.8e-4 with only
+-rt_crown_path, so the azimuth rule adds less error than the quadratures that
+were already there. Unlike the three above it does not touch the gap
+probabilities, so -W output cannot move with it.
+*/
+#define NQ_BRDF_PHI 12
+
 /*prospect*/
 #define PROSPECT_NWBANDS 2101
 #define PROSPECT_LOWER_WL 400.0
@@ -259,6 +275,7 @@ typedef struct  {
 		unsigned short rt_bg_coupling ;	/*background<->canopy in G and Z*/
 		unsigned short rt_crown_crown ;	/*neighbour-crown term in T and C*/
 		unsigned short rt_fd_paper ;	/*fd = mu/(mu+0.05), the paper's*/
+		unsigned short rt_crown_brdf ;	/*bidirectional rho'_df in the crown*/
 
 		/*gap probability file i/o (-W and -P)*/
 		int read_prob_file ;

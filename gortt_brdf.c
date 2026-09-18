@@ -441,6 +441,201 @@ static double gortt_recollision_scale( const gortt_parameters *p, double w, doub
 
 
 /*
+The Henyey-Greenstein phase function, normalised so that its average over the
+whole sphere is one: (1/4pi) int P dOmega = 1.
+
+g is the asymmetry parameter, <cos Theta>, and it is rt->g_asym, i.e. Li &
+Strahler's -(4/9)(rL - tL)/omega. That is negative when the leaf reflects more
+than it transmits, which is the usual case and which makes the scattering
+backward-peaked -- the right sign, and the reason no new user input is needed.
+|g| <= 4/9 by construction, so the denominator cannot approach zero, and a
+black leaf gives g = 0 and P = 1 rather than a NaN (see the guard on g_asym in
+gortt_rt_init).
+*/
+static double gortt_hg_phase( double g, double cos_theta )
+{
+
+	double d ;
+
+	d = 1.0 + g*g - 2.0*g*cos_theta ;
+
+	return( ( 1.0 - g*g ) / ( d * sqrt( d ) ) );
+
+}
+
+
+/*
+The scattering angle between the incident and exit directions, as a cosine.
+
+Theta is measured between the two directions of *propagation*, so exact
+backscatter -- the sensor looking down the sun's own beam -- is Theta = 180
+degrees and cos Theta = -1, which is where a backward-peaked phase function
+peaks. That is why this is the negative of the gortt_kuusk phase angle.
+
+Everything here is in the primed frame, where the crown is a sphere and the
+chord slab is horizontal, which is the frame gortt_two_stream is already
+evaluated in. n.b. gortt_kuusk forms its own cos_xi from the *unprimed*
+zeniths (the 05/06/06 comments); the two are inconsistent, and deliberately
+left that way -- OPEN-QUESTIONS.md has the prime-transform question, and
+CROWN-BRDF-NEXT.md section 6 says not to bundle it with this.
+*/
+static double gortt_cos_scatter( double mu_i, double mu_v, double raa )
+{
+
+	double si, sv ;
+
+	si = sqrt( MAX( 0.0, 1.0 - mu_i*mu_i ) ) ;
+	sv = sqrt( MAX( 0.0, 1.0 - mu_v*mu_v ) ) ;
+
+	return( -( mu_i*mu_v + si*sv*cos( raa ) ) );
+
+}
+
+
+/*
+Single-scattering reflectance factor of a horizontal slab of one-sided leaf
+area index L, for one incident and one exit direction: the exact first-order
+term, with no ground underneath.
+
+	R_ss = omega P(Theta) / ( 4 ( mu_i + mu_v ) )
+	       * [ 1 - exp( -k L ( 1/mu_i + 1/mu_v ) ) ]
+
+Both limits are the point of using it. Optically thin, the bracket goes to
+k L (1/mu_i + 1/mu_v) and R_ss becomes proportional to L, so a crown's
+brightness tracks the chord and the profile across the projected disc is
+sqrt(1 - u^2) -- the Lambert-sphere shape. Optically thick, the bracket goes
+to one and R_ss becomes omega P / (4(mu_i + mu_v)), which is Lommel-Seeliger:
+flat across the disc, and strongly view-dependent.
+
+Both are what FLIGHT shows a single crown doing. Measured over a black scene
+(flight_compare/run_crown_image.py), the ratio of the outermost to the
+innermost ring of the projected disc at zero phase runs from 0.24 at a crown
+optical radius of 0.23 to 0.94 at 15, against the 0.22 of a Lambert sphere and
+the 1.00 of the uniform disc the published model assumes.
+*/
+static double gortt_r_ss( double w, double g_asym, double k, double L,
+                          double mu_i, double mu_v, double raa )
+{
+
+	double P ;
+
+	P = gortt_hg_phase( g_asym, gortt_cos_scatter( mu_i, mu_v, raa ) ) ;
+
+	return( w * P / ( 4.0 * ( mu_i + mu_v ) )
+	        * ( 1.0 - exp( -k*L*( 1.0/mu_i + 1.0/mu_v ) ) ) );
+
+}
+
+
+/*
+The directional-hemispherical reflectance that gortt_r_ss implies, i.e.
+
+	rho_ss = (1/pi) int R_ss mu_v dOmega_v
+
+over the upward hemisphere. This is not a physical quantity anybody wants; it
+is what has to be subtracted from rho_df so that the isotropic remainder
+carries exactly the rest, and no energy is created by giving the crown a
+direction.
+
+The zenith half reuses the Gauss-Legendre rule in p->xq_gl on [-1,1] mapped to
+mu_v on [0,1], which is the same rule and the same -nquad scaling as the chord
+average above. The azimuth is a uniform midpoint rule, and is needed at all
+only because P(Theta) depends on it.
+*/
+static double gortt_rho_ss( const gortt_parameters *p, double w, double g_asym,
+                            double k, double L, double mu_i )
+{
+
+	int i, j, nphi ;
+
+	double mu_v, wgt, raa, dphi, sum ;
+
+
+	nphi = NQ_BRDF_PHI * p->nquad ;
+	dphi = 2.0*M_PI / nphi ;
+	sum  = 0.0 ;
+
+	for( i=0; i<p->nq_gl; i++ ){
+
+		mu_v = 0.5 * ( p->xq_gl[ i ] + 1.0 ) ;
+		wgt  = 0.5 * p->wq_gl[ i ] * mu_v ;
+
+		/*mu_v = 0 is a grazing exit direction: R_ss is finite there but
+		the weight mu_v is zero, so nothing is lost by skipping it and a
+		1/mu_v is kept away from zero*/
+		if( mu_v <= 0.0 ) continue ;
+
+		for( j=0; j<nphi; j++ ){
+
+			raa = ( j + 0.5 ) * dphi ;
+			sum += wgt * dphi
+			     * gortt_r_ss( w, g_asym, k, L, mu_i, mu_v, raa ) ;
+
+		}
+
+	}
+
+	/*(1/pi) int ... dOmega, and dOmega = dmu_v dphi*/
+	return( sum / M_PI );
+
+}
+
+
+/*
+The crown's bidirectional path reflectance, for -rt_crown_brdf: Option A of
+CROWN-BRDF-NEXT.md, single scattering exactly and multiple scattering
+isotropically, which is Hapke's IMSA construction.
+
+	R = R_ss + R_ms,	R_ms chosen so that  (1/pi) int R mu_v dOmega = rho_df
+
+rho_df is therefore the *normalisation*, not the answer: the two-stream keeps
+doing the thing it is good at, which is how much of the light is scattered,
+and the single-scattering term does the thing it is good at, which is where it
+goes. Energy is conserved by construction, so switching this on can only move
+radiation between directions and never add any.
+
+The band structure flatters it. In the near infrared omega is 0.9 and multiple
+scattering dominates the magnitude, but it is also genuinely the closer to
+isotropic; in the red omega is 0.12, single scattering dominates, and that half
+is treated exactly. The band that needs the anisotropy most is the band where
+the approximation is best.
+
+If single scattering alone already over-runs rho_df -- which it can, the
+two-stream being an approximation and the two not being constrained to agree --
+R_ss is scaled down to rho_df rather than R_ms being clamped at zero. That
+keeps the angular shape instead of throwing it away, and keeps the integral
+exact in both branches.
+*/
+static double gortt_crown_brdf( const gortt_parameters *p, const gortt_geometry *g,
+                                const gortt_rt *rt, double k, double L,
+                                double rho_df )
+{
+
+	double mu_i, mu_v, r_ss, rho_ss ;
+
+
+	mu_i = cos( g->sza_prime ) ;
+	mu_v = cos( g->vza_prime ) ;
+
+	r_ss   = gortt_r_ss( rt->w, rt->g_asym, k, L, mu_i, mu_v, g->raa ) ;
+	rho_ss = gortt_rho_ss( p, rt->w, rt->g_asym, k, L, mu_i ) ;
+
+	if( rho_ss > rho_df ){
+
+		/*nothing left for the isotropic part; rescale so the
+		hemispherical integral is still exactly rho_df*/
+		return( ( rho_ss > 0.0 ) ? r_ss * rho_df / rho_ss : rho_df );
+
+	}
+
+	/*an isotropic BRF of value x has directional-hemispherical
+	reflectance x, so the remainder goes in unchanged*/
+	return( r_ss + ( rho_df - rho_ss ) );
+
+}
+
+
+/*
 The path reflectances of the discontinuous canopy, rho'_df and rho'_ff.
 
 Ni et al. (1999) eqs (15)-(16) set them equal to those of the equivalent
@@ -472,6 +667,12 @@ is smaller than rho_df at the mean chord -- 0.398 against 0.417 for the
 sparse sphere. It reuses the Gauss-Legendre rule gortt_init_params already
 built for the gap probabilities, so it adds no new quadrature and follows
 -nquad like everything else.
+
+-rt_crown_brdf then changes what is averaged rather than what it is averaged
+over: rho_df(L) becomes a bidirectional reflectance with the same
+hemispherical integral. It requires -rt_crown_path for the same reason
+-rt_recollision does -- it describes a crown, and there is no chord to
+evaluate it on without one.
 */
 static void gortt_crown_reflectance( const gortt_parameters *p, const gortt_geometry *g,
                                      const gortt_rt *rt, double k,
@@ -532,7 +733,23 @@ static void gortt_crown_reflectance( const gortt_parameters *p, const gortt_geom
 		f = ( p->rt_recollision == TRUE )
 		    ? gortt_recollision_scale( p, rt->w, k, &sl ) : 1.0 ;
 
-		*p_df += wgt * f * sl.p_df ;
+		/*
+		-rt_crown_brdf replaces rho_df(L) with a bidirectional
+		reflectance of the same hemispherical integral, chord by chord.
+		It goes inside this loop rather than outside it because the
+		angular shape depends on the depth: a short chord at the limb
+		is in the single-scattering limit while the chord through the
+		middle need not be. Structurally it is one for one with the
+		line it replaces -- same rule, same weights, same -nquad.
+
+		rho'_ff is left alone. It is hemispherical-hemispherical, so
+		there is no direction in it to get right, and it is what the
+		crown-ground and neighbour-crown series are summed with.
+		*/
+		*p_df += wgt * f * ( ( p->rt_crown_brdf == TRUE )
+		                     ? gortt_crown_brdf( p, g, rt, k,
+		                                         p->favd * chord, sl.p_df )
+		                     : sl.p_df ) ;
 		*p_ff += wgt * f * sl.p_ff ;
 
 	}

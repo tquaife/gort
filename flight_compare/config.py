@@ -315,6 +315,9 @@ GORTT_VARIANTS = [
      "same, with the foliage squeezed sideways into 1 - K_open instead"),
     ("recollision",  ["-rt_crown_path", "-rt_recollision"],
      "crown path reflectance rescaled by the crown recollision probability"),
+    ("crown-brdf",   ["-rt_crown_path", "-rt_crown_brdf"],
+     "same, with a direction on it: single scattering exact, multiple "
+     "scattering isotropic, normalised to the same rho_df"),
     ("bg-coupling",  ["-rt_bg_coupling"],
      "background and canopy exchange radiation"),
     ("crown-crown",  ["-rt_crown_crown"],
@@ -338,3 +341,48 @@ def variant_blurb(name):
         if n == name:
             return blurb
     raise KeyError(name)
+
+
+# ---------------------------------------------------------------------------
+# single-crown imaging
+#
+# CROWN-BRDF-NEXT.md section 3: before any model code is written, measure what
+# a crown actually looks like.  One crown at the centre of a black scene,
+# FLIGHT in reverse mode with OUTPUT_MODE 2, and the per-pixel radiance factor
+# binned against the impact parameter of the view ray.
+#
+# GORT treats the sunlit crown as a disc of *uniform* radiance, so the profile
+# across that disc is the function the model has to reproduce, and it is a much
+# sharper target than the whole-scene BRDF: a Lambert sphere goes as
+# sqrt(1 - u^2) at zero phase and Lommel-Seeliger is perfectly flat, so the two
+# candidate laws disagree about exactly the thing being measured.
+# ---------------------------------------------------------------------------
+
+# The crowns to image, thinnest first.  sigma_r = k favd r is the crown optical
+# radius (mean free paths across a crown), which spans 60-fold over the scene
+# matrix -- the whole question is how the answer degrades as a crown stops
+# being optically large, so the list has to span it.
+CROWN_IMAGE_SCENES = [
+    "dense-low-prolate",        # sigma_r 0.23: a quarter of a mean free path
+    "dense-low-sphere",         # 0.58
+    "sparse-low-sphere",        # 1.88
+    "dense-high-sphere",        # 2.31
+    "sparse-high-oblate",       # 15.0: optically large, where a surface law should work
+]
+
+# The box.  Big enough that a photon leaving a wall and being wrapped back in
+# by FLIGHT's replace_if_out() has a negligible chance of meeting the crown
+# again: that chance is pi r^2 / (4 hw^2), which is 2.2% here and would be 9%
+# at hw = 3r.  Every wrapped photon that does come back is spurious multiple
+# scattering, because the crown is meant to be isolated.
+CROWN_IMAGE_HALFWIDTH = 12.0            # m
+CROWN_IMAGE_PIXEL = 0.02                # m; 200 pixels across a 2 m crown radius
+
+# One solar zenith is enough: sweeping the view zenith either side of it in the
+# principal plane already covers phase angle 0 to 100 degrees, and phase angle
+# is what the candidate laws differ on.
+CROWN_IMAGE_SZAS = [30.0]
+CROWN_IMAGE_VZAS = [0.0, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0, 70.0]
+CROWN_IMAGE_RAAS = [0.0, 180.0]         # 0 is backscatter
+
+CROWN_IMAGE_NU = 20                     # u bins across the projected disc

@@ -220,6 +220,15 @@ rt-recollision      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_recollision
 rt-bg-coupling      basic.in    -LAI 1.0 -PCC 0.2 -rt_bg_coupling
 rt-crown-crown      basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_crown
 rt-crown-brdf       basic.in    -LAI 1.0 -PCC 0.2 -rt_crown_path -rt_crown_brdf
+rt-upscatter        basic.in    -LAI 1.0 -PCC 0.2 -rt_upscatter
+# beta = 1/2 + (rl-tl)/(8w) is exactly 1/2 when the leaf reflects and transmits
+# equally, so with rl = tl the general branch has to reproduce the published one.
+# It cannot do so bit for bit -- sqrt((1-w/2)^2-(w/2)^2) is not sqrt(1-w) in
+# floating point -- so these two are a pair rather than a byte-identical control:
+# measured, they agree to 2e-16, against 6.3e-2 when rl != tl. If that ever
+# stops being true of these two goldens, the general branch is wrong.
+rt-upscatter-rteq-off basic.in  -LAI 1.0 -PCC 0.2 -refl_leaf 0.45 -trans_leaf 0.45
+rt-upscatter-rteq   basic.in    -LAI 1.0 -PCC 0.2 -refl_leaf 0.45 -trans_leaf 0.45 -rt_upscatter
 rt-all              basic.in    -LAI 1.0 -PCC 0.2 -rt_all
 # -rt_crown_brdf only redistributes what omega scatters, so with black leaves
 # there is nothing to redistribute: R_ss is proportional to omega and rho_df is

@@ -276,6 +276,7 @@ typedef struct  {
 		unsigned short rt_crown_crown ;	/*neighbour-crown term in T and C*/
 		unsigned short rt_fd_paper ;	/*fd = mu/(mu+0.05), the paper's*/
 		unsigned short rt_crown_brdf ;	/*bidirectional rho'_df in the crown*/
+		unsigned short rt_upscatter ;	/*two-stream beta from rL and tL*/
 
 		/*gap probability file i/o (-W and -P)*/
 		int read_prob_file ;
@@ -398,6 +399,21 @@ typedef struct  {
 		double w ;			/*leaf single scattering albedo*/
 		double gamma ;		/*sqrt( 1 - w )*/
 		double g_asym ;		/*phase function asymmetry*/
+
+		/*
+		Two-stream upscatter parameter, for -rt_upscatter: the fraction
+		of scattered radiation that goes into the backward hemisphere.
+
+		**Not p->beta**, which is Li & Strahler's weight between uniform
+		and random crown-centre heights in the geometric-optical mutual
+		shadowing (-beta, OPEN-QUESTIONS.md #9). Different quantity,
+		different half of the model, same Greek letter in two different
+		papers. This one is Dickinson's and Sellers's.
+
+		Only read when p->rt_upscatter is set; the published model has it
+		at 1/2 implicitly and never forms it.
+		*/
+		double beta_up ;
 
 		/*semi-infinite homogeneous layer*/
 		double R_inf_df ;

@@ -455,6 +455,17 @@ that they carry every scattering order rather than the two\-stream's.  Requires
 .BR \-rt_crown_path :
 the recollision probability describes a crown, so it can only rescale a crown.
 .TP
+.B \-rt_upscatter
+Use the two-stream upscatter parameter
+.I beta
+= 1/2 + (rl\-tl)/(8w) instead of the 1/2 that eqs (8)\-(11) assume implicitly.
+Identically 1/2 when the leaf reflects and transmits equally, so it does nothing
+in the near infrared and is in practice a red\-band option.  Not to be confused
+with
+.BR \-beta ,
+which is the geometric\-optical mutual shadowing weight and a different quantity
+entirely.
+.TP
 .B \-rt_crown_brdf
 Give
 .I rho'_df
@@ -487,7 +498,7 @@ gortt uses \(*m/(\(*m+0.09).
 overrides both.
 .TP
 .B \-rt_all
-All six of the above.
+All seven of the above.
 .SS Output and mode switches, continued
 .TP
 .BI \-diffuse " frac"

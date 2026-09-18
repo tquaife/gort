@@ -339,10 +339,65 @@ rather than 1/mu, the pow() calls, the order of the products -- because at
 -O0 there is no reassociation and the goldens are a byte comparison.
 */
 static void gortt_two_stream( double w, double gamma, double k, double L, double theta,
-                              gortt_slab *sl )
+                              int upscatter, double beta_up, gortt_slab *sl )
 {
 
+	double a, b, lambda, sbeam, det, P, Q ;
+
 	sl->t_0 = exp( -( k*L*SEC( theta ) ) ) ;
+
+	if( upscatter == TRUE ){
+
+		/*
+		The same four quantities with a general upscatter parameter.
+
+		gamma is not passed through here because gamma IS the beta = 1/2
+		assumption: the closure underneath eqs (8)-(11) is
+
+			dF_down/dl = -a F_down + b F_up + (1-beta) w s exp(-s l)
+			dF_up/dl   = -b F_down + a F_up -    beta  w s exp(-s l)
+
+		with a = 2k[1 - w(1-beta)] and b = 2k w beta, whose eigenvalue
+		is 2k sqrt( [1-w(1-beta)]^2 - (w beta)^2 ). At beta = 1/2 that
+		collapses to 2k sqrt(1-w) = 2k gamma, and only then. See
+		latex_notes/two_stream_derivation.tex section 3.2.
+
+		The beam upscatter is taken equal to the diffuse one. That is a
+		choice, not a result: the proper beam parameter depends on the
+		incidence direction (Sellers 1985). This is the one-parameter
+		version of the generalisation, and it is the same "half goes
+		each way" assumption being relaxed in both places at once.
+		*/
+
+		a      = 2.0*k*( 1.0 - w*( 1.0 - beta_up ) ) ;
+		b      = 2.0*k*w*beta_up ;
+		lambda = 2.0*k*sqrt( ( 1.0 - w*( 1.0 - beta_up ) )*( 1.0 - w*( 1.0 - beta_up ) )
+		                     - ( w*beta_up )*( w*beta_up ) ) ;
+		sbeam  = k*SEC( theta ) ;
+		det    = lambda*lambda - sbeam*sbeam ;
+
+		/*the particular solution for the beam source*/
+		P = w*sbeam*( ( 1.0 - beta_up )*( a + sbeam ) + b*beta_up ) / det ;
+		Q = w*sbeam*( beta_up*( a - sbeam ) + b*( 1.0 - beta_up ) ) / det ;
+
+		/*
+		b/(a+lambda), not the (a-lambda)/b the eigenvector gives
+		directly: they are equal because lambda^2 = a^2 - b^2, and this
+		form stays finite for a black leaf where b is zero and a-lambda
+		is zero with it.
+		*/
+		sl->R_inf_ff = b / ( a + lambda ) ;
+		sl->T_inf_ff = exp( -lambda*L ) ;
+
+		/*
+		top-of-medium upward flux, and the internal downward diffuse
+		flux at depth L, of the semi-infinite medium -- which is what
+		these two are, notwithstanding their names
+		*/
+		sl->R_inf_df = Q - P*sl->R_inf_ff ;
+		sl->T_inf_df = -P*( sl->T_inf_ff - sl->t_0 ) ;
+
+	}else{
 
 	/*hemispherical-hemispherical reflectance*/
 	sl->R_inf_ff = ( 1.0 - gamma )/( 1.0 + gamma ) ;
@@ -357,6 +412,8 @@ static void gortt_two_stream( double w, double gamma, double k, double L, double
 	sl->T_inf_df  = ( w / 2.0 ) ;
 	sl->T_inf_df *= ( 1. + 2. * cos( theta ) ) / ( 1. - pow( ( 2.*gamma*cos( theta ) ), 2 ) )  ;
 	sl->T_inf_df *= ( sl->T_inf_ff - sl->t_0 ) ;
+
+	}
 
 	/*hemispherical hemispherical transmittance*/
 	sl->t_ff  = sl->T_inf_ff ;
@@ -702,7 +759,8 @@ static void gortt_crown_reflectance( const gortt_parameters *p, const gortt_geom
 
 		L = ( p->rt_crown_path_mode == RT_PATH_SQUEEZE ) ? p->squeeze_lai : p->elai ;
 
-		gortt_two_stream( rt->w, rt->gamma, k, L, g->sza_prime, &sl ) ;
+		gortt_two_stream( rt->w, rt->gamma, k, L, g->sza_prime,
+		                  p->rt_upscatter, rt->beta_up, &sl ) ;
 
 		f = ( p->rt_recollision == TRUE )
 		    ? gortt_recollision_scale( p, rt->w, k, &sl ) : 1.0 ;
@@ -728,7 +786,8 @@ static void gortt_crown_reflectance( const gortt_parameters *p, const gortt_geom
 		wgt   = p->wq_gl[ i ] * u ;
 		chord = 2.0 * p->b * sqrt( MAX( 0.0, 1.0 - u*u ) ) ;
 
-		gortt_two_stream( rt->w, rt->gamma, k, p->favd * chord, g->sza_prime, &sl ) ;
+		gortt_two_stream( rt->w, rt->gamma, k, p->favd * chord, g->sza_prime,
+		                  p->rt_upscatter, rt->beta_up, &sl ) ;
 
 		f = ( p->rt_recollision == TRUE )
 		    ? gortt_recollision_scale( p, rt->w, k, &sl ) : 1.0 ;
@@ -790,6 +849,24 @@ void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
 	             ? -(4.0/9.0)*( *(s->rleaf+iw) - *(s->tleaf+iw) )/( rt->w )
 	             : 0.0 ;
 
+	/*
+	Two-stream upscatter parameter, for -rt_upscatter.
+
+	beta = 1/2 + (rL - tL)/(8 omega) is the standard canopy value for a
+	spherical leaf angle distribution, which is the only one gortt has
+	(LAD_05). It is bounded by [3/8, 5/8] because (rL-tL)/(rL+tL) cannot
+	exceed one, so it needs no clamp; a black leaf is the 0/0 and takes
+	the 1/2 that the published model assumes everywhere.
+
+	It is identically 1/2 whenever rL = tL, so the option is inert in the
+	near infrared of the FLIGHT comparison by construction. The red is
+	what it is for: 0.5417 there, an 8 per cent error in the backscatter
+	fraction that the published model does not carry.
+	*/
+	rt->beta_up = ( rt->w > 0.0 )
+	              ? 0.5 + ( *(s->rleaf+iw) - *(s->tleaf+iw) ) / ( 8.0 * rt->w )
+	              : 0.5 ;
+
 	k = gortt_leaf_angle_distribution( p, g->sza );
 
 
@@ -826,7 +903,8 @@ void gortt_rt_init( const gortt_parameters *p, const gortt_geometry *g,
 	depth; with L = p->elai it is bit-for-bit what was written out here.
 	*/
 
-	gortt_two_stream( rt->w, rt->gamma, k, p->elai, g->sza_prime, &slab ) ;
+	gortt_two_stream( rt->w, rt->gamma, k, p->elai, g->sza_prime,
+	                  p->rt_upscatter, rt->beta_up, &slab ) ;
 
 	rt->R_inf_ff = slab.R_inf_ff ;
 	rt->R_inf_df = slab.R_inf_df ;

@@ -299,6 +299,7 @@ static void gortt_set_defaults( gortt_parameters *p, gortt_geometry *g, gortt_sp
 	p->rt_crown_crown=FALSE ;
 	p->rt_fd_paper=FALSE ;
 	p->rt_crown_brdf=FALSE ;
+	p->rt_upscatter=FALSE ;
 
 	/*the lidar instrument. 1064nm is the VCL/LVIS/SLICER line, and the
 	one Ni-Meister et al. (2001) quote their rho_v = omega/5 at. J0 is
@@ -1488,6 +1489,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 			else if( !strncmp( argv[ i ], "-rt_crown_path", 15 ) )  p->rt_crown_path=TRUE;
 			else if( !strncmp( argv[ i ], "-rt_crown_brdf", 15 ) )  p->rt_crown_brdf=TRUE;
 			else if( !strncmp( argv[ i ], "-rt_recollision", 16 ) ) p->rt_recollision=TRUE;
+			else if( !strncmp( argv[ i ], "-rt_upscatter", 14 ) )   p->rt_upscatter=TRUE;
 			else if( !strncmp( argv[ i ], "-rt_bg_coupling", 16 ) ) p->rt_bg_coupling=TRUE;
 			else if( !strncmp( argv[ i ], "-rt_fd_paper", 13 ) )    p->rt_fd_paper=TRUE;
 
@@ -1514,6 +1516,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 				p->rt_crown_crown=TRUE;
 				p->rt_fd_paper=TRUE;
 				p->rt_crown_brdf=TRUE;
+				p->rt_upscatter=TRUE;
 			}
 
 			/*the lidar options. n.b. every one of these must stay ABOVE
@@ -1861,9 +1864,13 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-rt_bg_coupling\tlet the sunlit and shaded background exchange radiation with the canopy,\n"  );
 	fprintf( stderr, "               \tthe 1/(1-rho_s rho'_ff) that eqs (36)-(37) already give the crown\n"  );
 	fprintf( stderr, "-rt_crown_crown\tadd the neighbour-crown term the paper drops just below eq. (39)\n"  );
+	fprintf( stderr, "-rt_upscatter  \ttwo-stream upscatter beta = 1/2 + (rl-tl)/(8w) instead of the 1/2\n"  );
+	fprintf( stderr, "               \teqs (8)-(11) assume. Inert where the leaf reflects and transmits\n"  );
+	fprintf( stderr, "               \tequally, so it is a red-band option. n.b. NOT -beta, which is the\n"  );
+	fprintf( stderr, "               \tgeometric-optical mutual shadowing weight.\n"  );
 	fprintf( stderr, "-rt_fd_paper   \tdirect beam fraction mu/(mu+0.05), which is what section IV gives;\n"  );
 	fprintf( stderr, "               \twithout it gortt uses mu/(mu+0.09). n.b. -diffuse overrides both.\n"  );
-	fprintf( stderr, "-rt_all        \tall six of the above\n"  );
+	fprintf( stderr, "-rt_all        \tall seven of the above\n"  );
 
 	fprintf( stderr, "\n============ Input/output options:\n" );
 

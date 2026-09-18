@@ -323,6 +323,12 @@ GORTT_VARIANTS = [
     ("crown-path-bg", ["-rt_crown_path", "-rt_bg_coupling"],
      "the two options that each improve on the baseline, together: the crown's "
      "own optical depth and the background-canopy exchange"),
+    ("upscatter",    ["-rt_upscatter"],
+     "two-stream upscatter beta = 1/2 + (rl-tl)/(8w) rather than 1/2; inert "
+     "where the leaf reflects and transmits equally, so a red-band option"),
+    ("crown-path-up", ["-rt_crown_path", "-rt_upscatter"],
+     "the best option so far plus the upscatter parameter, which acts on the "
+     "band it does not"),
     ("crown-crown",  ["-rt_crown_crown"],
      "the neighbour-crown term the paper drops"),
     ("all",          ["-rt_all"],

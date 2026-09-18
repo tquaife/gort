@@ -290,6 +290,8 @@ FLIGHT's mean:
 |---|---|---|---|---|---|---|
 | baseline | +0.2% | 14.9% | −7.4% | 18.6% | −9.5% | 18.4% |
 | **crown-path** | +1.0% | 15.2% | **+1.7%** | **16.7%** | **+2.5%** | 13.9% |
+| upscatter | +1.2% | 15.1% | −7.4% | 18.6% | −9.5% | 18.4% |
+| crown-path-up | +1.9% | 15.5% | +1.7% | 16.7% | +2.5% | 13.9% |
 | crown-path-bg | +1.2% | 15.2% | +5.9% | 17.8% | +9.4% | 16.4% |
 | squeeze-path | +1.5% | 15.9% | +6.6% | 19.3% | +1.6% | **13.3%** |
 | recollision | +1.1% | 16.5% | +6.4% | 20.3% | +4.2% | 14.8% |
@@ -300,6 +302,48 @@ FLIGHT's mean:
 
 **`-rt_crown_path` is the one that works.** NIR bias −7.4% → +1.7% with the RMSD
 down as well, which a rescaling could not do — it is correcting a shape error.
+
+### The upscatter parameter: right band, right direction, wrong aggregate
+
+`-rt_upscatter` replaces the `beta = 1/2` that eqs (8)-(11) assume implicitly
+with `beta = 1/2 + (rl - tl)/(8w)`, the standard canopy value for the spherical
+leaf angle distribution `gortt` is hardwired to. It is the only option here that
+is aimed at the red, and it is **exactly inert in the near infrared** — `rl = tl`
+there, so `beta` is 1/2 and the near-infrared columns above are identical to the
+rows they sit under, to 4e-16.
+
+On the 12-scene aggregate it is a small net loss, 14.9% to 15.1%. That number is
+misleading, and the breakdown says why:
+
+| red RMSD, subset | baseline | upscatter | crown-path | crown-path-up |
+|---|---|---|---|---|
+| all 12 | 14.87% | 15.12% | 15.23% | 15.55% |
+| less `dense-low-prolate` | 9.66% | 9.63% | 9.85% | 9.90% |
+| less all three `dense-low` | 7.04% | **6.54%** | 6.72% | **6.23%** |
+
+**Nine of the twelve scenes improve** (median −0.26 points). The three that do not
+are exactly the three `dense-low` canopies, and they carry the aggregate because
+they are the darkest scenes in the red and so have the smallest denominator —
+`dense-low-prolate` alone is at 41% RMSD before anything is switched on.
+
+The reason is not obscure, and it joins up with the single-crown measurement in
+`CROWN-BRDF-INVESTIGATION.md`. A larger `beta` sends more of what is scattered
+backwards, so crowns get brighter. Measured against FLIGHT with an isolated crown
+over a black soil, GORT's red sunlit-crown signature is **3.4x too bright** for
+`dense-low-prolate` and 1.2x for `dense-low-sphere`, and **0.35 to 0.46 times too
+dark** for every scene with an optically larger crown. Brightening helps the
+second group and hurts the first, which is precisely the split in the table.
+
+So the upscatter parameter is doing what the derivation says it should — the
+bias moves toward zero nearly everywhere, −4.48% to −3.60% over the nine
+well-behaved scenes, and −3.98% to −3.06% on top of `-rt_crown_path` — and the
+aggregate is being set by a pre-existing red overestimate in optically thin
+crowns that has nothing to do with it. Fixing that is a separate problem, and
+until it is fixed this option cannot show a clean win on this scene matrix.
+
+`crown-path-up` is the two together. They do stack, unlike `crown-path-bg` below:
+they act on different bands, so the near infrared is `crown-path`'s number
+unchanged and the red is `upscatter`'s.
 
 ### The two that work do not stack
 

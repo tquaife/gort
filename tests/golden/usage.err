@@ -112,9 +112,13 @@ preferred because it reduces equifinality.
 -rt_bg_coupling	let the sunlit and shaded background exchange radiation with the canopy,
                	the 1/(1-rho_s rho'_ff) that eqs (36)-(37) already give the crown
 -rt_crown_crown	add the neighbour-crown term the paper drops just below eq. (39)
+-rt_upscatter  	two-stream upscatter beta = 1/2 + (rl-tl)/(8w) instead of the 1/2
+               	eqs (8)-(11) assume. Inert where the leaf reflects and transmits
+               	equally, so it is a red-band option. n.b. NOT -beta, which is the
+               	geometric-optical mutual shadowing weight.
 -rt_fd_paper   	direct beam fraction mu/(mu+0.05), which is what section IV gives;
                	without it gortt uses mu/(mu+0.09). n.b. -diffuse overrides both.
--rt_all        	all six of the above
+-rt_all        	all seven of the above
 
 ============ Input/output options:
 -prnspec	print the scene component spectra for each wavelength inside {}

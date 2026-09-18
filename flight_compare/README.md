@@ -290,14 +290,46 @@ FLIGHT's mean:
 |---|---|---|---|---|---|---|
 | baseline | +0.2% | 14.9% | −7.4% | 18.6% | −9.5% | 18.4% |
 | **crown-path** | +1.0% | 15.2% | **+1.7%** | **16.7%** | **+2.5%** | 13.9% |
+| crown-path-bg | +1.2% | 15.2% | +5.9% | 17.8% | +9.4% | 16.4% |
 | squeeze-path | +1.5% | 15.9% | +6.6% | 19.3% | +1.6% | **13.3%** |
 | recollision | +1.1% | 16.5% | +6.4% | 20.3% | +4.2% | 14.8% |
+| crown-brdf | +2.7% | 19.6% | +3.1% | 21.9% | +4.0% | 18.6% |
 | bg-coupling | +0.5% | 14.8% | −4.0% | 18.0% | −4.3% | 17.4% |
 | crown-crown | +0.5% | 14.9% | +13.7% | 37.4% | −0.9% | 22.1% |
-| all | +1.7% | 16.6% | +43.4% | 63.5% | +25.5% | 31.9% |
+| all | +3.2% | 20.8% | +44.8% | 68.0% | +26.9% | 36.4% |
 
 **`-rt_crown_path` is the one that works.** NIR bias −7.4% → +1.7% with the RMSD
 down as well, which a rescaling could not do — it is correcting a shape error.
+
+### The two that work do not stack
+
+`crown-path-bg` is `-rt_crown_path -rt_bg_coupling`, the only two options that
+each improve on the baseline, run together. It is **worse than `-rt_crown_path`
+alone** — NIR RMSD 16.7% → 17.8%, and 13.9% → 16.4% in the sparse scenes, which
+is where both of them do their work.
+
+The reason is not an interaction. In near-infrared bias the two corrections are
+very nearly additive:
+
+| subset | baseline | +crown_path | +bg_coupling | both | sum of the two | excess |
+|---|---|---|---|---|---|---|
+| sparse | −9.5 | +2.5 | −4.3 | +9.4 | +7.7 | +1.7 |
+| dense | −5.7 | +1.0 | −3.8 | +3.1 | +2.9 | +0.2 |
+| all | −7.4 | +1.7 | −4.0 | +5.9 | +5.1 | +0.9 |
+
+They add to within 2 points of independence — and that is the problem. The
+sparse deficit is 9.5 points and the two corrections between them supply 17, so
+applying both overshoots by as much as the baseline undershot. They are not two
+complementary fixes; they are two descriptions of the same missing brightness,
+and `-rt_crown_path` is the better of the two accounts of it.
+
+Worth knowing for anything built on `-rt_crown_path`: its success in the sparse
+near infrared is not evidence that the deficit is purely a crown optical depth
+problem, because a background–canopy coupling term with no crown geometry in it
+at all recovers half the same deficit.
+
+The variant is kept for that negative result, as `crown-brdf` and
+`-rt_recollision` are.
 In the sparse scenes, −9.5% → +2.5% and the RMSD 18.4% → 13.9%. Red moves by
 0.8 points. And it is near-inert where the paper *was* validated: on SOBS it
 moves the Fig. 7b sunlit-crown signature from 0.470 to 0.474.

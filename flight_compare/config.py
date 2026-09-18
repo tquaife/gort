@@ -320,6 +320,9 @@ GORTT_VARIANTS = [
      "scattering isotropic, normalised to the same rho_df"),
     ("bg-coupling",  ["-rt_bg_coupling"],
      "background and canopy exchange radiation"),
+    ("crown-path-bg", ["-rt_crown_path", "-rt_bg_coupling"],
+     "the two options that each improve on the baseline, together: the crown's "
+     "own optical depth and the background-canopy exchange"),
     ("crown-crown",  ["-rt_crown_crown"],
      "the neighbour-crown term the paper drops"),
     ("all",          ["-rt_all"],

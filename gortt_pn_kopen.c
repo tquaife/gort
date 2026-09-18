@@ -90,6 +90,15 @@ double gortt_crown_proj_volume( gortt_parameters *p, double t, double h )
 	int		i;
 
 	/*
+	* Degenerate layer: [h1_p, h2_p] is a single plane and this integral
+	* collapses onto its integrand there. lv_p carries lambda rather than
+	* a volume density to match -- see gortt_init_params.
+	*/
+
+	if( p->single_height )
+		return( gortt_crown_proj_cross_section( p, t, h, p->h1_p ) );
+
+	/*
 	* Circular section. The integral of pi ( r^2 - (h-z)^2 ) over [a,b] is
 	* pi [ r^2 (b-a) + ( (h-b)^3 - (h-a)^3 ) / 3 ].
 	*/
@@ -198,6 +207,44 @@ double gortt_crown_proj_cross_section( gortt_parameters *p, double t, double h, 
 
 }
 
+
+
+double gortt_capsule_cross_section( gortt_parameters *p, double t, double z_h, double z_s, double z )
+{
+
+	/*
+	* The horizontal cross-sectional area, at height z, of the region of
+	* crown centres whose crown meets the beam segment from z_h up to z_s.
+	* This is the integrand of gortt_vol, and it is needed on its own when
+	* h2 == h1 collapses that integral onto a single plane.
+	*
+	* The region is the set of points within r of the segment, which the
+	* projection parameter along the beam partitions into a near cap, a
+	* cylinder and a far cap. Writing X(h,.) for the semi-infinite version
+	* -- gortt_crown_proj_cross_section, the same region for a beam that
+	* goes on up for ever -- the near cap and the cylinder both cancel
+	* between X(z_h,.) and X(z_s,.), and what is left is the whole of the
+	* far ball:
+	*
+	*	A(z) = X(z_h,z) - X(z_s,z) + pi ( r^2 - (z-z_s)^2 )+
+	*
+	* figures/capsule_volume_check.c holds both checks: A against a pixel
+	* count of the region, to the resolution of the count, and its integral
+	* against a Monte Carlo of the volume. n.b. that same Monte Carlo does
+	* NOT agree with gortt_vol where the cut plane passes through the
+	* capsule -- OPEN-QUESTIONS.md #14 -- so this is the integrand of what
+	* gortt_vol is meant to be, and agrees with what it actually computes
+	* only away from that.
+	*/
+
+	double	d = z - z_s;
+	double	ball = p->rr - d*d;
+
+	return( gortt_crown_proj_cross_section( p, t, z_h, z )
+	      - gortt_crown_proj_cross_section( p, t, z_s, z )
+	      + ( ball > 0.0 ? M_PI * ball : 0.0 ) );
+
+}
 
 
 double gortt_weird_cross_section( gortt_parameters *p, double t, double h, double z )
@@ -457,8 +504,11 @@ double gortt_calc_epgap_ht( gortt_parameters *p, int h, int t )
 		* loop below. CFLAGS is -O0, so the compiler will not hoist it.
 		*/
 
-		temp1 = gortt_vol( p, z_h, z_m, t, p->h2_p )
-		      - gortt_vol( p, z_h, z_m, t, p->h1_p );
+		if( p->single_height )
+			temp1 = gortt_capsule_cross_section( p, p->theta_p[t], z_h, z_m, p->h1_p );
+		else
+			temp1 = gortt_vol( p, z_h, z_m, t, p->h2_p )
+			      - gortt_vol( p, z_h, z_m, t, p->h1_p );
 		temp1 *= p->lv_p;
 		e_temp1 = exp( -temp1 );
 
@@ -528,6 +578,16 @@ double gortt_get_es( gortt_parameters *p, double z_h, int t )
 	double ES = 0.0;
 	double a, b;
 	int    i;
+
+	/*
+	* Degenerate layer, as in gortt_crown_proj_volume: the crown centre
+	* density is a delta at h1_p and the expectation is the integrand
+	* there. gortt_get_pcc is not called at all in this case, which is
+	* just as well -- it is 1/(h2_p - h1_p).
+	*/
+
+	if( p->single_height )
+		return( gortt_get_s( p, z_h, p->h1_p, t ) );
 
 
 	/*

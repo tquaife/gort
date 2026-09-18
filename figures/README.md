@@ -369,3 +369,18 @@ Note that the Fig. 5 discussion above predates that work. The Monte Carlo puts n
 at about 0.32, not the ~0.15 of the published figure, so Fig. 5 is not a good target for Kc
 (KC-INVESTIGATION.md, section 7).
 
+
+## Gap probability geometry: capsule_volume_check.c
+
+The odd one out — C rather than python, because what it checks are internal functions with no
+command-line path to them. It links against `gortt_pn_kopen.o`:
+
+```sh
+gcc -Wall -g -I../include -o capsule_volume_check capsule_volume_check.c ../gortt_pn_kopen.o -lm
+```
+
+It checks `gortt_capsule_cross_section` against a pixel count of the region it describes, and
+`gortt_vol` against a Monte Carlo of the volume *it* computes. The first passes; the second
+does not, by up to 6% where the crown centre plane cuts the region, which is
+`OPEN-QUESTIONS.md` #14. Run it before touching `gortt_vol`, `gortt_trisec` or `gortt_cylind`,
+and run it after, because it is the only independent check those functions have.

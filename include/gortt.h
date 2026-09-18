@@ -336,6 +336,17 @@ typedef struct  {
 		double z1 ;				/*lowest height with any foliage*/
 		double z2 ;				/*highest height with any foliage*/
 		double lv ;
+		/*
+		h2 == h1 -- every crown centre on one plane -- is a legitimate
+		canopy, and lv is then a delta function. Every use of lv_p is
+		lv_p times an integral over the crown centre heights, which
+		stays finite: in the limit it is lambda times the integrand at
+		h1_p. So in that case lv_p carries lambda, lv is left at zero
+		because no finite value of it means anything, and the three
+		integrals concerned return their integrand instead. See
+		gortt_init_params, and OPEN-QUESTIONS.md #10.
+		*/
+		int    single_height ;
 		double favd_p ;
 		double lv_p ;
 		double z1_p ;
@@ -507,6 +518,7 @@ void   gortt_init_params( gortt_parameters *, gortt_geometry * );
 
 double gortt_crown_proj_volume( gortt_parameters *, double, double );
 double gortt_crown_proj_cross_section( gortt_parameters *, double, double, double );
+double gortt_capsule_cross_section( gortt_parameters *, double, double, double, double );
 double gortt_weird_cross_section( gortt_parameters *, double, double, double );
 double gortt_left_circle_area( double, double );
 double gortt_right_ellipse_area( double, double, double );

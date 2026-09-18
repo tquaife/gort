@@ -1591,13 +1591,40 @@ void gortt_init_params( gortt_parameters *p, gortt_geometry *g )
 
 	p->z1 = p->h1 - p->r * p->ellipticity;
 	p->z2 = p->h2 + p->r * p->ellipticity;
-	p->lv = p->lambda / ( p->h2 - p->h1 );
+
+	/*
+	crown centres per unit volume of the layer they occupy. h2 == h1 puts
+	them all on one plane, which is a canopy the model should be able to
+	do -- Li & Strahler's fig 3a, and the cleanest test there is of the
+	geometric-optical kernels -- but lv is then a delta function. It is
+	only ever used as lv_p times an integral over the crown centre
+	heights, and that product has a limit: lambda times the integrand at
+	h1_p. So lv_p carries lambda, and gortt_crown_proj_volume,
+	gortt_get_es and the expected crown count in gortt_calc_epgap_ht
+	return their integrands. lv itself is left at zero: nothing reads it
+	but the line below, and no finite value of it would be true.
+	*/
+
+	if( p->h2 < p->h1 ){
+		fprintf( stderr, "gortt: -h2 (%g) is below -h1 (%g)\n"
+		                 "crown centres are distributed between h1 and h2, so h2 "
+		                 "must be the higher of the two\n", p->h2, p->h1 );
+		exit( EXIT_FAILURE );
+	}
+
+	p->single_height = ( p->h2 == p->h1 ) ;
+
+	if( p->single_height ){
+		p->lv = 0.0 ;
+	}else{
+		p->lv = p->lambda / ( p->h2 - p->h1 );
+	}
 
 	/*Corresponded variables in transformed space */
 
 	p->favd_p = p->favd * p->ellipticity;
 	p->tau_p  = p->k * p->favd_p;
-	p->lv_p = p->lv * p->ellipticity;
+	p->lv_p = p->single_height ? p->lambda : p->lv * p->ellipticity;
 
 	p->z1_p = p->z1 / p->ellipticity;
 	p->z2_p = p->z2 / p->ellipticity;

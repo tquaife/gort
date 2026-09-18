@@ -14,6 +14,19 @@ favd            spec.in     -favd 0.5
 hbrpcc          spec.in     -HB 2.5 -BR 1.5 -PCC 0.6
 oldgeom         spec.in     -r 1.0 -b 3.0 -h1 2.0 -h2 9.0 -lambda 0.3
 beta            spec.in     -beta 0.4
+# h1 == h2: every crown centre on one plane. lv is a delta function there and
+# the three integrals over crown centre height collapse onto their integrands
+# -- see gortt_init_params. It used to hang, and then to return -nan; a run
+# with the layer merely thin has always worked, and the BRF converges to
+# within 2.6e-4 of this case as h2 - h1 -> 0 (the rest is OPEN-QUESTIONS #14).
+# The -W case covers the same three sites one level down, before the BRF
+# averages over them, and the lidar one exercises them above the ground.
+sameheight      spec.in     -r 1.0 -b 3.0 -h1 5.75 -h2 5.75 -lambda 0.3
+sameheight-probs -          -r 1.0 -b 3.0 -h1 5.75 -h2 5.75 -lambda 0.3 -W
+sameheight-lidar -          -r 1.0 -b 3.0 -h1 5.75 -h2 5.75 -lambda 0.3 -lidar -nlayers 8
+# and h2 below h1 is refused rather than quietly modelled: it used to return a
+# number, from a negative crown centre density
+badheights      spec.in     -r 1.0 -b 3.0 -h1 5.75 -h2 3.0 -lambda 0.3
 diffuse         spec.in     -diffuse 0.3
 readme          readme.in   -LAI 4.0
 extreme         extreme.in

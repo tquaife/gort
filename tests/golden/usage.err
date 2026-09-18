@@ -65,7 +65,10 @@ preferred because it reduces equifinality.
 
 ============ Read/write gap probabilities:
 -W       	go as far as calculating the gap probabilities and write these to the stdout and exit
+         	the file records the canopy it was computed for, and -P refuses one that does
+         	not match. With -lidar it holds every layer rather than only the ground.
 -P file  	read gap probabilities from file that have been written using the -W option
+         	only spectral options may differ between the -W and the -P run
          	n.b. the above two options are included to allow fast BRF calculation based on
          	pre-computed gap probabilities. The model must be run using the same crown and canopy
          	geometry options for the read and write. Spectral options (i.e. Prospect and Price options)
@@ -83,8 +86,10 @@ preferred because it reduces equifinality.
 -lidar           	predict the lidar waveform instead of the BRF, and exit
                  	n.b. lidar mode does not read stdin at all: the device is assumed to be
                  	at nadir, so no view/illumination geometry is required. Normal output is
-                 	suppressed. Cannot be combined with -W, -P or -q08_pn_kopen, all of which
-                 	only deal with the gap probabilities at the ground.
+                 	suppressed. Cannot be combined with -q08_pn_kopen, which only deals with
+                 	the gap probabilities at the ground.
+                 	-W and -P do work here: "-lidar -W" writes a file holding every layer,
+                 	and "-lidar -P" reads one back. The same file also serves a BRF run.
 -lidar_wl arg    	set the lidar wavelength (nm) to arg (default 1064, must be 400-2500)
 -lidar_J0 arg    	set the emitted pulse energy to arg (default 1, a pure scale factor)
 -lidar_waveform  	emit the binned waveform rather than the per-layer profile

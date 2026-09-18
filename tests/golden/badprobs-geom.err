@@ -1,0 +1,4 @@
+../gortt: actual/probs_default.dat was not written by this configuration:
+  favd      file 0.85799999999999998      run 3.0238176576165317
+the gap probabilities depend on every one of these, so recompute
+the file with -W and the same options

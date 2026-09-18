@@ -89,19 +89,24 @@ def _run(binary, args, stdin=""):
 
 def probabilities(binary, args):
     """
-    -W output: p_n0[0][t] and epgap[0][t] for t = 0..90, plus k_open[0] and
-    k_openep[0] off the final "-1" row.
+    Ground-layer gap probabilities out of a -W file: p_n0[0][t] and epgap[0][t]
+    for t = 0..90, plus k_open[0] and k_openep[0].
+
+    The file is the format described at the top of gortt_write_prob_file: a
+    "gortt_probs <version>" line, "#" comments, "<key> <value>" metadata, then
+    "p <h> <t> <p_n0> <epgap>" and "k <h> <k_open> <k_openep>" rows.  Only h = 0
+    is wanted here, and a "-lidar -W" file has more.
     """
     pn0, epg, kopen, kopenep = [], [], None, None
     for line in _run(binary, ["-W"] + list(args)).splitlines():
         f = line.split()
-        if not f:
+        if not f or f[0].startswith("#"):
             continue
-        if f[0] == "-1":
-            kopen, kopenep = float(f[1]), float(f[2])
-        else:
-            pn0.append(float(f[1]))
-            epg.append(float(f[2]))
+        if f[0] == "p" and f[1] == "0":
+            pn0.append(float(f[3]))
+            epg.append(float(f[4]))
+        elif f[0] == "k" and f[1] == "0":
+            kopen, kopenep = float(f[2]), float(f[3])
     if kopen is None:
         sys.exit("quadrature: no k_open row in -W output")
     return np.array(pn0), np.array(epg), kopen, kopenep

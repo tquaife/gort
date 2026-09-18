@@ -79,9 +79,13 @@ so they can be cached and reused across spectral variations:
 ```bash
 ./gortt -LAI 4.0 -W < /dev/null > probs.dat            # compute probabilities and exit
 echo -en "1 1 800\n10 0 30 20\n" | ./gortt -LAI 4.0 -P probs.dat -Cab 50
+
+./gortt -lidar -W -nlayers 8 > probs_full.dat          # every layer, for a waveform
+./gortt -lidar -P probs_full.dat -nlayers 8            # ...and the same file serves a BRF run
 ```
 The geometry options must be identical between the `-W` and `-P` runs; only spectral options
-may vary.
+may vary. **This is checked**: the file records the canopy it was computed for and `-P` names
+any field that differs and exits 1. See "The gap probability file" below.
 
 ## Architecture
 
@@ -192,6 +196,28 @@ regardless.)
 two options are order-dependent, and `gortt -lidar -nlayers 30` would otherwise leave
 `nh_probs` at 15 and read calloc zeros for the top half of the canopy. `gortt_lidar` has a
 defensive check for exactly this.
+
+**The gap probability file is self-describing and `-P` validates it.** `-W` writes rows
+`h < nh_probs`, so an ordinary run gives a ground-only file and `-lidar -W` gives one with
+every layer. The format is documented on `gortt_write_prob_file` and in `man/gortt.1`:
+a `gortt_probs <version>` line, `#` comments, `<key> <value>` metadata, then
+`p <h> <t> <p_n0> <epgap>` and `k <h> <k_open> <k_openep>` rows. The metadata carries the
+*cache key* — every parameter `gortt_pn_kopen.c` reads (`r b h1 h2 lambda favd lad
+maxcrowns dth nquad q08`) — and `gortt_probs_check_header` refuses a file whose key differs,
+that is too shallow, that is on a different `nlayers` grid, that is truncated, or that has
+no header at all. All five used to be accepted silently; a mismatched file gave a wrong
+number at exit 0 and a short one gave `-nan` at exit 0.
+
+Two subtleties if you extend it. The key holds the **derived** doubles rather than the
+option strings, so `-HB/-BR/-PCC` and `-LAI` are compared after they have overwritten
+`r/b/h1/h2/lambda/favd` — that is what makes the check robust to the two ways of specifying
+a canopy. And `nlayers` is written **only when `nh > 1`**: the ground row is `z1 = h1 - b`
+at every `nlayers`, so a ground-only file genuinely does not depend on it, and writing it
+anyway would stop `probs-nlayers.out` being byte-identical to `probs.out` and silently kill
+the invariant below.
+
+A deeper file serves a shallower need — one `-lidar -W` file feeds both a waveform and a
+BRF run, which reads row 0 and ignores the rest — but not the reverse.
 
 **No quadrature in the model steps with `nlayers`.** `nlayers` is the *output* grid: how finely
 the lidar profile is reported, and the `h` index of the probability tables. It is not an

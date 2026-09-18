@@ -32,10 +32,15 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
   * off-nadir. `gortt_set_zenith_dependant_probabilities` is hardwired to `[0]` in four places
     and would need a height-resolved variant; and the one-way attenuation of eq. 1 is only
     right at the hotspot, which nadir guarantees. Item 4 of `OPEN-QUESTIONS.md` bites here.
-  * `-P`/`-W` for lidar. The file format holds the ground row only, so the combination is
-    refused rather than silently returning zeros. Extending it would make cached probabilities
-    usable for waveforms, which is worth doing — a lidar run is ~6x a BRF run at 15 layers and
-    ~20x at 60.
+  * ~~`-P`/`-W` for lidar~~ — **done.** The file format is now self-describing and holds
+    rows `h < nh_probs`, so `-lidar -W` writes a waveform-depth file and `-lidar -P` reads
+    one back; the same file also serves a BRF run, which takes the ground row and ignores
+    the rest. That is worth ~5x on a 15-layer lidar run and ~20x at 60. It carries all
+    `nth` zenith columns rather than only nadir, so off-nadir lidar will not need another
+    format change. The header also records every parameter the probabilities depend on and
+    `-P` refuses a file that does not match — previously unchecked, and a mismatched file
+    silently produced a wrong answer at exit 0. See `man/gortt.1` and the format comment on
+    `gortt_write_prob_file`.
   * multi-layer and multi-species canopies (paper section III-B-2).
 * ~~remove compilation warnings~~ — **done for C.** Zero warnings under `-Wall`; a new one is
   something you introduced.

@@ -380,7 +380,10 @@ reused across many spectral variations.
 .TP
 .B \-W
 Compute the gap probabilities, write them to standard output, and exit.
-Standard input is never read.
+Standard input is never read.  The file holds the ground layer alone, which is
+all the BRF reads; combined with
+.B \-lidar
+it holds every layer instead, because a waveform is a function of height.
 .TP
 .BI \-P " file"
 Read gap probabilities from
@@ -393,10 +396,34 @@ The geometry options must be identical between the
 .B \-W
 and
 .B \-P
-runs.  This is
-.B not
-checked: giving different geometry silently produces wrong answers.  Only the
-spectral options (PROSPECT, Price and the overrides above) may vary between them.
+runs.  This
+.B is
+checked: the file records the canopy it was computed for, and
+.B \-P
+names any field that differs and exits 1 rather than producing a wrong answer.
+A file that is truncated, that was written by a version of
+.B gortt
+predating the current format, or that is not deep enough for the run reading it
+is refused the same way.  Only the spectral options (PROSPECT, Price and the
+overrides above) may vary between the two runs.
+.PP
+A file written with
+.B \-lidar \-W
+may be read by an ordinary BRF run as well as by
+.BR \-lidar ,
+since the BRF takes the ground row and ignores the rest.  The reverse is not
+true, and
+.B \-lidar \-P
+with a ground\-only file is an error.  Because row
+.I h
+of a height\-resolved file means the height of layer
+.I h
+on the reporting grid,
+.B \-nlayers
+must also match; it is recorded in the file and checked.  A ground\-only file
+does not depend on
+.B \-nlayers
+and does not record it.
 .
 .SS Output and mode switches
 .TP
@@ -643,14 +670,61 @@ Written by
 .B \-W
 and read by
 .BR \-P .
-Plain ASCII, one record per line.  Records with a non\-negative first field are
-.RI "\(dq" "index P(n=0) epgap" "\(dq"
-for that zenith index; the single record with an index of \-1 carries
-.I k_open
+Plain ASCII, one record per line, at full precision
+.RB ( %.17g ,
+which round\-trips an IEEE double exactly \(em the probabilities reach 1e\-65
+near grazing, so a fixed\-point format will not do).
+.PP
+The first line is
+.RI "\(dq" "gortt_probs version" "\(dq"
+and identifies the file.  After it, a line beginning with
+.B #
+is a comment, and the rest are one of three kinds, told apart by their first
+field:
+.TP
+.RI "\(dq" "key value" "\(dq"
+Metadata.  First the canopy the tables were computed for \(em
+.IR r ,
+.IR b ,
+.IR h1 ,
+.IR h2 ,
+.IR lambda ,
+.IR favd ,
+.IR lad ,
+.IR maxcrowns ,
+.IR dth ,
+.I nquad
 and
-.IR k_openep .
-Values are written at full precision
-.RB ( %.17g ).
+.IR q08 ,
+which together are every parameter the gap probabilities depend on and are what
+.B \-P
+checks.  Then what the file holds:
+.I nth
+zenith angles and
+.I nh
+height rows, and, only when
+.I nh
+is greater than one,
+.IR nlayers .
+.TP
+.RI "\(dq" "p h t p_n0 epgap" "\(dq"
+One table entry: the two gap probabilities at height row
+.I h
+and zenith index
+.IR t .
+.TP
+.RI "\(dq" "k h k_open k_openep" "\(dq"
+The two open\-gap fractions for height row
+.IR h .
+.PP
+Height row 0 is the ground.  An ordinary
+.B \-W
+writes it alone
+.RI ( nh " = 1);"
+.B \-lidar \-W
+writes
+.I nlayers
+of them.
 .
 .SS Soil spectrum files
 Read by

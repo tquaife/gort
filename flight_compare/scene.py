@@ -433,7 +433,8 @@ def gortt_brdf(scene, band, directions, extra=(), binary=None):
 def gortt_probabilities(scene, binary=None):
     """
     gortt -W: the gap probability tables, written instead of a BRF.  Returns the
-    ground-layer total nadir gap probability P(0) = p_n0 + epgap at each zenith.
+    file verbatim; see the format comment on gortt_write_prob_file for how to
+    read it, and validate.gortt_nadir_gap for the row this is usually wanted for.
     """
     binary = binary or config.GORTT_BIN
     out = _gortt([binary, "-W"] + scene.gortt_geometry(), "")

@@ -1,0 +1,4 @@
+../gortt: actual/probs_default.dat was not written by this configuration:
+  nquad     file 1                        run 4
+the gap probabilities depend on every one of these, so recompute
+the file with -W and the same options

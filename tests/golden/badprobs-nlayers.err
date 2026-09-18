@@ -1,0 +1,2 @@
+../gortt: actual/probs_lidar.dat is on a height grid of 8 layers, this run has 4
+-- rerun it with -nlayers 8, or regenerate the file

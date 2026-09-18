@@ -1,0 +1,2 @@
+../gortt: cases/probs_legacy.dat is not a gortt probability file
+(no "gortt_probs" header -- regenerate it with -W)

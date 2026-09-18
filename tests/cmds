@@ -37,10 +37,13 @@ lidar           -           -lidar
 # its overhead limit.  See KC-INVESTIGATION.md section 9.
 lowsun          lowsun.in   -lambda 1.0 -prnprop
 
-# ---- gap probabilities themselves (printed at %0.40f -- the precise gate) --
+# ---- gap probabilities themselves (printed at %.17g -- the precise gate) ---
 probs           -           -W
 probs-lai       -           -LAI 4.0 -W
 probs-hbrpcc    -           -HB 2.5 -BR 1.5 -PCC 0.6 -W
+# "-lidar -W" writes every layer rather than only the ground, because a
+# waveform is a function of height. The header gains an nlayers line with it.
+probs-lidar     -           -lidar -W -nlayers 8
 
 # ---- spectral-only sweeps, driven off a shared probability file -----------
 # -refl_leaf/-trans_leaf replaced -alb_leaf, which set r = t = arg/2 and so
@@ -178,12 +181,45 @@ nquad-converged basic.in    -nquad 8
 # and it must reach the -W tables, which are the sharpest probe in the suite.
 nquad-probs     -           -W -nquad 4
 
+# ---- the -P round trip at depth -------------------------------------------
+# @PROBS_LIDAR@ is "-lidar -W -nlayers 8". What it feeds must match what is
+# computed from scratch exactly -- the height-resolved counterpart of
+# useprobs-extreme/-grazing above -- so each of the first two has a direct
+# partner it must stay byte-identical to:
+#
+#   useprobs-lidar.out    == lidar-n8.out
+#   useprobs-lidar-wf.out == lidar-waveform.out
+#
+# and the third pins that the same file also serves an ordinary BRF run, which
+# reads the ground row and ignores the seven above it.
+lidar-n8           -        -lidar -nlayers 8
+useprobs-lidar     -        -lidar -P @PROBS_LIDAR@ -nlayers 8
+useprobs-lidar-wf  -        -lidar -P @PROBS_LIDAR@ -nlayers 8 -lidar_waveform
+useprobs-lidar-brf basic.in -P @PROBS_LIDAR@ -nlayers 8
+
+# ---- probability files that must be refused -------------------------------
+# The file now records the canopy it was computed for. Every one of these used
+# to be accepted silently: a mismatched file gave a wrong number at exit 0, and
+# a short one gave -nan at exit 0.
+badprobs-geom    -          -P @PROBS_DEFAULT@ -LAI 8.0
+badprobs-nquad   -          -P @PROBS_DEFAULT@ -nquad 4
+# deep enough, but row h means height[h] and that is a function of nlayers
+badprobs-nlayers -          -lidar -P @PROBS_LIDAR@ -nlayers 4
+# not deep enough: 8 rows, and a 20 layer waveform needs 20
+badprobs-shallow -          -lidar -P @PROBS_LIDAR@ -nlayers 20
+# written by a gortt from before the format was versioned
+badprobs-legacy  -          -P cases/probs_legacy.dat
+# the first 30 lines of a good file
+badprobs-trunc   -          -P cases/probs_trunc.dat
+# -W and -P are opposites
+badprobs-wp      -          -W -P @PROBS_DEFAULT@
+
 # ---- lidar option and combination errors ----------------------------------
-# all three of these would otherwise read calloc zeros for the whole canopy:
-# the -W/-P file format holds the ground layer only, and the Q08
-# approximation is only coded for h=0.
+# -lidar with -W or -P is no longer an error: the file format carries every
+# layer. Feeding it a ground-only file still is, and that is what this pins --
+# the message now comes from gortt_probs_check_header, not from the parser.
 badlidarprobs   -           -lidar -P @PROBS_DEFAULT@
-badlidarw       -           -lidar -W
+# the Q08 approximation really is only coded for h=0, so this one stands
 badlidarq08     -           -lidar -q08_pn_kopen
 # outside the PROSPECT-D and Price grids
 badlidarwl      -           -lidar -lidar_wl 300

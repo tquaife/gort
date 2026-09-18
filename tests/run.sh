@@ -32,18 +32,34 @@ mkdir -p actual golden || exit 2
 # so the goldens hold the model's actual values rather than a 4-figure
 # rounding of them.  Measured: with the default "%f", a 1e-7 perturbation of
 # favd was visible in only 1 of 30 BRF cases, and then only in the last digit.
-# The gap-probability (-W) cases are unaffected -- they already print %0.40f.
+# The gap-probability (-W) cases are unaffected -- they print %.17g whatever
+# GORTT_PREC says.
 # ---------------------------------------------------------------------------
 GORTT_PREC=17
 export GORTT_PREC
 
 # ---------------------------------------------------------------------------
-# Shared gap-probability file for the -P cases (@PROBS_DEFAULT@ in cmds).
-# Default canopy geometry, so only spectral options may vary in those cases.
+# Shared gap-probability files for the -P cases.
+#
+# @PROBS_DEFAULT@ is the ordinary one: default canopy geometry, ground row
+# only, which is all the BRF reads.  Cases using it may vary spectral options
+# and nothing else -- -P now checks that and exits 1 if they do.
+#
+# @PROBS_LIDAR@ is the height-resolved one, written by "-lidar -W".  A waveform
+# is a function of height so it needs every layer; 8 of them, to match the
+# -nlayers the lidar cases use and keep the suite fast.  It is deeper than a
+# BRF run needs, which is deliberate: useprobs-lidar-brf pins that one file
+# serves both.
 # ---------------------------------------------------------------------------
 PROBS=actual/probs_default.dat
 "$GORTT" -W < /dev/null > "$PROBS" 2> /dev/null || {
 	echo "run.sh: could not generate $PROBS" >&2
+	exit 2
+}
+
+PROBS_LIDAR=actual/probs_lidar.dat
+"$GORTT" -lidar -W -nlayers 8 > "$PROBS_LIDAR" 2> /dev/null || {
+	echo "run.sh: could not generate $PROBS_LIDAR" >&2
 	exit 2
 }
 
@@ -69,7 +85,8 @@ while read -r name input args; do
 		[ -f "$stdin" ] || { echo "run.sh: no such input: $stdin" >&2; exit 2; }
 	fi
 
-	args=$(printf '%s' "$args" | sed "s|@PROBS_DEFAULT@|$PROBS|g")
+	args=$(printf '%s' "$args" | sed -e "s|@PROBS_DEFAULT@|$PROBS|g" \
+	                                 -e "s|@PROBS_LIDAR@|$PROBS_LIDAR|g")
 
 	# Unquoted $args on purpose: it must split into separate arguments.
 	"$GORTT" $args < "$stdin" > "actual/$name.out" 2> "actual/$name.err"

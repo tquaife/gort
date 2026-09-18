@@ -5,6 +5,61 @@
 #include<ctype.h>
 #include<gortt.h>
 #include<soil_rho.h>
+
+/*
+The cache key of a gap probability file: everything gortt_pn_kopen.c reads
+out of the parameters, and nothing else. -W writes it into the file header
+and -P checks it against the current run before using the tables.
+
+It holds the *derived* values rather than the option strings, which is what
+makes it robust to the two ways of specifying the canopy: -HB/-BR/-PCC and
+-LAI overwrite r/b/h1/h2/lambda/favd at the end of gortt_cl_parser (see the
+"new style silently overrides the old" note in CLAUDE.md), so comparing
+after that has happened compares the canopy rather than how it was asked
+for. %.17g round-trips a double exactly, so the doubles compare with ==.
+
+lad, maxcrowns and dth have no command line option today and so cannot
+differ, but they are genuine dependencies of the tables and are in the key
+so that adding an option later cannot silently reuse a stale cache.
+
+nlayers is deliberately NOT here: it is the reporting grid, the values do
+not move with it, and a ground-only file is independent of it. It is
+written as part of the contents block instead, and only when the file is
+height resolved. See gortt_write_prob_file.
+*/
+typedef struct {
+
+	double r, b, h1, h2, lambda, favd, dth ;
+	int lad, maxcrowns, nquad, q08 ;
+
+	} gortt_probs_key ;
+
+/*
+The metadata lines of a probability file, in the order they are written:
+the cache key above, then what the file actually holds. seen is a bit per
+key, so that a missing or repeated one is an error rather than a zero.
+
+PROBS_MAXROWS only bounds nth and nh against a corrupt file, because they
+size an allocation in gortt_read_prob_file before anything has checked
+them against the run.
+*/
+enum { PROBS_K_R, PROBS_K_B, PROBS_K_H1, PROBS_K_H2, PROBS_K_LAMBDA,
+       PROBS_K_FAVD, PROBS_K_LAD, PROBS_K_MAXCROWNS, PROBS_K_DTH,
+       PROBS_K_NQUAD, PROBS_K_Q08, PROBS_K_NTH, PROBS_K_NH,
+       PROBS_K_NLAYERS, PROBS_NKEY } ;
+
+#define PROBS_MAXROWS 100000
+
+typedef struct {
+
+	gortt_probs_key key ;
+	unsigned int seen ;
+	int nth ;
+	int nh ;
+	int nlayers ;
+
+	} gortt_probs_header ;
+
 /*
 Driver-internal helpers. These are the decomposition of what used to be a
 single ~370 line main(). They are the program's plumbing rather than part
@@ -17,8 +72,15 @@ static void gortt_set_defaults( gortt_parameters *, gortt_geometry *, gortt_spec
 static void gortt_compute_probabilities( gortt_parameters *, gortt_control * );
 static void gortt_init_squeeze_lai( gortt_parameters * );
 static double gortt_bg_coupling( const gortt_parameters *, const gortt_rt *, double );
-static void gortt_write_prob_file( gortt_parameters * );
-static void gortt_read_prob_file( gortt_parameters *, char * );
+static void gortt_probs_key_fill( gortt_probs_key *, const gortt_parameters *,
+                                  const gortt_control * );
+static int gortt_probs_key_diff( const gortt_probs_key *, const gortt_probs_key *, char * );
+static void gortt_probs_bad( const char *, const char *, int, const char * );
+static int gortt_probs_rest_blank( const char * );
+static void gortt_probs_check_header( const gortt_probs_header *, const gortt_parameters *,
+                                      const gortt_control *, const char *, const char * );
+static void gortt_write_prob_file( const gortt_parameters *, const gortt_control * );
+static void gortt_read_prob_file( gortt_parameters *, const gortt_control *, char * );
 static void gortt_read_header( FILE *, gortt_spectra *, int *, char *, char * );
 static void gortt_lidar_spectra( gortt_spectra *, const gortt_lidar_params * );
 static void gortt_alloc_outputs( gortt_parameters *, gortt_spectra *, gortt_control * );
@@ -73,14 +135,14 @@ int main( int argc, char **argv )
 	/*2) write probability file for later use.
 	n.b. this returns before stdin is read at all*/
 	if( params.write_prob_file == TRUE ){
-		gortt_write_prob_file( &params );
+		gortt_write_prob_file( &params, &cont );
 		gortt_free_params( &params );
 		return( EXIT_SUCCESS );
 	}
 
 	/*3) read existing probability file*/
 	if( params.read_prob_file == TRUE )
-		gortt_read_prob_file( &params, *argv );
+		gortt_read_prob_file( &params, &cont, *argv );
 
 	/*
 	Both of those settle K_open, which is the last thing -rt_crown_path's
@@ -359,59 +421,496 @@ static void gortt_init_squeeze_lai( gortt_parameters *p )
 
 
 /*
-Write the gap probabilities to stdout so that a later run can pick them
-up with -P and skip recomputing them.
+The gap probability file: written by -W, read back by -P.
 
-Two things about the format matter, and both used to be wrong:
+Format version 1. Four kinds of line, told apart by the first field:
 
-The loop runs to nth, not to 90. The tables cover 0..90 degrees
-inclusive, so there are nth = 91 rows; stopping at 90 left the last one
-unwritten and a -P run read it back as the calloc zero.
+  gortt_probs <version>        the first line, and only the first line
+  # ...                        comment, ignored
+  <key> <value>                metadata: the cache key, then what the
+                               file holds
+  p <h> <t> <p_n0> <epgap>     one table entry
+  k <h> <k_open> <k_openep>    the open gap fractions for layer h
 
-The values are written as %.17g, not %0.40f. The gap probabilities fall
-off superexponentially towards grazing -- by 88 degrees P(n=0) is around
-7e-33 -- and %0.40f is *fixed* point, so everything below 1e-40 was
-written as exactly zero. -P then took the log of it in gortt_kuusk and
-returned -nan. %.17g round-trips a double exactly whatever its exponent.
+No metadata key is "p" or "k", so the tag is unambiguous.
+
+Everything numeric is %.17g, which round-trips a double exactly whatever
+its exponent. That matters more here than anywhere else in gortt: the
+probabilities fall off superexponentially towards grazing and are down to
+1e-65 by 89 degrees, and the fixed point %0.40f this format used to use
+wrote everything below 1e-40 as exactly zero, after which gortt_kuusk
+took the log of it and returned -nan. tests/useprobs-grazing pins that.
+
+The file holds rows h < nh_probs: one for an ordinary -W, because the BRF
+only ever reads the ground, and nlayers for "-lidar -W", because a
+waveform is a function of height. A file may hold more rows than the run
+needs -- a lidar file serves a BRF run too -- but never fewer.
 */
-static void gortt_write_prob_file( gortt_parameters *p )
+
+#define PROBS_MAGIC    "gortt_probs"
+#define PROBS_VERSION  1
+#define PROBS_DIFF_LEN 1024
+#define PROBS_NCMP     11	/*fields gortt_probs_key_diff compares*/
+
+
+static void gortt_probs_key_fill( gortt_probs_key *key, const gortt_parameters *p,
+                                  const gortt_control *c )
 {
 
-	int j ;
-
-	for( j=0; j<p->nth; j++ )
-		printf( "%d %.17g %.17g\n", j, p->p_n0[0][j], p->epgap[0][j] );
-
-	printf( "-1 %.17g %.17g\n",  p->k_open[0], p->k_openep[0]  );
+	key->r         = p->r ;
+	key->b         = p->b ;
+	key->h1        = p->h1 ;
+	key->h2        = p->h2 ;
+	key->lambda    = p->lambda ;
+	key->favd      = p->favd ;
+	key->dth       = p->dth ;
+	key->lad       = p->lad ;
+	key->maxcrowns = p->maxcrowns ;
+	key->nquad     = p->nquad ;
+	key->q08       = ( c->use_q08_pn_kopen == TRUE ) ;
 
 	return ;
 
 }
 
 
-static void gortt_read_prob_file( gortt_parameters *p, char *bin_name )
+/*
+Describe how two cache keys differ, one line per field, mentioning only
+the fields that actually do. Returns the number of them; out must be at
+least PROBS_DIFF_LEN long and is left a printable string either way.
+
+The integer fields go through the same double comparison as the rest:
+lad, maxcrowns, nquad and q08 are all small enough to be exact, and %.17g
+prints them without a fractional part.
+*/
+static int gortt_probs_key_diff( const gortt_probs_key *f, const gortt_probs_key *r, char *out )
 {
 
+	static const char *names[] = { "r", "b", "h1", "h2", "lambda", "favd",
+	                               "dth", "lad", "maxcrowns", "nquad", "q08" } ;
+	double fv[ PROBS_NCMP ], rv[ PROBS_NCMP ] ;
+	int i, n=0, used=0 ;
+
+	fv[  0 ] = f->r         ; rv[  0 ] = r->r         ;
+	fv[  1 ] = f->b         ; rv[  1 ] = r->b         ;
+	fv[  2 ] = f->h1        ; rv[  2 ] = r->h1        ;
+	fv[  3 ] = f->h2        ; rv[  3 ] = r->h2        ;
+	fv[  4 ] = f->lambda    ; rv[  4 ] = r->lambda    ;
+	fv[  5 ] = f->favd      ; rv[  5 ] = r->favd      ;
+	fv[  6 ] = f->dth       ; rv[  6 ] = r->dth       ;
+	fv[  7 ] = f->lad       ; rv[  7 ] = r->lad       ;
+	fv[  8 ] = f->maxcrowns ; rv[  8 ] = r->maxcrowns ;
+	fv[  9 ] = f->nquad     ; rv[  9 ] = r->nquad     ;
+	fv[ 10 ] = f->q08       ; rv[ 10 ] = r->q08       ;
+
+	*out = '\0' ;
+
+	for( i=0; i<PROBS_NCMP; i++ ){
+
+		if( fv[ i ] == rv[ i ] ) continue ;
+
+		n++ ;
+
+		if( used < PROBS_DIFF_LEN-1 )
+			used += snprintf( out+used, (size_t)( PROBS_DIFF_LEN-used ),
+			                  "  %-9s file %-24.17g run %.17g\n",
+			                  names[ i ], fv[ i ], rv[ i ] ) ;
+
+		if( used > PROBS_DIFF_LEN-1 ) used = PROBS_DIFF_LEN-1 ;
+
+	}
+
+	out[ PROBS_DIFF_LEN-1 ] = '\0' ;
+
+	return n ;
+
+}
+
+
+/*A malformed line, reported the same way everywhere.*/
+static void gortt_probs_bad( const char *bin_name, const char *fn, int nline, const char *what )
+{
+
+	fprintf( stderr, "%s: %s line %d: %s\n", bin_name, fn, nline, what );
+	exit( EXIT_FAILURE );
+
+	return ;
+
+}
+
+
+/*
+Is everything from s on whitespace? Used to refuse a data or metadata
+line with anything trailing it, so that a file gortt did not write is an
+error rather than a silently truncated read.
+*/
+static int gortt_probs_rest_blank( const char *s )
+{
+
+	while( *s != '\0' ){
+		if( !isspace( (unsigned char) *s ) ) return FALSE ;
+		s++ ;
+	}
+
+	return TRUE ;
+
+}
+
+
+/*
+Everything the header has to satisfy before its tables may be used,
+checked in the order a user would want to hear about it: is this the
+right canopy, is it the right shape, does it go deep enough.
+
+Split out from gortt_read_prob_file so that it can run both at the first
+data line -- where it has to, because the row counts size an allocation
+-- and after the loop, for a file that has a header and no data at all.
+*/
+static void gortt_probs_check_header( const gortt_probs_header *hd, const gortt_parameters *p,
+                                      const gortt_control *c, const char *bin_name,
+                                      const char *fn )
+{
+
+	static const char *names[] = { "r", "b", "h1", "h2", "lambda", "favd",
+	                               "lad", "maxcrowns", "dth", "nquad", "q08",
+	                               "nth", "nh" } ;
+	gortt_probs_key rkey ;
+	char diffs[ PROBS_DIFF_LEN ] ;
+	int i ;
+
+	for( i=0; i<PROBS_NKEY-1; i++ )
+		if( !( hd->seen & ( 1u << i ) ) ){
+			fprintf( stderr, "%s: %s has no \"%s\" line -- regenerate it with -W\n",
+			         bin_name, fn, names[ i ] );
+			exit( EXIT_FAILURE );
+		}
+
+	gortt_probs_key_fill( &rkey, p, c );
+
+	if( gortt_probs_key_diff( &hd->key, &rkey, diffs ) > 0 ){
+		fprintf( stderr, "%s: %s was not written by this configuration:\n%s",
+		         bin_name, fn, diffs );
+		fprintf( stderr, "the gap probabilities depend on every one of these, so recompute\n"
+		                 "the file with -W and the same options\n" );
+		exit( EXIT_FAILURE );
+	}
+
+	if( hd->nth != p->nth ){
+		fprintf( stderr, "%s: %s holds %d zenith angles, this run has %d\n",
+		         bin_name, fn, hd->nth, p->nth );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	More rows than the run needs is fine and is the point of writing them:
+	a "-lidar -W" file serves an ordinary BRF run, which reads the ground
+	row alone. Fewer is not.
+	*/
+	if( hd->nh < p->nh_probs ){
+		if( hd->nh == 1 )
+			fprintf( stderr, "%s: %s holds the ground layer only, and a waveform is a\n"
+			                 "function of height -- regenerate it with \"-lidar -W\"\n",
+			         bin_name, fn );
+		else
+			fprintf( stderr, "%s: %s holds %d layers, this run needs %d\n",
+			         bin_name, fn, hd->nh, p->nh_probs );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	Only a height resolved file records nlayers, and only a run that reads
+	above the ground cares: row h means p->height[h], which is a function
+	of nlayers. The ground row is z1 = h1 - b at every nlayers, so a
+	ground only file is independent of it and does not claim otherwise.
+	*/
+	if( p->nh_probs > 1 ){
+
+		if( !( hd->seen & ( 1u << PROBS_K_NLAYERS ) ) ){
+			fprintf( stderr, "%s: %s has %d layers but no \"nlayers\" line\n",
+			         bin_name, fn, hd->nh );
+			exit( EXIT_FAILURE );
+		}
+
+		if( hd->nlayers != p->nlayers ){
+			fprintf( stderr, "%s: %s is on a height grid of %d layers, this run has %d\n"
+			                 "-- rerun it with -nlayers %d, or regenerate the file\n",
+			         bin_name, fn, hd->nlayers, p->nlayers, hd->nlayers );
+			exit( EXIT_FAILURE );
+		}
+
+	}
+
+	return ;
+
+}
+
+
+static void gortt_write_prob_file( const gortt_parameters *p, const gortt_control *c )
+{
+
+	gortt_probs_key key ;
+	int h, t ;
+
+	gortt_probs_key_fill( &key, p, c );
+
+	printf( "%s %d\n", PROBS_MAGIC, PROBS_VERSION );
+
+	printf( "# the canopy these tables are for: -P refuses a file whose\n" );
+	printf( "# values differ from the run reading it\n" );
+	printf( "r %.17g\n",      key.r );
+	printf( "b %.17g\n",      key.b );
+	printf( "h1 %.17g\n",     key.h1 );
+	printf( "h2 %.17g\n",     key.h2 );
+	printf( "lambda %.17g\n", key.lambda );
+	printf( "favd %.17g\n",   key.favd );
+	printf( "lad %d\n",       key.lad );
+	printf( "maxcrowns %d\n", key.maxcrowns );
+	printf( "dth %.17g\n",    key.dth );
+	printf( "nquad %d\n",     key.nquad );
+	printf( "q08 %d\n",       key.q08 );
+
+	printf( "# what the file holds\n" );
+	printf( "nth %d\n", p->nth );
+	printf( "nh %d\n",  p->nh_probs );
+
+	/*
+	nlayers only when there is more than the ground row. See the comment
+	on gortt_probs_check_header: a ground only file does not depend on it,
+	and writing it anyway would stop tests/probs-nlayers being byte
+	identical to tests/probs, which is what pins the decoupling of the
+	tables from the reporting grid.
+	*/
+	if( p->nh_probs > 1 ) printf( "nlayers %d\n", p->nlayers );
+
+	printf( "# h t p_n0 epgap\n" );
+	for( h=0; h<p->nh_probs; h++ )
+		for( t=0; t<p->nth; t++ )
+			printf( "p %d %d %.17g %.17g\n", h, t, p->p_n0[ h ][ t ], p->epgap[ h ][ t ] );
+
+	printf( "# h k_open k_openep\n" );
+	for( h=0; h<p->nh_probs; h++ )
+		printf( "k %d %.17g %.17g\n", h, p->k_open[ h ], p->k_openep[ h ] );
+
+	return ;
+
+}
+
+
+static void gortt_read_prob_file( gortt_parameters *p, const gortt_control *c, char *bin_name )
+{
+
+	static const char *keys[ PROBS_NKEY ] = { "r", "b", "h1", "h2", "lambda", "favd",
+	                                          "lad", "maxcrowns", "dth", "nquad", "q08",
+	                                          "nth", "nh", "nlayers" } ;
+	gortt_probs_header hd ;
 	FILE *fp ;
-	int j ;
-	double x1, x2 ;
+	char line[ MAX_LINE_LEN ], tag[ 64 ] ;
+	char *seen_p=NULL, *seen_k=NULL ;
+	int h, t, i, ver, nc, nline=0, checked=FALSE ;
+	double x1, x2, v ;
+
+	memset( &hd, 0, sizeof( hd ) );
 
 	if( ( fp = fopen( p->prob_fn, "r") ) == NULL ){
 		fprintf( stderr, "%s: error opening probability file: %s\n", bin_name, p->prob_fn );
 		exit( EXIT_FAILURE );
 	}
 
-	while( fscanf( fp, "%d %lf %lf", &j, &x1, &x2 ) == 3 ){
-		if( j>=0 ){
-			p->p_n0[0][j]=x1;
-			p->epgap[0][j]=x2;
-		}else{
-			p->k_open[0]=x1;
-			p->k_openep[0] =x2;
+	while( fgets( line, MAX_LINE_LEN, fp ) != NULL ){
+
+		nline++ ;
+
+		/*
+		The magic first. A file with no header is one written by a gortt
+		from before the format was versioned: it held the ground row
+		alone and recorded nothing about the canopy it was for, so there
+		is no way to check it and no way to use it for a waveform.
+		Refusing beats guessing -- it is a cache, and -W rebuilds it in
+		about a tenth of a second.
+		*/
+		if( nline == 1 ){
+
+			if( sscanf( line, "%63s %d", tag, &ver ) != 2 || strcmp( tag, PROBS_MAGIC ) ){
+				fprintf( stderr, "%s: %s is not a gortt probability file\n"
+				                 "(no \"%s\" header -- regenerate it with -W)\n",
+				         bin_name, p->prob_fn, PROBS_MAGIC );
+				exit( EXIT_FAILURE );
+			}
+
+			if( ver != PROBS_VERSION ){
+				fprintf( stderr, "%s: %s is probability file format %d, this gortt\n"
+				                 "writes format %d -- regenerate it with -W\n",
+				         bin_name, p->prob_fn, ver, PROBS_VERSION );
+				exit( EXIT_FAILURE );
+			}
+
+			continue ;
+
 		}
+
+		if( sscanf( line, "%63s", tag ) != 1 ) continue ;	/*blank line*/
+		if( tag[ 0 ] == '#' ) continue ;
+
+		/*---- the tables --------------------------------------------*/
+
+		if( !strcmp( tag, "p" ) || !strcmp( tag, "k" ) ){
+
+			/*
+			The header has to be complete and correct here, because the
+			row counts in it are what says how many rows to expect and
+			size the bookkeeping below.
+			*/
+			if( checked == FALSE ){
+				if( !( hd.seen & ( 1u << PROBS_K_NTH ) ) || !( hd.seen & ( 1u << PROBS_K_NH ) ) )
+					gortt_probs_bad( bin_name, p->prob_fn, nline,
+					                 "table data before the nth and nh lines" );
+				gortt_probs_check_header( &hd, p, c, bin_name, p->prob_fn );
+				checked = TRUE ;
+				seen_p = calloc( (size_t) hd.nh * (size_t) hd.nth, 1 );
+				seen_k = calloc( (size_t) hd.nh, 1 );
+				if( seen_p == NULL || seen_k == NULL ){
+					fprintf( stderr, "%s: out of memory reading %s\n", bin_name, p->prob_fn );
+					exit( EXIT_FAILURE );
+				}
+			}
+
+			if( tag[ 0 ] == 'p' ){
+
+				if( sscanf( line, "%63s %d %d %lf %lf %n", tag, &h, &t, &x1, &x2, &nc ) != 5
+				    || !gortt_probs_rest_blank( line+nc ) )
+					gortt_probs_bad( bin_name, p->prob_fn, nline,
+					                 "expected \"p <h> <t> <p_n0> <epgap>\"" );
+
+				if( h<0 || h>=hd.nh || t<0 || t>=hd.nth )
+					gortt_probs_bad( bin_name, p->prob_fn, nline, "row index out of range" );
+
+				if( seen_p[ h*hd.nth + t ] )
+					gortt_probs_bad( bin_name, p->prob_fn, nline, "duplicate p row" );
+				seen_p[ h*hd.nth + t ] = 1 ;
+
+				/*
+				Keep only what will be read. A file may be deeper than
+				the run needs, and the rows past nh_probs have nowhere to
+				go: the tables are allocated nlayers rows and nh_probs is
+				either 1 or nlayers.
+				*/
+				if( h < p->nh_probs ){
+					p->p_n0[ h ][ t ]  = x1 ;
+					p->epgap[ h ][ t ] = x2 ;
+				}
+
+			}else{
+
+				if( sscanf( line, "%63s %d %lf %lf %n", tag, &h, &x1, &x2, &nc ) != 4
+				    || !gortt_probs_rest_blank( line+nc ) )
+					gortt_probs_bad( bin_name, p->prob_fn, nline,
+					                 "expected \"k <h> <k_open> <k_openep>\"" );
+
+				if( h<0 || h>=hd.nh )
+					gortt_probs_bad( bin_name, p->prob_fn, nline, "row index out of range" );
+
+				if( seen_k[ h ] )
+					gortt_probs_bad( bin_name, p->prob_fn, nline, "duplicate k row" );
+				seen_k[ h ] = 1 ;
+
+				if( h < p->nh_probs ){
+					p->k_open[ h ]   = x1 ;
+					p->k_openep[ h ] = x2 ;
+				}
+
+			}
+
+			continue ;
+
+		}
+
+		/*---- metadata ----------------------------------------------*/
+
+		if( checked == TRUE )
+			gortt_probs_bad( bin_name, p->prob_fn, nline, "metadata after the table data" );
+
+		for( i=0; i<PROBS_NKEY; i++ )
+			if( !strcmp( tag, keys[ i ] ) ) break ;
+
+		if( i == PROBS_NKEY )
+			gortt_probs_bad( bin_name, p->prob_fn, nline, "unknown key" );
+
+		if( hd.seen & ( 1u << i ) )
+			gortt_probs_bad( bin_name, p->prob_fn, nline, "duplicate key" );
+
+		if( sscanf( line, "%63s %lf %n", tag, &v, &nc ) != 2
+		    || !gortt_probs_rest_blank( line+nc ) )
+			gortt_probs_bad( bin_name, p->prob_fn, nline, "expected \"<key> <value>\"" );
+
+		hd.seen |= 1u << i ;
+
+		switch( i ){
+			case PROBS_K_R         : hd.key.r         = v ; break ;
+			case PROBS_K_B         : hd.key.b         = v ; break ;
+			case PROBS_K_H1        : hd.key.h1        = v ; break ;
+			case PROBS_K_H2        : hd.key.h2        = v ; break ;
+			case PROBS_K_LAMBDA    : hd.key.lambda    = v ; break ;
+			case PROBS_K_FAVD      : hd.key.favd      = v ; break ;
+			case PROBS_K_DTH       : hd.key.dth       = v ; break ;
+			case PROBS_K_LAD       : hd.key.lad       = (int) v ; break ;
+			case PROBS_K_MAXCROWNS : hd.key.maxcrowns = (int) v ; break ;
+			case PROBS_K_NQUAD     : hd.key.nquad     = (int) v ; break ;
+			case PROBS_K_Q08       : hd.key.q08       = (int) v ; break ;
+			case PROBS_K_NTH       : hd.nth           = (int) v ; break ;
+			case PROBS_K_NH        : hd.nh            = (int) v ; break ;
+			case PROBS_K_NLAYERS   : hd.nlayers       = (int) v ; break ;
+		}
+
+		/*
+		These two size an allocation below, so they are sanity checked
+		the moment they are read rather than after it.
+		*/
+		if( ( i == PROBS_K_NTH || i == PROBS_K_NH ) && ( v < 1.0 || v > (double) PROBS_MAXROWS ) )
+			gortt_probs_bad( bin_name, p->prob_fn, nline, "implausible row count" );
+
 	}
 
 	fclose( fp );
+
+	/*
+	An empty file never reaches the magic check above, because the loop
+	body never runs. It is the same complaint.
+	*/
+	if( nline == 0 ){
+		fprintf( stderr, "%s: %s is empty, so it is not a gortt probability file\n"
+		                 "(regenerate it with -W)\n", bin_name, p->prob_fn );
+		exit( EXIT_FAILURE );
+	}
+
+	/*A header and no tables at all: say what is wrong with the header.*/
+	if( checked == FALSE ){
+		gortt_probs_check_header( &hd, p, c, bin_name, p->prob_fn );
+		fprintf( stderr, "%s: %s holds no gap probabilities at all\n", bin_name, p->prob_fn );
+		exit( EXIT_FAILURE );
+	}
+
+	/*
+	A short file used to be the worst outcome of the lot: the old reader
+	stopped at the first line it could not parse and left the rest of the
+	tables at their calloc zero, and the run went on to print -nan and
+	exit 0. Count the rows instead.
+	*/
+	for( h=0; h<hd.nh; h++ ){
+		for( t=0; t<hd.nth; t++ )
+			if( !seen_p[ h*hd.nth + t ] ){
+				fprintf( stderr, "%s: %s is incomplete: no \"p %d %d\" row\n",
+				         bin_name, p->prob_fn, h, t );
+				exit( EXIT_FAILURE );
+			}
+		if( !seen_k[ h ] ){
+			fprintf( stderr, "%s: %s is incomplete: no \"k %d\" row\n",
+			         bin_name, p->prob_fn, h );
+			exit( EXIT_FAILURE );
+		}
+	}
+
+	free( seen_p );
+	free( seen_k );
 
 	return ;
 
@@ -1408,6 +1907,7 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 	p->read_prob_file=FALSE ;
 	p->write_prob_file=FALSE;
+	p->prob_fn[ 0 ]='\0' ;
 	p->use_user_beta=FALSE ;
 
 
@@ -1534,7 +2034,11 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 
 			else if( !strncmp( argv[ i ], "-lidar", 6 ) ) c->lidar_mode=TRUE;
 
-			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE; strcpy( p->prob_fn, gortt_next_arg( argc, argv, &i ) );}
+			else if( !strncmp( argv[ i ], "-P", 2 ) ){ p->read_prob_file=TRUE;
+				/*strncpy, not strcpy: prob_fn is a fixed MAX_LINE_LEN buffer
+				and the argument is whatever the user typed*/
+				strncpy( p->prob_fn, gortt_next_arg( argc, argv, &i ), MAX_LINE_LEN-1 );
+				p->prob_fn[ MAX_LINE_LEN-1 ] = '\0' ; }
 			else if( !strncmp( argv[ i ], "-W", 2 ) ) p->write_prob_file=TRUE;
 
 			/*prospect*/
@@ -1693,25 +2197,31 @@ void gortt_cl_parser( int argc, char **argv, gortt_parameters *p, gortt_spectra 
 	if( c->lidar_mode == TRUE ) p->nh_probs = p->nlayers ;
 
 	/*
-	Lidar mode is incompatible with three things, all for the same reason:
-	they only ever deal with the gap probabilities at the ground.
+	-W with -P reads a file and writes it straight back out, which is
+	either a typo or a misunderstanding of what -W does. Neither is worth
+	a run that does no modelling and says nothing about it.
+	*/
+	if( p->read_prob_file == TRUE && p->write_prob_file == TRUE ){
+		fprintf( stderr, "%s: -W and -P do the opposite things and cannot be combined:\n", argv[ 0 ] );
+		fprintf( stderr, "-W computes the gap probabilities and writes them, -P reads them back\n" );
+		exit( EXIT_FAILURE );
+	}
 
-	  -P / -W   gortt_write_prob_file and gortt_read_prob_file serialise
-	            row 0 alone, so a -P run has zeros above the ground. -W
-	            also short-circuits main(), as lidar mode does.
-	  -q08      gortt_gap_probabilities_Q08 is only coded for h=0 and
-	            says so itself.
+	/*
+	-W and -P are no longer among them: the file format carries every row
+	the run computed, so "-lidar -W" writes a waveform-depth file and
+	"-lidar -P" reads one back. Nothing is needed here for that, because
+	main() tests -W before the lidar short-circuit and nh_probs has just
+	been raised above -- but a file that is too shallow or on the wrong
+	height grid still has to be caught, and gortt_probs_check_header is
+	where that now happens.
 
+	Lidar mode remains incompatible with the Q08 approximation, which
+	gortt_gap_probabilities_Q08 only codes for h=0 and says so itself.
 	Silently returning zeros for the whole canopy is a much worse outcome
 	than refusing, so refuse.
 	*/
 	if( c->lidar_mode == TRUE ){
-
-		if( p->read_prob_file == TRUE || p->write_prob_file == TRUE ){
-			fprintf( stderr, "%s: -lidar cannot be combined with -P or -W: the gap probability\n", argv[ 0 ] );
-			fprintf( stderr, "file format holds the ground layer only, and a waveform needs every layer\n" );
-			exit( EXIT_FAILURE );
-		}
 
 		if( c->use_q08_pn_kopen == TRUE ){
 			fprintf( stderr, "%s: -lidar cannot be combined with -q08_pn_kopen: the Q08\n", argv[ 0 ] );
@@ -1815,7 +2325,10 @@ void gortt_usage( char *bin_name )
 
 	fprintf( stderr, "\n============ Read/write gap probabilities:\n" );
 	fprintf( stderr, "-W       \tgo as far as calculating the gap probabilities and write these to the stdout and exit\n"  );
+	fprintf( stderr, "         \tthe file records the canopy it was computed for, and -P refuses one that does\n"  );
+	fprintf( stderr, "         \tnot match. With -lidar it holds every layer rather than only the ground.\n"  );
 	fprintf( stderr, "-P file  \tread gap probabilities from file that have been written using the -W option\n"  );
+	fprintf( stderr, "         \tonly spectral options may differ between the -W and the -P run\n"  );
 	fprintf( stderr, "         \tn.b. the above two options are included to allow fast BRF calculation based on\n"  );
 	fprintf( stderr, "         \tpre-computed gap probabilities. The model must be run using the same crown and canopy\n"  );
 	fprintf( stderr, "         \tgeometry options for the read and write. Spectral options (i.e. Prospect and Price options)\n"  );
@@ -1833,8 +2346,10 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-lidar           \tpredict the lidar waveform instead of the BRF, and exit\n"  );
 	fprintf( stderr, "                 \tn.b. lidar mode does not read stdin at all: the device is assumed to be\n"  );
 	fprintf( stderr, "                 \tat nadir, so no view/illumination geometry is required. Normal output is\n"  );
-	fprintf( stderr, "                 \tsuppressed. Cannot be combined with -W, -P or -q08_pn_kopen, all of which\n"  );
-	fprintf( stderr, "                 \tonly deal with the gap probabilities at the ground.\n"  );
+	fprintf( stderr, "                 \tsuppressed. Cannot be combined with -q08_pn_kopen, which only deals with\n"  );
+	fprintf( stderr, "                 \tthe gap probabilities at the ground.\n"  );
+	fprintf( stderr, "                 \t-W and -P do work here: \"-lidar -W\" writes a file holding every layer,\n"  );
+	fprintf( stderr, "                 \tand \"-lidar -P\" reads one back. The same file also serves a BRF run.\n"  );
 	fprintf( stderr, "-lidar_wl arg    \tset the lidar wavelength (nm) to arg (default 1064, must be 400-2500)\n"  );
 	fprintf( stderr, "-lidar_J0 arg    \tset the emitted pulse energy to arg (default 1, a pure scale factor)\n"  );
 	fprintf( stderr, "-lidar_waveform  \temit the binned waveform rather than the per-layer profile\n"  );

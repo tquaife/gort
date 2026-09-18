@@ -1,0 +1,2 @@
+../gortt: -W and -P do the opposite things and cannot be combined:
+-W computes the gap probabilities and writes them, -P reads them back

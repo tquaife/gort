@@ -59,12 +59,17 @@ def mc_cover(scn, crowns, n=400000, seed=1):
 
 
 def gortt_nadir_gap(scn):
-    """P(0) at nadir from `gortt -W`: row 0 is theta = 0, columns p_n0 and epgap."""
+    """
+    P(0) at nadir from `gortt -W`: the "p 0 0" row of the probability file,
+    which is the ground layer at theta = 0, summed over its p_n0 and epgap
+    columns.  See the format comment on gortt_write_prob_file.
+    """
     out = sc.gortt_probabilities(scn)
-    first = out.splitlines()[0].split()
-    if int(first[0]) != 0:
-        sys.exit("validate: unexpected -W layout: %r" % first)
-    return float(first[1]) + float(first[2])
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) == 5 and f[0] == "p" and f[1] == "0" and f[2] == "0":
+            return float(f[3]) + float(f[4])
+    sys.exit("validate: no \"p 0 0\" row in -W output")
 
 
 def flight_run(scn, workdir, mode, sza, vza, raa, realisation=0,

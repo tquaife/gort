@@ -1846,9 +1846,11 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "\n============ Experimental scattering options:\n" );
 
   fprintf( stderr, "  Ni et al. (1999) section V says the model is validated over dense forests, and\n"  );
-  fprintf( stderr, "  defers three things that matter as a canopy opens up. Each of these switches one\n"  );
-  fprintf( stderr, "  of them on. All are off by default: with none of them given the model is the\n"  );
-  fprintf( stderr, "  paper as published.\n"  );
+  fprintf( stderr, "  defers three things that matter as a canopy opens up; most of these switch one\n"  );
+  fprintf( stderr, "  of them on. -rt_crown_brdf and -rt_upscatter do not: the first comes from\n"  );
+  fprintf( stderr, "  measuring a single crown against a Monte Carlo, the second from the two-stream\n"  );
+  fprintf( stderr, "  closure underneath eqs (8)-(11). All are off by default: with none of them\n"  );
+  fprintf( stderr, "  given the model is the paper as published.\n"  );
 
 	fprintf( stderr, "-rt_crown_path \ttake the crown path reflectances from a crown rather than from a layer\n"  );
 	fprintf( stderr, "               \tholding the whole scene's foliage. Eqs (15)-(16) use the latter, so a\n"  );

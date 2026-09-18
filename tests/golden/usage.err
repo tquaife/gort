@@ -95,9 +95,11 @@ preferred because it reduces equifinality.
 
 ============ Experimental scattering options:
   Ni et al. (1999) section V says the model is validated over dense forests, and
-  defers three things that matter as a canopy opens up. Each of these switches one
-  of them on. All are off by default: with none of them given the model is the
-  paper as published.
+  defers three things that matter as a canopy opens up; most of these switch one
+  of them on. -rt_crown_brdf and -rt_upscatter do not: the first comes from
+  measuring a single crown against a Monte Carlo, the second from the two-stream
+  closure underneath eqs (8)-(11). All are off by default: with none of them
+  given the model is the paper as published.
 -rt_crown_path 	take the crown path reflectances from a crown rather than from a layer
                	holding the whole scene's foliage. Eqs (15)-(16) use the latter, so a
                	stand of widely spaced crowns comes out with black crowns.

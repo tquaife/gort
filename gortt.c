@@ -2297,6 +2297,8 @@ void gortt_usage( char *bin_name )
 
 	fprintf( stderr, "-h1 arg    \tset the lower boundary of the crown centres (m) to arg\n"  );
 	fprintf( stderr, "-h2 arg    \tset the upper boundary of the crown centres (m) to arg\n"  );
+	fprintf( stderr, "           \t[n.b. h2 must not be below h1; h2 equal to h1 is a canopy of\n"  );
+	fprintf( stderr, "           \tequal-height crowns and is allowed]\n"  );
 	fprintf( stderr, "-b arg     \tset the vertical crown radius (m) to arg\n"  );
 	fprintf( stderr, "-r arg     \tset the horizontal crown radius (m) to arg\n"  );
 	fprintf( stderr, "-lambda arg\tset the tree stem density (1/m2) to arg\n"  );
@@ -2321,6 +2323,12 @@ void gortt_usage( char *bin_name )
 	fprintf( stderr, "-favd arg\tset the foliage area volume density (1/m) within crown to arg\n"  );
   fprintf( stderr, "\n------------ OR:\n" );
 	fprintf( stderr, "-LAI  arg\tset the leaf area index (m2/m2) for the scene to arg\n"  );
+
+	fprintf( stderr, "\n============ Illumination:\n" );
+	fprintf( stderr, "-diffuse arg\tset the diffuse fraction of the incoming radiation to arg, at every\n"  );
+	fprintf( stderr, "            \tsolar zenith. Without it the direct fraction is derived per angle\n"  );
+	fprintf( stderr, "            \tfrom the sun position as mu/(mu+0.09), Ni et al. (1997) eq. 5; see\n"  );
+	fprintf( stderr, "            \talso -rt_fd_paper below.\n"  );
 
 	fprintf( stderr, "\n============ Prospect leaf options:\n" );
 

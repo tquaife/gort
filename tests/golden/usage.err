@@ -17,6 +17,8 @@ The command line options are:
 ------------ EITHER (old style):
 -h1 arg    	set the lower boundary of the crown centres (m) to arg
 -h2 arg    	set the upper boundary of the crown centres (m) to arg
+           	[n.b. h2 must not be below h1; h2 equal to h1 is a canopy of
+           	equal-height crowns and is allowed]
 -b arg     	set the vertical crown radius (m) to arg
 -r arg     	set the horizontal crown radius (m) to arg
 -lambda arg	set the tree stem density (1/m2) to arg
@@ -39,6 +41,12 @@ preferred because it reduces equifinality.
 
 ------------ OR:
 -LAI  arg	set the leaf area index (m2/m2) for the scene to arg
+
+============ Illumination:
+-diffuse arg	set the diffuse fraction of the incoming radiation to arg, at every
+            	solar zenith. Without it the direct fraction is derived per angle
+            	from the sun position as mu/(mu+0.09), Ni et al. (1997) eq. 5; see
+            	also -rt_fd_paper below.
 
 ============ Prospect leaf options:
 -N arg  	set the leaf structure variable to arg

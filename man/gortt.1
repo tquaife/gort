@@ -238,6 +238,16 @@ Lower boundary of the crown centres, m.  Default 3.0.
 .TP
 .BI \-h2 " arg"
 Upper boundary of the crown centres, m.  Default 8.5.
+.I h2
+below
+.I h1
+is refused.
+.I h2
+equal to
+.I h1
+is a canopy of equal\-height crowns and is modelled: the crown centre density
+is then a delta function, and the integrals over crown centre height are taken
+at that one plane.
 .TP
 .BI \-b " arg"
 Vertical crown radius, m.  Default 2.6999988 (3.55263 * r).
@@ -534,8 +544,8 @@ Set the fraction of incident radiation that is diffuse to
 i.e. fix the direct fraction at
 .RI 1\- frac .
 Without this option the direct fraction is derived per geometry from the solar
-zenith angle following Ni et al. (1999).  Not listed by
-.BR \-u .
+zenith angle following Ni et al. (1997); see
+.BR \-rt_fd_paper .
 .TP
 .B \-u
 Print a brief usage message to standard error and exit successfully.
@@ -900,9 +910,16 @@ Both the direct path and
 .B \-P
 return
 .B \-nan
-at a view or solar zenith of exactly 90 degrees, because the secant of 90
-degrees is infinite.  The gap probability tables are clamped to 89 degrees to
-keep them finite, but the BRF path is not.  Avoid the endpoint.
+when the view zenith and the solar zenith are
+.I both
+exactly 90 degrees.  Either one alone is finite.  The mutual shadowing carries
+sec i' + sec v' \- O, which is inf \- inf when both secants are infinite rather
+than simply infinite; it shows up in
+.I Kc
+and
+.IR Kt .
+The gap probability tables are clamped to 89 degrees to keep them finite, but
+the BRF path is not.  Avoid the corner.
 .
 .SS Leaf angle distribution
 The leaf angle distribution is effectively hardwired to a spherical
@@ -917,13 +934,17 @@ hemispherical integral has overwritten them.  This is only safe because neither
 background component depends on view direction.
 .
 .SS Known numerical issues
-Two known discrepancies against the published equations are deliberately left
-in place so that any fix shows up as a reviewable change in the regression
-goldens: the last trapezium panel of the k_open integral is built from a zero,
-and the principal\-plane interpolation in the sunlit crown kernel carries a
-factor of F squared where the analytic branch carries F.  See
+The last trapezium panel of the k_open integral is built from a duplicated
+abscissa, the top of the zenith grid being clamped; it is worth about 1e\-51
+against a k_open of 0.1 at the current one\-degree resolution.
+.PP
+More seriously, the crown projection volume behind the within\-crown gap
+probability does not agree with a Monte Carlo of the volume it computes: it is
+exact where the crown centre plane lies clear of the region, and up to 6 per
+cent out where it cuts it.  What that is worth to a reflectance has not been
+established.  See
 .I OPEN\-QUESTIONS.md
-in the source distribution.
+in the source distribution, which also records what has been fixed.
 .
 .SH SEE ALSO
 .IR README.md ,

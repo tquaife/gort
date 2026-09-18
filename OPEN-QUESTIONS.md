@@ -5,12 +5,17 @@ them is a modelling decision rather than a refactor, or because they need checki
 papers first. Nothing here is a regression: all of it predates the tidy-up.
 
 The tidy-up itself is on the `tidy-up` branch; `v0-pre-refactor` tags the code as it was.
-Every commit outside the "behaviour change" ones is byte-identical on all 51 test cases, so
+Every commit outside the "behaviour change" ones is byte-identical on all 124 test cases, so
 `make test` is the instrument for measuring anything below: change one thing, run it, and the
 harness prints the largest absolute and relative deviation per case.
 
 **Needs resolving first: item 9, β.** Since items 1 and 7 were fixed, β is the largest
-remaining error in the geometric-optical proportions.
+remaining error in the geometric-optical proportions. Item 14, found in September 2026, may
+turn out to matter more: it is a disagreement between `gortt_vol` and a Monte Carlo of the
+volume it computes, and it is not in a kernel but in the gap probabilities.
+
+Resolved since the list was written: 1, 7, 8 (the `-Anth` half), 10 and 13. Each keeps its
+number and carries a status line.
 
 ---
 
@@ -98,7 +103,23 @@ it.
 
 ---
 
-## 2. `-nan` at exactly 90 degrees zenith
+## 2. `-nan` at exactly 90 degrees zenith — narrower than this item used to say
+
+> **Re-measured September 2026.** It takes *both* angles. `vza = 90` at any other sun, and
+> `sza = 90` at any other view, both return a finite number today:
+>
+> | vza | sza | direct | `-P` |
+> |---:|---:|---:|---:|
+> | 90 | 0, 45, 89 | 0.368941, 0.543256, 0.511082 | same |
+> | 0, 45, 89 | 90 | 0.049343, 0.035701, 0.033509 | same |
+> | 90 | 90 | `-nan` | `-nan` |
+>
+> `-prnprop` at 90/90 puts it in `Kc` and `Kt`; `Kg` and `Kz` are 0. It is the
+> `sec i' + sec v' - O` of `gortt_kg`/`gortt_kc`, where both secants *and* the overlap are
+> infinite, so the mutual shadowing term is inf − inf rather than either secant on its own.
+> Which is why one grazing angle is survivable and two are not.
+>
+> The text below is the original item, and the options it lists are still the options.
 
 **Where:** the `SEC()` calls throughout `gortt_brdf.c` and `gortt_rsurf`.
 
@@ -214,14 +235,13 @@ is the thing you would actually want when writing this up.
 
 ## 8. Smaller usability items
 
-* **`-Anth` is documented but not accepted.** `gortt_usage` advertises it; `gortt_cl_parser`
-  matches `-canth` at three characters (i.e. `-ca`), so the documented spelling is rejected as
-  an unknown option. Pinned by the `badanth` case. Fix either the usage text or the parser —
-  and note the parser is prefix-matched and order-dependent, so adding a new spelling needs
-  care about both the length argument and its position in the if-chain.
-* **`-diffuse` is undocumented in `-u`**, and TODO.md flags the default as "a bit dangerous".
-  It sets `p->user_fd = 1 - frac`; without it `g->fd` is derived per angle from the solar
-  zenith following Ni et al. (1999).
+* ~~**`-Anth` is documented but not accepted.**~~ **Fixed.** The parser matches `-anth` at
+  five characters above `-canth`, which is kept as an alias and still matched on `-ca` alone,
+  so it has to stay below `-cab` and `-car`. The `badanth` case is gone; `prospect-anth`
+  exercises the spelling.
+* ~~**`-diffuse` is undocumented in `-u`**~~ — **fixed**, under a new "Illumination" heading;
+  `man/gortt.1` already had it. TODO.md still flags the *default* as "a bit dangerous", and
+  that part stands: without `-diffuse`, `g->fd` is derived per angle from the solar zenith.
 * **The stdin header line is capped at `MAX_LINE_LEN` (1000 characters)**, so roughly 200
   wavebands. This is not silent corruption — a truncation mid-number yields a wavelength below
   400 and trips the range check, and a truncation between numbers trips the
@@ -315,7 +335,36 @@ goldens.
 
 ---
 
-## 10. `-h1` equal to `-h2` hangs; nearly equal gives `-nan`
+## 10. `-h1` equal to `-h2` — **resolved**, the degenerate layer is now modelled
+
+> **Status: resolved, September 2026.** It is handled rather than refused, so same-height
+> crowns are a canopy gortt can do. `h2 < h1` is refused with a message.
+>
+> The hang had already gone by the time this was picked up (the quadrature work took the
+> loops off the layer grid); what was left was `p->lv = lambda/(h2-h1)` going infinite, and
+> `-nan` out of the three places that multiply it by an integral over the crown centre
+> heights. Each of those is `lv_p` times ∫ F(z) dz over [h1_p, h2_p], and each has the same
+> limit, λ·F(h1_p). So `p->single_height` is set in `gortt_init_params`, `lv_p` carries λ
+> instead of a volume density, and the three integrals return their integrand:
+>
+> | | integrand at h1_p |
+> |---|---|
+> | `gortt_crown_proj_volume` (Vgamma) | `gortt_crown_proj_cross_section` |
+> | `gortt_get_es` (E[S]) | `gortt_get_s` |
+> | the expected crown count in `gortt_calc_epgap_ht` | `gortt_capsule_cross_section`, new |
+>
+> The first two are the functions those integrals were already written in terms of. The third
+> is new because `gortt_vol` is a closed form for the volume rather than a quadrature over an
+> integrand, so there was nothing to reuse: see item 14, which came out of deriving it.
+>
+> `sameheight`, `sameheight-probs`, `sameheight-lidar` and `badheights` pin it, and the whole
+> suite is byte-identical for `h2 > h1`. **The BRF is 2.6e-4 relative away from the limit of
+> the thin-layer sequence** — 0.26501747 against 0.26508674 extrapolated from h2−h1 = 1e-4
+> down to 1e-8 — and that gap is item 14, not a fault in the limits: the sequence goes through
+> `gortt_vol`, which the Monte Carlo says is wrong by a few per cent in exactly the branch a
+> thin layer sits in. The two should agree once 14 is settled.
+>
+> The text below is the original item.
 
 `gortt -h1 5.75 -h2 5.75` does not return: the gap-probability calculation never finishes.
 `-h1 5.75 -h2 5.76` returns `-nan`. Both predate the kc-investigation changes; master
@@ -387,7 +436,36 @@ exactly, by construction, whatever `maxcrowns` is.
 
 ---
 
-## 13. Two removable singularities in `gortt_two_stream` print `-nan`
+## 13. Two removable singularities in `gortt_two_stream` print `-nan` — **resolved**
+
+> **Status: resolved, September 2026.** All three are evaluated at their limits — three,
+> because the `-rt_upscatter` branch reaches the first one through its own `det == 0` and had
+> the same `-nan` (`-refl_leaf 0.375 -trans_leaf 0.375` with an overhead sun does it, in both
+> branches at once).
+>
+> | | test | limit |
+> |---|---|---|
+> | 2γμ = 1 | `T_inf_df` is 0/0 | (T_inf_ff − t_0)/(1 − (2γμ)²) → kL sec(θ) t_0 / 2 |
+> | λ = s | the beam particular solution is 0/0 | R_inf_df → w[β + (1−β)R_inf_ff]/2, T_inf_df → wLt_0[(1−β)(a+s) + bβ]/2 |
+> | ω = 1 | the adding denominator is 0 | t_ff → 1/(1+aL), p_ff → aL/(1+aL), a = k(2−w) |
+>
+> The first two are the same singularity, in the published and the general-β branch; the
+> second reduces to the first at β = 1/2, and `twostream-upscatter` and
+> `twostream-upscatter-off` are byte-identical, which is two separately derived limits
+> agreeing to the last bit. The third is the classical conservative-scattering pair, and with
+> the two above it gives `p_df + t_df + t_0 = 1` to the last bit.
+>
+> Each guard tests the *denominator* against zero rather than the condition, because
+> `pow(2γμ,2)` can round to exactly 1 while `2γμ` is not: what needs catching is the
+> expression that cannot be evaluated, not the algebraic coincidence.
+>
+> Checked by approaching each line from outside: the published-branch limit is the tenfold
+> convergent of the sequence at Δtl = 1e-3 … 1e-7 (0.21124244, 0.21095237, 0.21092340,
+> 0.21092051, 0.21092022 → 0.21092018, the limit to eight figures). The 118 other goldens did
+> not move, which is the proof the guards are inert off the lines.
+>
+> `badtwostream-{gamma,omega1}` became `twostream-{gamma,omega1}` and now pin the values
+> rather than the `-nan`s. The text below is the original item.
 
 Both are in the published path, both are reachable from the command line, and both
 have a closed-form limit. Found while reconstructing the derivation of eqs (8)-(11)
@@ -423,6 +501,66 @@ Left alone deliberately: both are one-line guards, but they move the published p
 so they want their own commit with its own `make bless` rather than riding along with
 the crown BRDF work. `blackleaf` is the precedent for the opposite end of the same
 axis — `omega = 0` used to produce a NaN too, and was fixed and pinned.
+
+---
+
+## 14. `gortt_vol` disagrees with a Monte Carlo of the volume it computes — **new, and it is in the gap probabilities**
+
+Found in September 2026 while deriving the `h1 == h2` limit (item 10), not by reading the
+code. It is the only item on this list that is a plain numerical disagreement rather than a
+question about which published form to follow.
+
+**Where:** `gortt_vol` in `gortt_pn_kopen.c`, read twice by `gortt_calc_epgap_ht` as
+`gortt_vol(…, h2_p) − gortt_vol(…, h1_p)` — the expected number of crowns a beam penetrates
+along one panel of the first-contact integral, which is the exponent of the within-crown gap
+probability.
+
+**What it computes.** The region of crown centres whose crown meets the beam segment from
+`z_h` up to `z_s`, truncated below the plane `h_b`. That region is a capsule: the Minkowski
+sum of the segment with a ball of radius `r`, a crown being a sphere in the primed frame. Its
+untruncated volume is `gortt_vol`'s own `V_0 = pi r^2 s + 4/3 pi r^3`, which is the capsule
+exactly.
+
+**The disagreement.** `figures/capsule_volume_check.c` puts 4e7 random points in a box and
+counts those within `r` of the segment. With `h_b` above the capsule, gortt_vol is right to
+the noise of the count (0.01–0.02%). With `h_b` cutting it, it is not:
+
+| zenith | h_b = −0.26 | 0.50 | 1.11 | 1.50 | 4.30 |
+|---:|---:|---:|---:|---:|---:|
+| 0° | 0.00% | 0.01% | 0.01% | 0.01% | 0.02% |
+| 20° | **2.65%** | 0.02% | 0.02% | 0.02% | 0.02% |
+| 45° | **6.44%** | **0.55%** | 0.03% | 0.02% | 0.01% |
+| 70° | **3.63%** | **0.82%** | 0.10% | −0.11% | 0.01% |
+
+(`r = 1.7`, segment from `z_h = 0` to `z_s = 2.5`; 4.30 is above the capsule.) It is exact at
+nadir and grows with zenith, which places it in the branch where the cut plane lands between
+`z_h ± r sin t` — the one written with `gortt_trisec` and `gortt_cylind`. The two branches
+either side of it, the spherical cap and the plain cylinder, are both right.
+
+**Independently, the integrand is known.** `gortt_capsule_cross_section` (added with item 10)
+is that region's horizontal cross section,
+
+	A(z) = X(z_h,z) − X(z_s,z) + pi ( r^2 − (z−z_s)^2 )+
+
+with `X` = `gortt_crown_proj_cross_section`, the semi-infinite version already in the file:
+the near cap and the cylinder cancel between the two `X` terms and the far ball is what is
+left. The same program checks `A` against a pixel count of the region at four zeniths and
+eight heights and it agrees to the resolution of the count, and `∫A dz` reproduces the Monte
+Carlo. So there is a correct closed form for the integrand, and the check program contains
+both halves of the evidence.
+
+**What is not known** is what it is worth to the model. The two `gortt_vol` calls are a
+difference across `[h1_p, h2_p]`, so the errors partly cancel, and the result is then
+exponentiated, integrated over the first-contact panels and over zenith. The one number in
+hand is item 10's: the `h1 == h2` BRF, which uses the exact integrand, sits 2.6e-4 relative
+away from the limit of the `gortt_vol` sequence as `h2 → h1`. That is a lower bound on a
+thin layer and says nothing about a thick one.
+
+**To resolve:** integrate `gortt_capsule_cross_section` over `[h1_p, h2_p]` — closed form on
+the pieces where `X` is a circle or an ellipse, quadrature across the band, exactly as
+`gortt_crown_proj_volume` already does for Vgamma — and replace the `gortt_vol` difference
+with it. Then `make test`, and expect every golden to move. Fixing it also removes the
+discontinuity at `h2 = h1` recorded in item 10, which is the check that it worked.
 
 ---
 

@@ -85,14 +85,21 @@ See `OPEN-QUESTIONS.md` for things deliberately left alone and why.
 * Resolve β in `gortt_kc` — `OPEN-QUESTIONS.md` item 9. (Γi was corrected to the illumination
   area in c0ef2c3; the view-direction dependence is what remains.) It is now the largest error in the
   geometric-optical proportions, and fixing it will move most BRF goldens.
-* Make `-h1` equal to `-h2` work, or refuse it — `OPEN-QUESTIONS.md` item 10.
+* ~~Make `-h1` equal to `-h2` work, or refuse it~~ — **done**, it works: the three integrals
+  over crown centre height collapse onto their integrands and `h2 < h1` is refused.
+  `OPEN-QUESTIONS.md` item 10, and item 14 for what deriving it turned up.
+* **`gortt_vol` does not agree with a Monte Carlo of the volume it computes** — up to 6% where
+  the crown centre plane cuts the capsule, nothing where it does not. It is in the gap
+  probabilities, under the whole model. `OPEN-QUESTIONS.md` item 14 has the measurement, the
+  correct integrand, and what to do about it; `figures/capsule_volume_check.c` is the
+  instrument. Expect every golden to move.
 
 ## general
 
-* ~~Add example data for testing~~ — **done.** `tests/` is a 51-case golden-file suite:
-  `make test` (~3 s), `make bless` to re-capture. Covers stdout, stderr and exit status, so the
-  error paths are tested too. `tests/README.md` explains the layout, the `GORTT_PREC=17`
-  precision rationale, and the cases that pin known-bad behaviour.
+* ~~Add example data for testing~~ — **done.** `tests/` is a 124-case golden-file suite:
+  `make test` (~20 s), `make bless` to re-capture. Covers stdout, stderr and exit status, so the
+  error paths are tested too. `tests/README.md` explains the layout and the `GORTT_PREC=17`
+  precision rationale.
 * Documentation — **partly done.** `CLAUDE.md` covers build, test, architecture and the
   gotchas; `tests/README.md` covers the suite; `OPEN-QUESTIONS.md` covers what is still
   unresolved. There is still no user-facing documentation of the model or its options beyond

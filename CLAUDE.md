@@ -27,7 +27,7 @@ should be its own commit (with `-ffp-contract=off`).
 ## Testing
 
 ```bash
-make test       # 107 golden-file cases, ~20 s; or: cd tests && ./run.sh
+make test       # 124 golden-file cases, ~20 s; or: cd tests && ./run.sh
 make bless      # re-capture goldens -- only on a commit MEANT to change the numbers
 ```
 
@@ -42,9 +42,10 @@ is too coarse to catch a small regression: a 1e-7 perturbation of `favd` was vis
 BRF cases at `%f`, and 25 of 36 at full precision. The `-W` cases print `%.17g` and are the
 most sensitive probe in the suite.
 
-`badanth` deliberately pins *known-bad* behaviour so that fixing it shows up as a reviewable
-change, and `useprobs-{extreme,grazing}` hold `-P` to reproducing the direct path exactly —
-see `tests/README.md`.
+`useprobs-{extreme,grazing}` hold `-P` to reproducing the direct path exactly, and
+`sameheight*` cover the degenerate crown-centre layer — see `tests/README.md`. Nothing pins
+known-bad behaviour any more: `badanth` and `badtwostream-*` were the last two and both bugs
+are fixed.
 
 ## Running by hand
 
@@ -342,20 +343,21 @@ agree to 4e-16 against 6e-2 when `rl != tl`. It cannot be a byte-identical contr
 because `sqrt((1-w/2)^2-(w/2)^2)` is not `sqrt(1-w)` in floating point.
 
 **Known broken/incomplete paths:**
-* `-diffuse <frac>` sets `p->user_fd = 1 - frac` and is undocumented in `-u`. Without it,
-  `g->fd` is derived per-angle from the solar zenith following Ni et al. (1999). TODO.md flags
-  the current default as "a bit dangerous".
-* `-Anth` is advertised by `gortt -u` but the parser only matches `-canth`, so the documented
-  spelling is rejected. Pinned by the `badanth` test case.
+* `-diffuse <frac>` sets `p->user_fd = 1 - frac`. Without it, `g->fd` is derived per-angle
+  from the solar zenith following Ni et al. (1997). TODO.md flags the current default as "a
+  bit dangerous"; that is still open, though the option itself is now documented in `-u`.
 * The leaf angle distribution is effectively hardwired: `params.lad = LAD_05` and
-  `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else.
-* **Two removable singularities in `gortt_two_stream` print `-nan`**, both in the published
-  path and both reachable from the command line: `2*gamma*mu_i == 1` in `T_inf_df` (e.g.
-  `-refl_leaf 0.45 -trans_leaf 0.30` with an overhead sun) and `omega == 1` in eqs (8)-(9)
-  (`-refl_leaf 0.5 -trans_leaf 0.5`). Both have closed-form limits; OPEN-QUESTIONS #13 has
-  them. Pinned as known-bad by `badtwostream-{gamma,omega1}` the way `badanth` is, so a fix
-  shows up as a reviewable golden change. Not fixed in the crown BRDF work because the fix
-  moves the published path and wants its own `make bless`.
+  `gortt_leaf_angle_distribution` returns 0.5 (and warns) for anything else. Note that
+  un-hardwiring it is **not** the small change OPEN-QUESTIONS #4/#5 make it sound: `p->k`
+  feeds `p->tau`/`p->tau_p`, which feed the gap probability tables, which are canopy-fixed,
+  `const` downstream, and cached to a file whose key includes `lad`. A real LAD makes the
+  probabilities depend on the sun, which breaks that whole design, `-W`/`-P` included.
+* `gortt_vol` disagrees with a Monte Carlo of the volume it computes, by up to 6% where the
+  crown-centre plane cuts the capsule and not at all where it does not (OPEN-QUESTIONS #14,
+  `figures/capsule_volume_check.c`). It is in the gap probabilities, so it is under
+  everything. What it is worth to a BRF is not known.
+* **`-Anth`, the `-h1 == -h2` hang and the three `gortt_two_stream` singularities are
+  fixed** (September 2026). They were all listed here as known-bad; do not re-add them.
 
 **The geometric-optical kernels were checked against a Monte Carlo** (`KC-INVESTIGATION.md`),
 which led to these changes:
@@ -375,20 +377,27 @@ the illumination shadow area. **β is still wrong** (OPEN-QUESTIONS #9): the MC 
 backscatter and small in forward scatter, and the published formula does not depend on view
 direction at all.
 
-**`-h1` equal to `-h2` hangs** in the gap-probability code, and nearly equal gives `-nan`
-(OPEN-QUESTIONS #10).
+**`-h1` equal to `-h2` is a canopy the model does**, and `-h2` below `-h1` is refused.
+Crown centres on one plane make `p->lv` a delta function, so `p->single_height` is set in
+`gortt_init_params`, `lv_p` carries `lambda` rather than a volume density, and the three
+integrals over crown-centre height — Vgamma, `E[S]`, and the expected crown count in
+`gortt_calc_epgap_ht` — return their integrand at `h1_p` instead. Anything new that divides
+by `h2 - h1`, or that integrates over `[h1_p, h2_p]`, needs the same treatment.
+OPEN-QUESTIONS #10.
 
-**Both the direct path and `-P` return `-nan` at exactly 90° zenith**, because `theta[nth-1]`
-gives `sec(90°) = inf`. `gortt_init_params` clamps `theta[90]` to 89° to keep the probability
-tables finite, but the BRF path does not. Treating the endpoint analytically is a modelling
-decision, not a tidy-up.
+**Both the direct path and `-P` return `-nan` at a view zenith of 90° *and* a solar zenith of
+90° together**; either one alone is finite. It is `sec i' + sec v' - O` in the mutual
+shadowing, which is inf - inf when both secants are infinite, not a single `sec(90°)`.
+`gortt_init_params` clamps `theta[90]` to 89° to keep the probability tables finite, but the
+BRF path does not. Treating the endpoint analytically is a modelling decision, not a tidy-up
+(OPEN-QUESTIONS #2).
 
 `TODO.md` tracks the intended direction and what is already done. `OPEN-QUESTIONS.md` collects
 the things found during the tidy-up that were deliberately left alone — β in `gortt_kc`,
-the 90° endpoint, the hardwired leaf angle distribution, the `p->k`
-evaluated at the wrong solar zenith that has to be fixed before any real LAD goes in, and
-(#13) the two `-nan` singularities in `gortt_two_stream`. Read it before starting the lidar
-work.
+the 90° endpoint, the hardwired leaf angle distribution, the `p->k` evaluated at the wrong
+solar zenith that has to be fixed before any real LAD goes in, and (#14) the `gortt_vol`
+disagreement. Items carry a status line when they are resolved rather than being deleted, so
+read the status before acting on the body. Read it before starting the lidar work.
 
 **`CROWN-BRDF-INVESTIGATION.md` is the record of the crown BRDF work and is the one to
 read before touching `gortt_rt_init`, `gortt_crown_reflectance` or `gortt_kuusk`.** It

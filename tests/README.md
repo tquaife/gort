@@ -52,13 +52,27 @@ deviation in the commit message.
 
 ## Known-bad behaviour pinned here
 
-These cases record bugs, not correct behaviour. They exist so that fixing the
-bug shows up as a deliberate, reviewable change.
+Nothing, currently. The device is still worth knowing about: a case that pins
+a *bug* rather than correct behaviour, so that fixing it shows up as a
+deliberate, reviewable golden change instead of passing silently. There have
+been three, and all three bugs are now fixed:
 
-- **`badanth`** — `gortt -u` documents `-Anth`, but the parser only matches
-  `-canth` (at 3 characters, i.e. `-ca`), so the documented spelling is
-  rejected as an unknown option. `prospect-anth` exercises the spelling that
-  does work.
+- **`badanth`** — `-Anth` was documented by `-u` and rejected by the parser,
+  which matched only `-canth`. Gone; `prospect-anth` exercises the spelling.
+- **`badtwostream-gamma`, `badtwostream-omega1`** — two removable
+  singularities in `gortt_two_stream` that printed `-nan`. They are now
+  `twostream-gamma` and `twostream-omega1` and pin the limits, with
+  `twostream-upscatter{,-off}` for the third singularity, in the general-beta
+  branch. See OPEN-QUESTIONS.md #13.
+
+## The degenerate crown-centre layer
+
+`sameheight`, `sameheight-probs` and `sameheight-lidar` are `h1 == h2`: every
+crown centre on one plane, which makes `p->lv` a delta function and used to
+give `-nan`. The three cases take the same canopy through the BRF, the gap
+probability tables and the lidar profile, because the limit is taken in three
+separate places and the BRF averages over all of them. `badheights` is `h2`
+below `h1`, which is refused. See OPEN-QUESTIONS.md #10.
 
 ## Low sun
 

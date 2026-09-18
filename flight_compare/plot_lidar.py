@@ -16,22 +16,34 @@ One figure per scene, three panels:
       return that is several times larger.
 
   (c) where the energy goes: the fraction returned from the ground against the
-      fraction returned from the canopy.  This is where the absolute scalings
-      differ, and they are not equivalent quantities -- see the note below.
+      fraction returned from the canopy.  This is the panel the backscatter
+      coefficients control, and the one that caught the error in the published
+      model -- see the note below.
 
-Why the absolute magnitudes are not compared
---------------------------------------------
-gortt (gortt_lidar.c:93) uses
+Why the waveforms are normalised anyway
+---------------------------------------
+Panels (a) and (b) are normalised because the shape is dP/dz alone and carries
+no information about the backscatter coefficients either way.  Panel (c) is
+where those coefficients show up, and it is now a real comparison.
+
+It did not start that way.  gortt originally used
 
     rho_v = 2 * t_leaf / 3          rho_g = 0.5 * r_soil
 
-for the volume and ground backscatter coefficients.  rho_v is built from the
-leaf *transmittance*.  For a backscattered return the relevant leaf property is
-its reflectance, so this looks wrong, and at 1064 nm where r and t are close it
-is nearly harmless but not identical.  It is recorded here as a finding rather
-than worked around: nothing in gortt has been modified for this comparison.  It
-affects only the canopy-to-ground ratio in panel (c), never the shapes in (a)
-and (b).
+following Ni-Meister et al. (2001).  rho_v built from the leaf *transmittance*
+looked wrong for a backscattered return, and panel (c) showed it: gortt's
+ground fraction came out at 0.68-0.87 of FLIGHT's in every scene.  That was
+recorded as a finding rather than worked around, and it was right.  Ni-Meister
+et al. (2018), RSE 204, 229-243 corrects both coefficients -- the hotspot is at
+scattering angle xi = pi, not 0, so rho_v takes the reflection lobe of the
+phase function and not the transmission one, and rho_g is the soil albedo
+outright:
+
+    rho_v = 2 * r_leaf / 3          rho_g = r_soil
+
+gortt now uses those (gortt_lidar.c), and panel (c) agrees with FLIGHT to
+within 7% in every scene.  The change was made in the model on the paper's
+authority; nothing here is tuned against FLIGHT.
 
 What "orders 1-8" is
 --------------------
@@ -277,7 +289,7 @@ def plot_scene(scn, gortt, gmeta, flight, outdir, style, variants=None, suffix="
     ax.set_xticklabels(labels, fontsize=8)
     ax.set_ylim(0, 1)
     ax.set_ylabel("fraction of returned energy")
-    ax.set_title("energy partition\n(scalings are not equivalent -- see docstring)",
+    ax.set_title("energy partition\n(set by rho_g/rho_v -- see docstring)",
                  fontsize=8)
     ax.legend(fontsize=7, frameon=False, loc="lower right")
     ax.tick_params(direction="in", right=True)

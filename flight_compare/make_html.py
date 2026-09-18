@@ -495,11 +495,11 @@ def build(outdir, figdir, variant=None, name="index.html", extra_head=""):
   <div class="note warn">
     <strong>Deliberately not compared:</strong> the areal proportions of the
     scene components (gortt's Kc/Kg/Kt/Kz against FLIGHT's per-component
-    fractions). <strong>Absolute lidar magnitudes</strong> are not compared
-    either: gortt builds its volume backscatter coefficient from the leaf
-    <em>transmittance</em>, which is not the same quantity FLIGHT returns, so
-    the waveforms are compared as normalised shapes with the energy partition
-    shown separately.
+    fractions). The lidar waveforms are still compared as <strong>normalised
+    shapes</strong>, with the energy partition shown separately, because the
+    shape is <code>dP/dz</code> alone and is independent of the backscatter
+    coefficients &mdash; but the partition itself is now a real comparison
+    rather than a disclaimer, and it agrees. See the lidar findings below.
   </div>
 
   %(overview)s
@@ -536,13 +536,22 @@ def build(outdir, figdir, variant=None, name="index.html", extra_head=""):
       0.009&ndash;0.020 on a profile integrating to one, and mean return heights
       agree to 0.5&nbsp;m in the high-LAI scenes. gortt's mean return height is
       biased low, by 1.2&ndash;1.4&nbsp;m in the low-LAI prolate canopies.</li>
-      <li><strong>The lidar energy split differs by a factor of two, and it is
-      not the canopy structure.</strong> The nadir gap probability was validated
-      to within 0.8%% beforehand, so the difference can only be in the
-      backscatter coefficients &mdash; and it is: the implied &rho;<sub>g</sub>/
-      &rho;<sub>v</sub> is exactly 0.426 in gortt (every scene) against 0.79 in
-      FLIGHT. Numerically the factor of 0.5 on the soil reflectance is all of
-      it. It does not affect the waveform shape.</li>
+      <li><strong>The lidar energy split agrees, and getting there found a
+      bug in the published model.</strong> This comparison originally put
+      gortt's ground fraction at 0.68&ndash;0.87 of FLIGHT's &mdash; the implied
+      &rho;<sub>g</sub>/&rho;<sub>v</sub> was exactly 0.426 in gortt, every
+      scene, against 0.79 in FLIGHT. The nadir gap probability had been
+      validated to within 0.8%% beforehand, so it could only be the backscatter
+      coefficients, and this page recorded that as an open question for
+      Ni-Meister et al. (2001). It was: the 2018 restatement of that model
+      corrects both coefficients &mdash; &rho;<sub>v</sub> is built from the
+      leaf <em>reflectance</em>, the hotspot being at scattering angle
+      &xi;&nbsp;=&nbsp;&pi; rather than 0, and &rho;<sub>g</sub> is the soil
+      albedo outright rather than half of it. With those, gortt's implied
+      &rho;<sub>g</sub>/&rho;<sub>v</sub> is 0.750 against FLIGHT's 0.791 mean
+      (0.61&ndash;0.92 across scenes), and the ground fraction lands within 7%%
+      of FLIGHT in every scene (median ratio 0.97, was 0.84). The waveform
+      shapes are byte-unchanged, as they must be.</li>
       <li><strong>Multiple scattering shows up below the ground, not in the
       canopy.</strong> The <em>orders 1&ndash;8</em> curve is FLIGHT's
       cumulative waveform over scattering orders 1 to 8, single scattering

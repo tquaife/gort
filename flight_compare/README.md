@@ -210,24 +210,35 @@ return height agrees to 0.5 m for the high-LAI scenes. gortt's mean return
 height is biased low — by 1.2–1.4 m in the low-LAI prolate canopies, where it
 puts the return too far down the crown.
 
-**The ground-to-canopy energy split differs by about a factor of two, and it is
-not the canopy structure.** The nadir gap probability was validated between the
-two models to within 0.8% before any of this was run, so the partition can only
-come from the backscatter coefficients. Backing the implied ratio out of each
-model confirms it:
+**The ground-to-canopy energy split agrees — after this comparison turned up an
+error in the published model.** The nadir gap probability was validated between
+the two models to within 0.8% before any of this was run, so the partition can
+only come from the backscatter coefficients. Backing the implied ratio out of
+each model isolated it:
 
 | | implied ρ_g/ρ_v | |
 |---|---|---|
-| gortt | 0.426 exactly, every scene | `= 0.5 r_soil / (2 t_leaf/3)` |
+| gortt, as first written | 0.426 exactly, every scene | `= 0.5 r_soil / (2 t_leaf/3)` |
+| gortt, Ni-Meister et al. (2018) | 0.750 exactly, every scene | `= r_soil / (2 r_leaf/3)` |
 | FLIGHT | 0.79 mean (0.61–0.92) | |
 
 gortt reproduces `f_ground/(1−f_ground) = (ρ_g/ρ_v)·P(0)/(1−P(0))` to the
-digit, so the arithmetic is sound and the whole difference is in that constant.
-Numerically the factor of `0.5` on the soil reflectance is all of it: with
-`ρ_g = r_soil` the implied ratio would be 0.853, inside FLIGHT's range. Whether
-that factor belongs there is a question for Ni-Meister et al. (2001) rather
-than something to change on this evidence — and the same goes for `ρ_v` being
-built from the leaf transmittance. Neither affects the waveform shape.
+digit, so the arithmetic was never in doubt and the whole difference was in that
+constant. This page recorded it as a question for Ni-Meister et al. (2001)
+rather than something to change on the evidence here. That was the right call
+and the answer came back yes: **Ni-Meister et al. (2018), RSE 204, 229-243
+corrects both coefficients** — `ρ_v = 2 r_leaf/3`, from the leaf *reflectance*,
+because the hotspot is at scattering angle ξ = π and not 0; and `ρ_g = r_soil`,
+not half of it. gortt was changed to match (see `gortt_lidar.c`).
+
+The result is a genuine agreement rather than a disclaimer: the ground fraction
+is now within 7% of FLIGHT in every scene, median ratio 0.97 against 0.84
+before, and 0.750 sits comfortably inside FLIGHT's 0.61–0.92 scene-to-scene
+spread. The canopy shape RMSDs are unchanged to four decimal places, as they
+must be — the shape is `dP/dz` alone.
+
+This is independent of the evidence in the 2018 paper itself, which recovers
+ρ_v/ρ_g ≈ 1 from LVIS waveforms and 0.77–0.84 from RAMI-IV field data.
 
 **Multiple scattering shows up as a tail below the ground, not as a broader
 canopy.** The `orders 1-8` curve is FLIGHT's *cumulative* waveform over
@@ -394,7 +405,7 @@ do not compose — `-rt_all` overshoots by +43%, because `crown-path` and
 same photons a third time.
 
 **The lidar is untouched by all of it.** `gortt_lidar` takes its backscatter
-coefficients straight from the leaf transmittance and the soil albedo and never
+coefficients straight from the leaf reflectance and the soil albedo and never
 calls `gortt_rt_init`, so no `-rt_*` option can reach it; `gortt -lidar -rt_all`
 is byte-identical to `gortt -lidar`. The variant pages show the baseline lidar
 figure and say so, and `run_lidar.py` defaults to the baseline alone.
@@ -437,16 +448,18 @@ What it found, and what came of it, is in `CROWN-BRDF-INVESTIGATION.md`.
 Deliberately **not** compared: the areal proportions of the scene components
 (gortt's Kc/Kg/Kt/Kz against FLIGHT's per-component fractions).
 
-**Absolute lidar magnitudes are not compared either.** gortt builds its volume
-backscatter coefficient as `rho_v = 2 t_leaf / 3` — from the leaf
-**transmittance** (`gortt_lidar.c:93`) — and its ground coefficient as
-`rho_g = 0.5 r_soil`. For a backscattered return the relevant leaf property is
-the reflectance, so `rho_v` looks wrong; at 1064 nm, where r and t are close, it
-is nearly harmless but not identical. It is recorded here as a finding, not
-worked around: nothing in gortt was modified for this comparison. It affects
-only the canopy-to-ground energy ratio, never the waveform *shape*, which is
-`dP/dz` alone and independent of `rho_v`. The waveform panels are therefore
-normalised, with the energy partition shown separately.
+**Lidar waveforms are compared as normalised shapes**, with the energy
+partition shown separately, because the shape is `dP/dz` alone and is
+independent of both backscatter coefficients. The partition is now a real
+comparison and it agrees — see the lidar findings above.
+
+It did not start that way. gortt originally built `rho_v` from the leaf
+**transmittance** and halved the soil reflectance, following Ni-Meister et al.
+(2001), and the resulting factor-of-two discrepancy in the energy split was
+recorded here as a finding rather than worked around. It turned out to be an
+error in that paper, corrected by Ni-Meister et al. (2018) and now fixed in
+gortt. The change was made in the model, on the paper's authority, not tuned
+against FLIGHT.
 
 ## Cost
 
